@@ -1,0 +1,56 @@
+{
+  // CompanyOS Phase 0 — the Cloudflare "brain": gateway + event bus + agent runtime.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "companyos",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "observability": { "enabled": true },
+
+  "vars": {
+    // When "true", module adapters return canned data instead of calling live
+    // ERPNext/Twenty/etc. Lets the vertical slice run end-to-end with no VPS.
+    "MOCK_MODE": "true"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "companyos-db",
+      // Placeholder — replace with the real ID from `wrangler d1 create companyos-db`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG_CACHE",
+      // Placeholder — replace with the real ID from `wrangler kv namespace create CONFIG_CACHE`.
+      "id": "00000000000000000000000000000000"
+    }
+  ],
+
+  "queues": {
+    "producers": [
+      { "binding": "EVENTS", "queue": "companyos-events" }
+    ],
+    "consumers": [
+      {
+        "queue": "companyos-events",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "dead_letter_queue": "companyos-events-dlq"
+      }
+    ]
+  },
+
+  "durable_objects": {
+    "bindings": [
+      { "name": "COLLECTIONS_AGENT", "class_name": "CollectionsAgent" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CollectionsAgent"] }
+  ]
+}
