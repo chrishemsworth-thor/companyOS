@@ -48,15 +48,41 @@ describe("gateway auth", () => {
   });
 });
 
-describe("gateway routes (mock adapter)", () => {
-  const auth = { Authorization: `Bearer ${API_KEY}` };
+describe("gateway routes (native finance)", () => {
+  const auth = { Authorization: `Bearer ${API_KEY}`, "Content-Type": "application/json" };
 
-  it("GET /v1/invoices?status=overdue returns normalized invoices", async () => {
-    const { response } = gatewayFetch("/v1/invoices?status=overdue", { headers: auth });
+  // Test-pool storage is isolated per test, so each test creates its own invoice.
+  async function createNativeInvoice(): Promise<string> {
+    const { response, ctx } = gatewayFetch("/v1/invoices", {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        customer_id: "cust_456",
+        currency: "MYR",
+        due_date: "2026-06-26",
+        lines: [{ description: "Consulting", quantity: 1, unit_cents: 450_000 }],
+      }),
+    });
+    const res = await response;
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as { invoice_id: string; status: string; total_cents: number };
+    expect(body.status).toBe("draft");
+    expect(body.total_cents).toBe(450_000);
+    return body.invoice_id;
+  }
+
+  it("POST /v1/invoices issues a native invoice", async () => {
+    await createNativeInvoice();
+  });
+
+  it("GET /v1/invoices?status=draft returns the invoice from D1", async () => {
+    const invoiceId = await createNativeInvoice();
+    const { response } = gatewayFetch("/v1/invoices?status=draft", { headers: auth });
     const res = await response;
     expect(res.status).toBe(200);
     const body = (await res.json()) as { invoices: { invoice_id: string }[] };
-    expect(body.invoices[0]!.invoice_id).toBe("inv_789");
+    expect(body.invoices.map((i) => i.invoice_id)).toContain(invoiceId);
   });
 
   it("GET /v1/customers/:id returns the normalized customer", async () => {
@@ -67,9 +93,10 @@ describe("gateway routes (mock adapter)", () => {
   });
 
   it("POST /v1/invoices/:id/reminder sends a templated nudge", async () => {
-    const { response } = gatewayFetch("/v1/invoices/inv_789/reminder", {
+    const invoiceId = await createNativeInvoice();
+    const { response } = gatewayFetch(`/v1/invoices/${invoiceId}/reminder`, {
       method: "POST",
-      headers: { ...auth, "Content-Type": "application/json" },
+      headers: auth,
       body: JSON.stringify({ channel: "email" }),
     });
     const res = await response;

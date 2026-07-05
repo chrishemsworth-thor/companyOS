@@ -5,6 +5,7 @@ import { invoices } from "./gateway/routes/invoices";
 import { customers } from "./gateway/routes/customers";
 import { webhooks } from "./gateway/routes/webhooks";
 import { ledger } from "./gateway/routes/ledger";
+import { payments } from "./gateway/routes/payments";
 import { handleEventBatch } from "./queue/consumer";
 
 export { CollectionsAgent } from "./agents/collections";
@@ -19,6 +20,7 @@ app.route("/v1/invoices", invoices);
 app.route("/v1/customers", customers);
 app.route("/v1/webhooks", webhooks);
 app.route("/v1/ledger", ledger);
+app.route("/v1/payments", payments);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

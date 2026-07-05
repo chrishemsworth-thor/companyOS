@@ -1,6 +1,9 @@
 import type { z } from "zod";
+import { invoiceCreatedV1 } from "./invoice.created.v1";
+import { invoiceSentV1 } from "./invoice.sent.v1";
 import { invoiceOverdueV1 } from "./invoice.overdue.v1";
 import { paymentReceivedV1 } from "./payment.received.v1";
+import { paymentPartialV1 } from "./payment.partial.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -12,8 +15,11 @@ import { paymentReceivedV1 } from "./payment.received.v1";
  * incompatibly, add a v2 file and bump the mapping here.
  */
 export const eventRegistry: Record<string, z.ZodTypeAny> = {
+  "invoice.created": invoiceCreatedV1,
+  "invoice.sent": invoiceSentV1,
   "invoice.overdue": invoiceOverdueV1,
   "payment.received": paymentReceivedV1,
+  "payment.partial": paymentPartialV1,
 };
 
 export function validatePayload(
