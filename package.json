@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply companyos-db --local",
-    "db:migrate:remote": "wrangler d1 migrations apply companyos-db --remote"
+    "db:migrate:remote": "wrangler d1 migrations apply companyos-db --remote",
+    "seed:local": "node scripts/seed-local.mjs"
   },
   "dependencies": {
     "@hono/zod-validator": "^0.4.3",
