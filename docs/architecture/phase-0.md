@@ -1,3 +1,9 @@
+ > **Superseded by [phase-1-native.md](phase-1-native.md).** The VPS/OSS
+> module layer described below (ERPNext, Twenty, Plane, Libredesk behind a
+> `ModuleAdapter`) was replaced by native Cloudflare modules; this document
+> is retained for history. The spine it describes (gateway, event bus,
+> Durable Object agents, D1) lives on unchanged.
+
 # CompanyOS — Phase 0: Data Spine & Agent Orchestration
 
 ## Deployment topology
