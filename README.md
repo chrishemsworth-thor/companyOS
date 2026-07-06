@@ -122,12 +122,31 @@ Recipient addresses come from the customer record (`email`/`phone`); if the
 requested channel has no address the other channel is used, and every send
 attempt is logged in the `deliveries` table.
 
+### Smart collections (LLM)
+
+The `CollectionsAgent` assesses risk and composes reminders with an LLM
+behind a provider-agnostic port (`src/llm/`). Configure whichever provider
+you use:
+
+```sh
+npx wrangler secret put ANTHROPIC_API_KEY   # Claude (default model claude-opus-4-8)
+# or
+npx wrangler secret put OPENAI_API_KEY      # OpenAI (default model gpt-5)
+```
+
+Optional vars: `LLM_PROVIDER` (`anthropic` | `openai`) pins a provider when
+both keys exist; `LLM_MODEL` overrides the default model id. With no key
+configured — or on any API/validation failure — the agent falls back to the
+deterministic Phase 1 heuristic and template, so collections never silently
+stops. Every decision (LLM or fallback) is audited into `events_log` as a
+`collections.decision.v1` event; escalation emits `customer.risk_flagged.v1`.
+
 ## Roadmap
 
 - **Phase 2** — make the agents smart (LLM-driven risk assessment and message
-  composition) and wire real delivery providers (email/WhatsApp) behind the
-  `DeliveryProvider` port (✅ Workstream 1); transactional outbox if new event
-  types need it.
+  composition, ✅ Workstream 2) and wire real delivery providers
+  (email/WhatsApp) behind the `DeliveryProvider` port (✅ Workstream 1);
+  transactional outbox if new event types need it.
   Full brief: [docs/architecture/phase-2-plan.md](docs/architecture/phase-2-plan.md).
 - **Phase 3** — People/HR module on the same pattern; cross-module Insights
   (the payoff of one database: support tickets × overdue invoices × open

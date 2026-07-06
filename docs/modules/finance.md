@@ -92,6 +92,8 @@ All routes require `Authorization: Bearer <tenant_api_key>`. Errors carry
 | `invoice.overdue` | v2 | `invoice_id, customer_id, amount_due_cents, currency, days_overdue` | daily sweep (re-emitted while unpaid) |
 | `payment.received` | v2 | `payment_id?, invoice_id, customer_id, amount_paid_cents, currency` | `recordPayment`, per fully settled invoice |
 | `payment.partial` | v1 | `payment_id, invoice_id, customer_id, amount_paid_cents, remaining_cents, currency` | `recordPayment`, per partially settled invoice |
+| `collections.decision` | v1 | `customer_id, risk_score, action, channel, message, source, trigger` | CollectionsAgent, every assessment (LLM or fallback) — the audit trail |
+| `customer.risk_flagged` | v1 | `customer_id, risk_score, open_invoices, total_due_cents` | CollectionsAgent, on the transition into `escalated` |
 
 `invoice.overdue` and `payment.received` route to the `CollectionsAgent`
 Durable Object (per tenant+customer); the rest are audit-logged in
