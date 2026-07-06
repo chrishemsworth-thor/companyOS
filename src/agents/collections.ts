@@ -4,6 +4,7 @@ import type { EventEnvelope } from "../schemas/envelope";
 import { invoiceOverdueV2 } from "../schemas/events/invoice.overdue.v2";
 import { paymentReceivedV2 } from "../schemas/events/payment.received.v2";
 import { getDeliveryProvider } from "../delivery/console";
+import { insertActivityRow } from "../modules/crm/service";
 
 interface AgentState {
   tenant_id: string;
@@ -73,6 +74,13 @@ export class CollectionsAgent extends DurableObject<Env> {
       customer_id: payload.customer_id,
       channel: "email",
       message: `Friendly reminder: invoice ${payload.invoice_id} for ${payload.currency} ${(payload.amount_due_cents / 100).toFixed(2)} is ${payload.days_overdue} day(s) overdue.`,
+    });
+
+    // Collections history is CRM-visible: every reminder lands in the activities log.
+    await insertActivityRow(this.env.DB, envelope.tenant_id, {
+      customer_id: payload.customer_id,
+      kind: "reminder_sent",
+      body: `reminder for invoice ${payload.invoice_id} (${delivery_ref})`,
     });
 
     const now = new Date().toISOString();

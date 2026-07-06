@@ -6,6 +6,8 @@ import { customers } from "./gateway/routes/customers";
 import { webhooks } from "./gateway/routes/webhooks";
 import { ledger } from "./gateway/routes/ledger";
 import { payments } from "./gateway/routes/payments";
+import { deals } from "./gateway/routes/deals";
+import { activities } from "./gateway/routes/activities";
 import { handleEventBatch } from "./queue/consumer";
 import { runOverdueSweep } from "./modules/finance/overdue-sweep";
 
@@ -22,6 +24,8 @@ app.route("/v1/customers", customers);
 app.route("/v1/webhooks", webhooks);
 app.route("/v1/ledger", ledger);
 app.route("/v1/payments", payments);
+app.route("/v1/deals", deals);
+app.route("/v1/activities", activities);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

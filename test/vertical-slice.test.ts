@@ -14,6 +14,11 @@ async function seedTenant() {
   )
     .bind(TENANT_ID, "Test SME", await sha256Hex(API_KEY))
     .run();
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO customers (customer_id, tenant_id, name, email, created_at) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind("cust_456", TENANT_ID, "Test Customer", "customer@example.com", new Date().toISOString())
+    .run();
 }
 
 function gatewayFetch(path: string, init?: RequestInit) {
