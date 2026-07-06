@@ -74,15 +74,22 @@ npm run db:migrate:local  # apply D1 migrations locally
 npm run dev               # wrangler dev
 ```
 
-Try the slice locally (after seeding a tenant row in the local D1 — see
-`test/finance-lifecycle.test.ts` for the shape):
+In a second terminal, seed a local tenant and try the vertical slice:
 
 ```sh
-curl -X POST http://localhost:8787/v1/invoices \
-  -H "Authorization: Bearer <tenant_api_key>" \
+npm run seed:local
+```
+
+This prints a tenant id, a plaintext API key (only shown here — the DB stores just its SHA-256 hash), and a ready-to-run curl command, e.g.:
+
+```sh
+curl -X POST http://localhost:8787/v1/webhooks/erpnext \
+  -H "Authorization: Bearer <printed_api_key>" \
   -H "Content-Type: application/json" \
   -d '{"customer_id":"cust_456","currency":"MYR","due_date":"2026-06-26","lines":[{"description":"Consulting","quantity":1,"unit_cents":450000}]}'
 ```
+
+Pass `--tenant-id`, `--name`, or `--api-key` to `npm run seed:local` to customize the seeded tenant.
 
 ## Deploying
 
