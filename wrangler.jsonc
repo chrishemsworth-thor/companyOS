@@ -1,16 +1,14 @@
 {
-  // CompanyOS Phase 0 — the Cloudflare "brain": gateway + event bus + agent runtime.
+  // CompanyOS — native modules on Cloudflare: gateway + event bus + agent runtime.
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "companyos",
   "main": "src/index.ts",
   "compatibility_date": "2025-04-01",
   "observability": { "enabled": true },
 
-  "vars": {
-    // When "true", module adapters return canned data instead of calling live
-    // ERPNext/Twenty/etc. Lets the vertical slice run end-to-end with no VPS.
-    "MOCK_MODE": "true"
-  },
+  // Daily overdue sweep (01:00 UTC): marks past-due invoices and re-emits
+  // invoice.overdue events while they stay unpaid.
+  "triggers": { "crons": ["0 1 * * *"] },
 
   "d1_databases": [
     {

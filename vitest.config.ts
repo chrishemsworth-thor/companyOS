@@ -12,6 +12,13 @@ export default defineWorkersConfig(async () => {
           miniflare: {
             // Exposed to test/setup.ts so migrations run before each test file.
             bindings: { TEST_MIGRATIONS: migrations },
+            // Queue consumption is tested by feeding batches into
+            // handleEventBatch directly; keep miniflare from auto-delivering
+            // mid-test (delivery runs outside the isolated-storage frame,
+            // where migrations haven't been applied).
+            queueConsumers: {
+              "companyos-events": { maxBatchSize: 100, maxBatchTimeout: 60 },
+            },
           },
         },
       },

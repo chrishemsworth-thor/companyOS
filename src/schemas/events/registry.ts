@@ -1,6 +1,23 @@
 import type { z } from "zod";
-import { invoiceOverdueV1 } from "./invoice.overdue.v1";
-import { paymentReceivedV1 } from "./payment.received.v1";
+import { invoiceCreatedV1 } from "./invoice.created.v1";
+import { invoiceSentV1 } from "./invoice.sent.v1";
+import { invoiceOverdueV2 } from "./invoice.overdue.v2";
+import { paymentReceivedV2 } from "./payment.received.v2";
+import { paymentPartialV1 } from "./payment.partial.v1";
+import { customerCreatedV1 } from "./customer.created.v1";
+import { dealCreatedV1 } from "./deal.created.v1";
+import { dealStageChangedV1 } from "./deal.stage_changed.v1";
+import { dealWonV1 } from "./deal.won.v1";
+import { dealLostV1 } from "./deal.lost.v1";
+import { activityLoggedV1 } from "./activity.logged.v1";
+import { ticketCreatedV1 } from "./ticket.created.v1";
+import { ticketMessageAddedV1 } from "./ticket.message_added.v1";
+import { ticketStatusChangedV1 } from "./ticket.status_changed.v1";
+import { ticketResolvedV1 } from "./ticket.resolved.v1";
+import { projectCreatedV1 } from "./project.created.v1";
+import { issueCreatedV1 } from "./issue.created.v1";
+import { issueStatusChangedV1 } from "./issue.status_changed.v1";
+import { issueCompletedV1 } from "./issue.completed.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -12,8 +29,25 @@ import { paymentReceivedV1 } from "./payment.received.v1";
  * incompatibly, add a v2 file and bump the mapping here.
  */
 export const eventRegistry: Record<string, z.ZodTypeAny> = {
-  "invoice.overdue": invoiceOverdueV1,
-  "payment.received": paymentReceivedV1,
+  "invoice.created": invoiceCreatedV1,
+  "invoice.sent": invoiceSentV1,
+  "invoice.overdue": invoiceOverdueV2,
+  "payment.received": paymentReceivedV2,
+  "payment.partial": paymentPartialV1,
+  "customer.created": customerCreatedV1,
+  "deal.created": dealCreatedV1,
+  "deal.stage_changed": dealStageChangedV1,
+  "deal.won": dealWonV1,
+  "deal.lost": dealLostV1,
+  "activity.logged": activityLoggedV1,
+  "ticket.created": ticketCreatedV1,
+  "ticket.message_added": ticketMessageAddedV1,
+  "ticket.status_changed": ticketStatusChangedV1,
+  "ticket.resolved": ticketResolvedV1,
+  "project.created": projectCreatedV1,
+  "issue.created": issueCreatedV1,
+  "issue.status_changed": issueStatusChangedV1,
+  "issue.completed": issueCompletedV1,
 };
 
 export function validatePayload(
