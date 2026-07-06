@@ -1,5 +1,6 @@
 import { ulid } from "ulid";
 import { makeEnvelope } from "../../schemas/envelope";
+import { paginate } from "../../gateway/pagination";
 import {
   buildEntryStatements,
   ensureSystemAccounts,
@@ -82,19 +83,28 @@ export async function getInvoice(
 export async function listInvoices(
   db: D1Database,
   tenantId: string,
-  filter: { status?: InvoiceStatus },
-): Promise<Invoice[]> {
-  const query = filter.status
-    ? db
-        .prepare(
-          `SELECT ${INVOICE_COLUMNS} FROM invoices WHERE tenant_id = ? AND status = ? ORDER BY due_date`,
-        )
-        .bind(tenantId, filter.status)
-    : db
-        .prepare(`SELECT ${INVOICE_COLUMNS} FROM invoices WHERE tenant_id = ? ORDER BY due_date`)
-        .bind(tenantId);
-  const { results } = await query.all<InvoiceRow>();
-  return results;
+  filter: { status?: InvoiceStatus; cursor?: string; limit: number },
+): Promise<{ invoices: Invoice[]; next_cursor: string | null }> {
+  const clauses = ["tenant_id = ?"];
+  const binds: unknown[] = [tenantId];
+  if (filter.status) {
+    clauses.push("status = ?");
+    binds.push(filter.status);
+  }
+  if (filter.cursor) {
+    clauses.push("invoice_id > ?");
+    binds.push(filter.cursor);
+  }
+  binds.push(filter.limit + 1);
+  const { results } = await db
+    .prepare(
+      `SELECT ${INVOICE_COLUMNS} FROM invoices WHERE ${clauses.join(" AND ")}
+       ORDER BY invoice_id ASC LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<InvoiceRow>();
+  const { items, next_cursor } = paginate(results, filter.limit, "invoice_id");
+  return { invoices: items, next_cursor };
 }
 
 export async function getInvoiceLines(

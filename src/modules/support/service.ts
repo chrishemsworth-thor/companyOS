@@ -1,5 +1,6 @@
 import { ulid } from "ulid";
 import { makeEnvelope } from "../../schemas/envelope";
+import { paginate } from "../../gateway/pagination";
 import { canTransition, legalTransitions, type TicketStatus } from "./state-machine";
 import type { MessageAuthor, Ticket, TicketMessage, TicketPriority } from "./types";
 
@@ -33,19 +34,28 @@ export async function getTicket(
 export async function listTickets(
   db: D1Database,
   tenantId: string,
-  filter: { status?: TicketStatus },
-): Promise<Ticket[]> {
-  const query = filter.status
-    ? db
-        .prepare(
-          `SELECT ${TICKET_COLUMNS} FROM tickets WHERE tenant_id = ? AND status = ? ORDER BY created_at`,
-        )
-        .bind(tenantId, filter.status)
-    : db
-        .prepare(`SELECT ${TICKET_COLUMNS} FROM tickets WHERE tenant_id = ? ORDER BY created_at`)
-        .bind(tenantId);
-  const { results } = await query.all<Ticket>();
-  return results;
+  filter: { status?: TicketStatus; cursor?: string; limit: number },
+): Promise<{ tickets: Ticket[]; next_cursor: string | null }> {
+  const clauses = ["tenant_id = ?"];
+  const binds: unknown[] = [tenantId];
+  if (filter.status) {
+    clauses.push("status = ?");
+    binds.push(filter.status);
+  }
+  if (filter.cursor) {
+    clauses.push("ticket_id > ?");
+    binds.push(filter.cursor);
+  }
+  binds.push(filter.limit + 1);
+  const { results } = await db
+    .prepare(
+      `SELECT ${TICKET_COLUMNS} FROM tickets WHERE ${clauses.join(" AND ")}
+       ORDER BY ticket_id ASC LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<Ticket>();
+  const { items, next_cursor } = paginate(results, filter.limit, "ticket_id");
+  return { tickets: items, next_cursor };
 }
 
 export async function createTicket(

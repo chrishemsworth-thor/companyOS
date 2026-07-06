@@ -69,14 +69,43 @@ All routes require `Authorization: Bearer <tenant_api_key>`. Errors carry
 (`invalid_status`), or 422 (`invalid_total`, `amount_mismatch`, `overpayment`,
 `customer_mismatch`, `currency_mismatch`).
 
+`POST /v1/invoices` and `POST /v1/payments` honor an optional
+`Idempotency-Key` header (see [Idempotency keys](#idempotency-keys) below).
+`GET /v1/invoices` supports cursor pagination (see
+[Cursor pagination](#cursor-pagination)).
+
 | Method & path | Body | Returns |
 |---|---|---|
 | `POST /v1/invoices` | `{customer_id, currency, due_date, lines: [{description, quantity, unit_cents}]}` | 201 invoice (status `draft`, ledger posted) |
-| `GET /v1/invoices?status=` | — | `{invoices: [...]}` |
+| `GET /v1/invoices?status=&limit=&cursor=` | — | `{invoices: [...], next_cursor}` |
 | `GET /v1/invoices/:id` | — | invoice + `lines` |
 | `POST /v1/invoices/:id/send` | — | invoice (`sent`); 409 unless `draft` |
 | `POST /v1/invoices/:id/reminder` | `{channel: "email"\|"whatsapp", message?}` | 202 `{status, delivery_ref, channel, provider}` via the DeliveryProvider port; 422 `no_recipient` if the customer has no email/phone, 502 `send_failed` on provider errors |
 | `POST /v1/payments` | `{customer_id, amount_cents, currency, method?, received_at?, applications: [{invoice_id, applied_cents}]}` | 201 `{payment_id, entry_id}` |
+
+### Idempotency keys
+
+Pass `Idempotency-Key: <opaque string>` on `POST /v1/invoices` or
+`POST /v1/payments` to make a retry safe. The response is keyed on
+`(tenant_id, endpoint, key)`:
+
+- Unseen key → runs normally, and the response (success or an expected
+  `FinanceError`) is cached against the key.
+- Same key, identical body → the cached response is replayed; the write does
+  not run again.
+- Same key, different body → `422 key_reused`.
+- Same key, still being processed by a concurrent request → `409 in_progress`.
+
+This is the one workstream4 change agents should adopt before being given
+retry authority — double-recording a payment is the worst outcome in this
+system, and a naive retry-on-timeout otherwise risks exactly that.
+
+### Cursor pagination
+
+List endpoints accept `?limit=` (default 50, max 200) and `?cursor=`.
+Entity IDs are ULIDs — lexicographically sortable by creation time — so
+pages are ordered `id ASC` and the cursor is the last id seen. The response
+includes `next_cursor`; `null` means there is no further page.
 | `GET /v1/ledger/accounts` | — | seeds + lists the chart |
 | `GET /v1/ledger/accounts/:id/balance` | — | `{balance_cents}` (signed sum) |
 | `POST /v1/ledger/entries` | `{entry_date, currency, memo?, lines: [{account_id, amount_cents}]}` | 201 `{entry_id}`; unbalanced → 422 |

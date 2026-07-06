@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
+import { pageQuerySchema } from "../pagination";
 import {
   changeDealStage,
   createDeal,
@@ -24,7 +25,7 @@ const stageBodySchema = z.object({
   stage_id: z.string().startsWith("stg_"),
 });
 
-const listQuerySchema = z.object({
+const listQuerySchema = pageQuerySchema.extend({
   status: z.enum(["open", "won", "lost"]).optional(),
 });
 
@@ -45,8 +46,8 @@ deals.get("/stages", async (c) => {
 
 deals.get("/", zValidator("query", listQuerySchema), async (c) => {
   const tenant = c.get("tenant");
-  const { status } = c.req.valid("query");
-  return c.json({ deals: await listDeals(c.env.DB, tenant.tenant_id, { status }) });
+  const { status, cursor, limit } = c.req.valid("query");
+  return c.json(await listDeals(c.env.DB, tenant.tenant_id, { status, cursor, limit }));
 });
 
 deals.post("/", zValidator("json", createBodySchema), async (c) => {

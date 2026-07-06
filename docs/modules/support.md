@@ -38,7 +38,7 @@ Auth as everywhere. `SupportError` maps to 404 (`not_found`) and 409
 
 | Method & path | Body | Returns |
 |---|---|---|
-| `GET /v1/tickets?status=` | — | `{tickets: [...]}` |
+| `GET /v1/tickets?status=&limit=&cursor=` | — | `{tickets: [...], next_cursor}` |
 | `POST /v1/tickets` | `{customer_id, subject, priority?, body?}` | 201 ticket (`open`; `body` becomes the opening customer message, atomically) |
 | `GET /v1/tickets/:id` | — | ticket + `messages` thread in order |
 | `POST /v1/tickets/:id/messages` | `{author, body}` | 201 message |

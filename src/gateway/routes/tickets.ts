@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
+import { pageQuerySchema } from "../pagination";
 import {
   addMessage,
   changeTicketStatus,
@@ -28,7 +29,7 @@ const statusBodySchema = z.object({
   status: z.enum(["open", "pending", "resolved", "closed"]),
 });
 
-const listQuerySchema = z.object({
+const listQuerySchema = pageQuerySchema.extend({
   status: z.enum(["open", "pending", "resolved", "closed"]).optional(),
 });
 
@@ -43,8 +44,8 @@ export const tickets = new Hono<AuthedEnv>();
 
 tickets.get("/", zValidator("query", listQuerySchema), async (c) => {
   const tenant = c.get("tenant");
-  const { status } = c.req.valid("query");
-  return c.json({ tickets: await listTickets(c.env.DB, tenant.tenant_id, { status }) });
+  const { status, cursor, limit } = c.req.valid("query");
+  return c.json(await listTickets(c.env.DB, tenant.tenant_id, { status, cursor, limit }));
 });
 
 tickets.post("/", zValidator("json", createBodySchema), async (c) => {
