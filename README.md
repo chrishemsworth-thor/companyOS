@@ -103,11 +103,31 @@ Pass `--tenant-id`, `--name`, or `--api-key` to `npm run seed:local` to customiz
 2. `npm run db:migrate:remote`
 3. `npm run deploy`
 
+### Real delivery (email / WhatsApp)
+
+Reminders go through the `DeliveryProvider` port (`src/delivery/`). Without
+configuration they log to the console; real sends require **both**:
+
+1. Provider secrets on the Worker:
+   ```sh
+   npx wrangler secret put RESEND_API_KEY       # email via Resend
+   npx wrangler secret put TWILIO_ACCOUNT_SID   # WhatsApp via Twilio
+   npx wrangler secret put TWILIO_AUTH_TOKEN
+   ```
+2. A per-tenant opt-in row in `delivery_config` with the sender identity
+   (`from_address` is an email address for `email`, an E.164 number for
+   `whatsapp`) and `enabled = 1`.
+
+Recipient addresses come from the customer record (`email`/`phone`); if the
+requested channel has no address the other channel is used, and every send
+attempt is logged in the `deliveries` table.
+
 ## Roadmap
 
 - **Phase 2** — make the agents smart (LLM-driven risk assessment and message
   composition) and wire real delivery providers (email/WhatsApp) behind the
-  `DeliveryProvider` port; transactional outbox if new event types need it.
+  `DeliveryProvider` port (✅ Workstream 1); transactional outbox if new event
+  types need it.
   Full brief: [docs/architecture/phase-2-plan.md](docs/architecture/phase-2-plan.md).
 - **Phase 3** — People/HR module on the same pattern; cross-module Insights
   (the payoff of one database: support tickets × overdue invoices × open

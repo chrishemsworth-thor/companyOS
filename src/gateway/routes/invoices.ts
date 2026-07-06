@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
-import { getDeliveryProvider } from "../../delivery/console";
+import { DeliveryError, sendReminder } from "../../delivery/dispatch";
 import {
   createInvoice,
   FinanceError,
@@ -92,13 +92,20 @@ invoices.post("/:id/reminder", zValidator("json", reminderBodySchema), async (c)
   const invoice = await getInvoice(c.env.DB, tenant.tenant_id, c.req.param("id"));
   if (!invoice) return c.json({ error: "invoice not found" }, 404);
 
-  const { delivery_ref } = await getDeliveryProvider().send({
-    invoice_id: invoice.invoice_id,
-    customer_id: invoice.customer_id,
-    channel: body.channel,
-    message: body.message ?? defaultReminderMessage(invoice),
-  });
-  return c.json({ status: "sent", delivery_ref }, 202);
+  try {
+    const result = await sendReminder(c.env, tenant.tenant_id, {
+      invoice_id: invoice.invoice_id,
+      customer_id: invoice.customer_id,
+      channel: body.channel,
+      message: body.message ?? defaultReminderMessage(invoice),
+    });
+    return c.json({ status: "sent", ...result }, 202);
+  } catch (err) {
+    if (err instanceof DeliveryError) {
+      return c.json({ error: err.message, code: err.code }, err.httpStatus);
+    }
+    throw err;
+  }
 });
 
 export function defaultReminderMessage(invoice: Invoice): string {

@@ -75,7 +75,7 @@ All routes require `Authorization: Bearer <tenant_api_key>`. Errors carry
 | `GET /v1/invoices?status=` | — | `{invoices: [...]}` |
 | `GET /v1/invoices/:id` | — | invoice + `lines` |
 | `POST /v1/invoices/:id/send` | — | invoice (`sent`); 409 unless `draft` |
-| `POST /v1/invoices/:id/reminder` | `{channel: "email"\|"whatsapp", message?}` | 202 `{status, delivery_ref}` via the DeliveryProvider port |
+| `POST /v1/invoices/:id/reminder` | `{channel: "email"\|"whatsapp", message?}` | 202 `{status, delivery_ref, channel, provider}` via the DeliveryProvider port; 422 `no_recipient` if the customer has no email/phone, 502 `send_failed` on provider errors |
 | `POST /v1/payments` | `{customer_id, amount_cents, currency, method?, received_at?, applications: [{invoice_id, applied_cents}]}` | 201 `{payment_id, entry_id}` |
 | `GET /v1/ledger/accounts` | — | seeds + lists the chart |
 | `GET /v1/ledger/accounts/:id/balance` | — | `{balance_cents}` (signed sum) |

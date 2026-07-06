@@ -3,7 +3,7 @@ import type { Env } from "../env";
 import type { EventEnvelope } from "../schemas/envelope";
 import { invoiceOverdueV2 } from "../schemas/events/invoice.overdue.v2";
 import { paymentReceivedV2 } from "../schemas/events/payment.received.v2";
-import { getDeliveryProvider } from "../delivery/console";
+import { DeliveryError, sendReminder } from "../delivery/dispatch";
 import { insertActivityRow } from "../modules/crm/service";
 
 interface AgentState {
@@ -69,18 +69,36 @@ export class CollectionsAgent extends DurableObject<Env> {
     // Dumbest possible risk heuristic for Phase 0.
     state.risk_score = Math.min(100, payload.days_overdue * 5 + state.reminder_history.length * 10);
 
-    const { delivery_ref } = await getDeliveryProvider().send({
-      invoice_id: payload.invoice_id,
-      customer_id: payload.customer_id,
-      channel: "email",
-      message: `Friendly reminder: invoice ${payload.invoice_id} for ${payload.currency} ${(payload.amount_due_cents / 100).toFixed(2)} is ${payload.days_overdue} day(s) overdue.`,
-    });
+    let delivery: { delivery_ref: string; channel: string };
+    try {
+      delivery = await sendReminder(this.env, envelope.tenant_id, {
+        invoice_id: payload.invoice_id,
+        customer_id: payload.customer_id,
+        channel: "email",
+        message: `Friendly reminder: invoice ${payload.invoice_id} for ${payload.currency} ${(payload.amount_due_cents / 100).toFixed(2)} is ${payload.days_overdue} day(s) overdue.`,
+      });
+    } catch (err) {
+      if (!(err instanceof DeliveryError)) throw err;
+      // Undeliverable (no address on file / provider failure): keep tracking
+      // the invoice and re-checking daily, but don't record a contact that
+      // never happened. Don't rethrow — a queue retry can't fix this.
+      console.warn(
+        `[CollectionsAgent] reminder undeliverable for ${envelope.tenant_id}:${payload.customer_id}: ${err.message}`,
+      );
+      if (!state.open_overdue_invoices.includes(payload.invoice_id)) {
+        state.open_overdue_invoices.push(payload.invoice_id);
+      }
+      await this.putState(state);
+      await this.ctx.storage.setAlarm(Date.now() + RECHECK_INTERVAL_MS);
+      return;
+    }
+    const { delivery_ref } = delivery;
 
     // Collections history is CRM-visible: every reminder lands in the activities log.
     await insertActivityRow(this.env.DB, envelope.tenant_id, {
       customer_id: payload.customer_id,
       kind: "reminder_sent",
-      body: `reminder for invoice ${payload.invoice_id} (${delivery_ref})`,
+      body: `reminder for invoice ${payload.invoice_id} via ${delivery.channel} (${delivery_ref})`,
     });
 
     const now = new Date().toISOString();
