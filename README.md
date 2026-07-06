@@ -83,7 +83,7 @@ npm run seed:local
 This prints a tenant id, a plaintext API key (only shown here — the DB stores just its SHA-256 hash), and a ready-to-run curl command, e.g.:
 
 ```sh
-curl -X POST http://localhost:8787/v1/webhooks/erpnext \
+curl -X POST http://localhost:8787/v1/invoices \
   -H "Authorization: Bearer <printed_api_key>" \
   -H "Content-Type: application/json" \
   -d '{"customer_id":"cust_456","currency":"MYR","due_date":"2026-06-26","lines":[{"description":"Consulting","quantity":1,"unit_cents":450000}]}'
