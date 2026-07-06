@@ -28,6 +28,12 @@ async function seedTenant() {
   )
     .bind(TENANT_ID, "Lifecycle Test SME", await sha256Hex(API_KEY))
     .run();
+  // Phase 2: reminders resolve the recipient address from the customers table.
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO customers (customer_id, tenant_id, name, email, created_at) VALUES (?, ?, ?, ?, ?)",
+  )
+    .bind(CUSTOMER_ID, TENANT_ID, "Lifecycle Customer", "life@example.com", NOW.toISOString())
+    .run();
 }
 
 async function gatewayFetch(path: string, init?: RequestInit): Promise<Response> {

@@ -75,7 +75,7 @@ All routes require `Authorization: Bearer <tenant_api_key>`. Errors carry
 | `GET /v1/invoices?status=` | — | `{invoices: [...]}` |
 | `GET /v1/invoices/:id` | — | invoice + `lines` |
 | `POST /v1/invoices/:id/send` | — | invoice (`sent`); 409 unless `draft` |
-| `POST /v1/invoices/:id/reminder` | `{channel: "email"\|"whatsapp", message?}` | 202 `{status, delivery_ref}` via the DeliveryProvider port |
+| `POST /v1/invoices/:id/reminder` | `{channel: "email"\|"whatsapp", message?}` | 202 `{status, delivery_ref, channel, provider}` via the DeliveryProvider port; 422 `no_recipient` if the customer has no email/phone, 502 `send_failed` on provider errors |
 | `POST /v1/payments` | `{customer_id, amount_cents, currency, method?, received_at?, applications: [{invoice_id, applied_cents}]}` | 201 `{payment_id, entry_id}` |
 | `GET /v1/ledger/accounts` | — | seeds + lists the chart |
 | `GET /v1/ledger/accounts/:id/balance` | — | `{balance_cents}` (signed sum) |
@@ -92,6 +92,8 @@ All routes require `Authorization: Bearer <tenant_api_key>`. Errors carry
 | `invoice.overdue` | v2 | `invoice_id, customer_id, amount_due_cents, currency, days_overdue` | daily sweep (re-emitted while unpaid) |
 | `payment.received` | v2 | `payment_id?, invoice_id, customer_id, amount_paid_cents, currency` | `recordPayment`, per fully settled invoice |
 | `payment.partial` | v1 | `payment_id, invoice_id, customer_id, amount_paid_cents, remaining_cents, currency` | `recordPayment`, per partially settled invoice |
+| `collections.decision` | v1 | `customer_id, risk_score, action, channel, message, source, trigger` | CollectionsAgent, every assessment (LLM or fallback) — the audit trail |
+| `customer.risk_flagged` | v1 | `customer_id, risk_score, open_invoices, total_due_cents` | CollectionsAgent, on the transition into `escalated` |
 
 `invoice.overdue` and `payment.received` route to the `CollectionsAgent`
 Durable Object (per tenant+customer); the rest are audit-logged in

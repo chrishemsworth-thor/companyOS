@@ -204,6 +204,27 @@ describe("activities", () => {
 
   it("the CollectionsAgent's reminders appear as reminder_sent activities", async () => {
     const { customer_id } = await createCustomer("Late Payer");
+
+    // Phase 2: the agent assembles its context from D1, so the overdue
+    // invoice must actually exist there.
+    const invoiceRes = await gatewayFetch("/v1/invoices", {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({
+        customer_id,
+        currency: "MYR",
+        due_date: "2026-06-26",
+        lines: [{ description: "Late work", quantity: 1, unit_cents: 90_000 }],
+      }),
+    });
+    const { invoice_id } = (await invoiceRes.json()) as { invoice_id: string };
+    await gatewayFetch(`/v1/invoices/${invoice_id}/send`, { method: "POST", headers: auth });
+    await env.DB.prepare(
+      "UPDATE invoices SET status = 'overdue' WHERE tenant_id = ? AND invoice_id = ?",
+    )
+      .bind(TENANT_ID, invoice_id)
+      .run();
+
     const id = env.COLLECTIONS_AGENT.idFromName(`${TENANT_ID}:${customer_id}`);
     const stub = env.COLLECTIONS_AGENT.get(id) as unknown as {
       onEvent(e: unknown): Promise<void>;
@@ -215,7 +236,7 @@ describe("activities", () => {
         source_module: "finance",
         tenant_id: TENANT_ID,
         payload: {
-          invoice_id: "inv_late_1",
+          invoice_id,
           customer_id,
           amount_due_cents: 90_000,
           currency: "MYR",

@@ -16,6 +16,7 @@
     "seed:local": "node scripts/seed-local.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
     "@hono/zod-validator": "^0.4.3",
     "hono": "^4.7.0",
     "ulid": "^2.3.0",
