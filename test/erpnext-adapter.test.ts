@@ -28,7 +28,7 @@ describe("ErpNextAdapter.normalizeWebhook", () => {
     expect(envelope!.payload).toMatchObject({
       invoice_id: "inv_789",
       customer_id: "cust_456",
-      amount_due: 4500,
+      amount_due_cents: 450_000,
       currency: "MYR",
     });
   });

@@ -333,10 +333,10 @@ export async function recordPayment(
           source_module: "finance",
           tenant_id: tenantId,
           payload: {
+            payment_id: paymentId,
             invoice_id: app.invoice_id,
             customer_id: input.customer_id,
-            // v1 shape (major units); moves to cents with payment.received.v2.
-            amount_paid: app.applied_cents / 100,
+            amount_paid_cents: app.applied_cents,
             currency: input.currency,
           },
         }),

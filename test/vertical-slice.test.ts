@@ -139,7 +139,7 @@ describe("vertical slice: webhook → queue → agent", () => {
       payload: {
         invoice_id: "inv_789",
         customer_id: "cust_456",
-        amount_due: 4500,
+        amount_due_cents: 450_000,
         currency: "MYR",
         days_overdue: 9,
       },
@@ -200,7 +200,7 @@ describe("vertical slice: webhook → queue → agent", () => {
       payload: {
         invoice_id: "inv_789",
         customer_id: "cust_456",
-        amount_due: 4500,
+        amount_due_cents: 450_000,
         currency: "MYR",
         days_overdue: 9,
       },
@@ -212,7 +212,7 @@ describe("vertical slice: webhook → queue → agent", () => {
       payload: {
         invoice_id: "inv_789",
         customer_id: "cust_456",
-        amount_paid: 4500,
+        amount_paid_cents: 450_000,
         currency: "MYR",
       },
     });

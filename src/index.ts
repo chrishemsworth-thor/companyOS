@@ -7,6 +7,7 @@ import { webhooks } from "./gateway/routes/webhooks";
 import { ledger } from "./gateway/routes/ledger";
 import { payments } from "./gateway/routes/payments";
 import { handleEventBatch } from "./queue/consumer";
+import { runOverdueSweep } from "./modules/finance/overdue-sweep";
 
 export { CollectionsAgent } from "./agents/collections";
 
@@ -31,4 +32,8 @@ app.onError((err, c) => {
 export default {
   fetch: app.fetch,
   queue: handleEventBatch,
+  // Daily overdue sweep — native replacement for ERPNext's due-date webhook.
+  scheduled(_controller, env, ctx) {
+    ctx.waitUntil(runOverdueSweep(env));
+  },
 } satisfies ExportedHandler<Env>;

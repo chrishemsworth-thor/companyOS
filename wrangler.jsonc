@@ -6,6 +6,10 @@
   "compatibility_date": "2025-04-01",
   "observability": { "enabled": true },
 
+  // Daily overdue sweep (01:00 UTC): marks past-due invoices and re-emits
+  // invoice.overdue events while they stay unpaid.
+  "triggers": { "crons": ["0 1 * * *"] },
+
   "vars": {
     // When "true", module adapters return canned data instead of calling live
     // ERPNext/Twenty/etc. Lets the vertical slice run end-to-end with no VPS.

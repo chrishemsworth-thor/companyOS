@@ -1,10 +1,9 @@
 import { DurableObject } from "cloudflare:workers";
 import type { Env } from "../env";
 import type { EventEnvelope } from "../schemas/envelope";
-import { invoiceOverdueV1 } from "../schemas/events/invoice.overdue.v1";
-import { paymentReceivedV1 } from "../schemas/events/payment.received.v1";
-import { ErpNextAdapter } from "../gateway/adapters/erpnext";
-import { getModuleCredentials, MOCK_CREDENTIALS } from "../gateway/middleware/tenant";
+import { invoiceOverdueV2 } from "../schemas/events/invoice.overdue.v2";
+import { paymentReceivedV2 } from "../schemas/events/payment.received.v2";
+import { getDeliveryProvider } from "../delivery/console";
 
 interface AgentState {
   tenant_id: string;
@@ -54,7 +53,7 @@ export class CollectionsAgent extends DurableObject<Env> {
   }
 
   private async onInvoiceOverdue(envelope: EventEnvelope): Promise<void> {
-    const payload = invoiceOverdueV1.parse(envelope.payload);
+    const payload = invoiceOverdueV2.parse(envelope.payload);
 
     const state: AgentState = (await this.getState()) ?? {
       tenant_id: envelope.tenant_id,
@@ -69,21 +68,11 @@ export class CollectionsAgent extends DurableObject<Env> {
     // Dumbest possible risk heuristic for Phase 0.
     state.risk_score = Math.min(100, payload.days_overdue * 5 + state.reminder_history.length * 10);
 
-    const mock = this.env.MOCK_MODE === "true";
-    const adapter = new ErpNextAdapter(mock);
-    const creds = mock
-      ? MOCK_CREDENTIALS
-      : await getModuleCredentials(this.env, envelope.tenant_id, "finance");
-    if (!creds) {
-      console.error(`[CollectionsAgent] no finance credentials for ${envelope.tenant_id}`);
-      return;
-    }
-
-    const { delivery_ref } = await adapter.sendReminder(creds, {
+    const { delivery_ref } = await getDeliveryProvider().send({
       invoice_id: payload.invoice_id,
       customer_id: payload.customer_id,
       channel: "email",
-      message: `Friendly reminder: invoice ${payload.invoice_id} for ${payload.currency} ${payload.amount_due.toFixed(2)} is ${payload.days_overdue} day(s) overdue.`,
+      message: `Friendly reminder: invoice ${payload.invoice_id} for ${payload.currency} ${(payload.amount_due_cents / 100).toFixed(2)} is ${payload.days_overdue} day(s) overdue.`,
     });
 
     const now = new Date().toISOString();
@@ -100,7 +89,7 @@ export class CollectionsAgent extends DurableObject<Env> {
   }
 
   private async onPaymentReceived(envelope: EventEnvelope): Promise<void> {
-    const payload = paymentReceivedV1.parse(envelope.payload);
+    const payload = paymentReceivedV2.parse(envelope.payload);
     const state = await this.getState();
     if (!state) return;
 

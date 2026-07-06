@@ -1,8 +1,8 @@
 import type { z } from "zod";
 import { invoiceCreatedV1 } from "./invoice.created.v1";
 import { invoiceSentV1 } from "./invoice.sent.v1";
-import { invoiceOverdueV1 } from "./invoice.overdue.v1";
-import { paymentReceivedV1 } from "./payment.received.v1";
+import { invoiceOverdueV2 } from "./invoice.overdue.v2";
+import { paymentReceivedV2 } from "./payment.received.v2";
 import { paymentPartialV1 } from "./payment.partial.v1";
 
 /**
@@ -17,8 +17,8 @@ import { paymentPartialV1 } from "./payment.partial.v1";
 export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "invoice.created": invoiceCreatedV1,
   "invoice.sent": invoiceSentV1,
-  "invoice.overdue": invoiceOverdueV1,
-  "payment.received": paymentReceivedV1,
+  "invoice.overdue": invoiceOverdueV2,
+  "payment.received": paymentReceivedV2,
   "payment.partial": paymentPartialV1,
 };
 

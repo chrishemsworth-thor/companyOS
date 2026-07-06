@@ -1,9 +1,8 @@
 import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import { ErpNextAdapter } from "../adapters/erpnext";
-import { getModuleCredentials, MOCK_CREDENTIALS } from "../middleware/tenant";
 import type { AuthedEnv } from "../middleware/auth";
+import { getDeliveryProvider } from "../../delivery/console";
 import {
   createInvoice,
   FinanceError,
@@ -85,10 +84,7 @@ invoices.post("/:id/send", async (c) => {
   }
 });
 
-/**
- * Trigger an agent-composed nudge. Delivery still goes through the adapter's
- * mock channel; the DeliveryProvider port replaces it in the next phase.
- */
+/** Trigger an agent-composed nudge, delivered through the DeliveryProvider port. */
 invoices.post("/:id/reminder", zValidator("json", reminderBodySchema), async (c) => {
   const tenant = c.get("tenant");
   const body = c.req.valid("json");
@@ -96,14 +92,7 @@ invoices.post("/:id/reminder", zValidator("json", reminderBodySchema), async (c)
   const invoice = await getInvoice(c.env.DB, tenant.tenant_id, c.req.param("id"));
   if (!invoice) return c.json({ error: "invoice not found" }, 404);
 
-  const mock = c.env.MOCK_MODE === "true";
-  const adapter = new ErpNextAdapter(mock);
-  const creds = mock
-    ? MOCK_CREDENTIALS
-    : await getModuleCredentials(c.env, tenant.tenant_id, "finance");
-  if (!creds) return c.json({ error: "finance module not connected" }, 409);
-
-  const { delivery_ref } = await adapter.sendReminder(creds, {
+  const { delivery_ref } = await getDeliveryProvider().send({
     invoice_id: invoice.invoice_id,
     customer_id: invoice.customer_id,
     channel: body.channel,

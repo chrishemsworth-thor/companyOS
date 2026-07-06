@@ -5,7 +5,7 @@ import { validatePayload } from "../src/schemas/events/registry";
 const validOverduePayload = {
   invoice_id: "inv_789",
   customer_id: "cust_456",
-  amount_due: 4500,
+  amount_due_cents: 450_000,
   currency: "MYR",
   days_overdue: 9,
 };
@@ -51,4 +51,42 @@ describe("event registry", () => {
     const result = validatePayload("invoice.overdue", { invoice_id: "inv_789" });
     expect(result.ok).toBe(false);
   });
+
+  const financeEventSamples: Record<string, Record<string, unknown>> = {
+    "invoice.created": {
+      invoice_id: "inv_1",
+      customer_id: "cust_1",
+      total_cents: 10_000,
+      currency: "MYR",
+      due_date: "2026-08-01",
+    },
+    "invoice.sent": {
+      invoice_id: "inv_1",
+      customer_id: "cust_1",
+      sent_at: "2026-07-06T00:00:00.000Z",
+    },
+    "payment.received": {
+      payment_id: "pay_1",
+      invoice_id: "inv_1",
+      customer_id: "cust_1",
+      amount_paid_cents: 10_000,
+      currency: "MYR",
+    },
+    "payment.partial": {
+      payment_id: "pay_1",
+      invoice_id: "inv_1",
+      customer_id: "cust_1",
+      amount_paid_cents: 4_000,
+      remaining_cents: 6_000,
+      currency: "MYR",
+    },
+  };
+
+  it.each(Object.entries(financeEventSamples))(
+    "accepts a valid %s payload and rejects an empty one",
+    (eventType, payload) => {
+      expect(validatePayload(eventType, payload)).toEqual({ ok: true });
+      expect(validatePayload(eventType, {}).ok).toBe(false);
+    },
+  );
 });

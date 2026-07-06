@@ -157,7 +157,8 @@ export class ErpNextAdapter implements ModuleAdapter {
         payload: {
           invoice_id: doc.name,
           customer_id: doc.customer,
-          amount_due: doc.outstanding_amount ?? 0,
+          // ERPNext reports major units; the bus speaks integer cents (v2).
+          amount_due_cents: Math.round((doc.outstanding_amount ?? 0) * 100),
           currency: doc.currency ?? "USD",
           days_overdue: daysOverdue,
         },
@@ -171,7 +172,7 @@ export class ErpNextAdapter implements ModuleAdapter {
         payload: {
           invoice_id: doc.name,
           customer_id: doc.customer,
-          amount_paid: doc.grand_total ?? 0,
+          amount_paid_cents: Math.round((doc.grand_total ?? 0) * 100),
           currency: doc.currency ?? "USD",
         },
       });
