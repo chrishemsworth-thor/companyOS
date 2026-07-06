@@ -6,6 +6,4 @@ export interface Env {
   CONFIG_CACHE: KVNamespace;
   EVENTS: Queue;
   COLLECTIONS_AGENT: DurableObjectNamespace;
-  /** "true" → adapters return canned data instead of hitting live module APIs. */
-  MOCK_MODE: string;
 }
