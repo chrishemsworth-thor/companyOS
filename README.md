@@ -50,6 +50,7 @@ src/
   agents/            CollectionsAgent Durable Object
   queue/             Event-bus consumer: validate → log → route to agent DO
 docs/architecture/   Design docs
+ui/                  Operator console (read-only dashboard + list/detail views), see ui/README.md
 ```
 
 ## The vertical slice

@@ -1,4 +1,4 @@
-import { ulid } from "ulid";
+import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
 import { canTransition, legalTransitions, type TicketStatus } from "./state-machine";
 import type { MessageAuthor, Ticket, TicketMessage, TicketPriority } from "./types";

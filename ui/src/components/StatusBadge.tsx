@@ -1,0 +1,29 @@
+const TONE_BY_STATUS: Record<string, "neutral" | "good" | "bad" | "warn"> = {
+  draft: "neutral",
+  sent: "neutral",
+  overdue: "bad",
+  partially_paid: "warn",
+  paid: "good",
+  cancelled: "neutral",
+  open: "neutral",
+  pending: "warn",
+  resolved: "good",
+  closed: "neutral",
+  won: "good",
+  lost: "bad",
+  active: "good",
+  archived: "neutral",
+  todo: "neutral",
+  in_progress: "warn",
+  done: "good",
+  low: "neutral",
+  normal: "neutral",
+  medium: "warn",
+  high: "warn",
+  urgent: "bad",
+};
+
+export function StatusBadge({ status }: { status: string }) {
+  const tone = TONE_BY_STATUS[status] ?? "neutral";
+  return <span className={`badge badge-${tone}`}>{status.replace(/_/g, " ")}</span>;
+}

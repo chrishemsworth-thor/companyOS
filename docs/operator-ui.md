@@ -7,6 +7,15 @@ top of the existing `/v1/*` API — forms and views for a person to run the
 business day-to-day without an agent or curl in the loop. It is a scoping
 exercise, not a commitment; see the recommendation at the end.
 
+## Status
+
+The §8 recommendation's first slice is built: a read-only dashboard +
+list/detail views across all four modules, with option-1 auth (paste an
+API key, session-storage only). Lives in [`../ui/`](../ui/), see its
+README to run it. CORS was added to the Worker (`src/index.ts`) to support
+it. The write-side forms, pagination/search, Kanban boards, and any
+auth upgrade from option 1 are still just scoped below, not built.
+
 ## 1. What exists to build on
 
 One Worker, four native modules, one API key per tenant, no pagination, no

@@ -1,4 +1,4 @@
-import { ulid } from "ulid";
+import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
 import type { Issue, IssuePriority, IssueStatus, Project } from "./types";
 
