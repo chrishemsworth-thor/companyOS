@@ -2,6 +2,7 @@ import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
+import { pageQuerySchema } from "../pagination";
 import {
   BuildError,
   changeIssueStatus,
@@ -27,7 +28,7 @@ const issueStatusBodySchema = z.object({
   status: z.enum(["todo", "in_progress", "done", "cancelled"]),
 });
 
-const issueListQuerySchema = z.object({
+const issueListQuerySchema = pageQuerySchema.extend({
   project_id: z.string().optional(),
   status: z.enum(["todo", "in_progress", "done", "cancelled"]).optional(),
 });
@@ -41,9 +42,10 @@ function buildErrorResponse(c: Context<AuthedEnv>, err: unknown) {
 
 export const projects = new Hono<AuthedEnv>();
 
-projects.get("/", async (c) => {
+projects.get("/", zValidator("query", pageQuerySchema), async (c) => {
   const tenant = c.get("tenant");
-  return c.json({ projects: await listProjects(c.env.DB, tenant.tenant_id) });
+  const { cursor, limit } = c.req.valid("query");
+  return c.json(await listProjects(c.env.DB, tenant.tenant_id, { cursor, limit }));
 });
 
 projects.post("/", zValidator("json", projectBodySchema), async (c) => {
@@ -63,7 +65,7 @@ export const issues = new Hono<AuthedEnv>();
 
 issues.get("/", zValidator("query", issueListQuerySchema), async (c) => {
   const tenant = c.get("tenant");
-  return c.json({ issues: await listIssues(c.env.DB, tenant.tenant_id, c.req.valid("query")) });
+  return c.json(await listIssues(c.env.DB, tenant.tenant_id, c.req.valid("query")));
 });
 
 issues.post("/", zValidator("json", issueBodySchema), async (c) => {

@@ -3,6 +3,8 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
 import { DeliveryError, sendReminder } from "../../delivery/dispatch";
+import { IdempotencyConflict, withIdempotency } from "../idempotency";
+import { pageQuerySchema } from "../pagination";
 import {
   createInvoice,
   FinanceError,
@@ -13,7 +15,7 @@ import {
 } from "../../modules/finance/service";
 import type { Invoice } from "../../modules/finance/types";
 
-const listQuerySchema = z.object({
+const listQuerySchema = pageQuerySchema.extend({
   status: z
     .enum(["draft", "sent", "overdue", "partially_paid", "paid", "cancelled"])
     .optional(),
@@ -51,18 +53,43 @@ export function financeErrorResponse(c: Context<AuthedEnv>, err: unknown) {
 
 invoices.get("/", zValidator("query", listQuerySchema), async (c) => {
   const tenant = c.get("tenant");
-  const { status } = c.req.valid("query");
-  const result = await listInvoices(c.env.DB, tenant.tenant_id, { status });
-  return c.json({ invoices: result });
+  const { status, cursor, limit } = c.req.valid("query");
+  const result = await listInvoices(c.env.DB, tenant.tenant_id, { status, cursor, limit });
+  return c.json(result);
 });
 
+/**
+ * Honors an `Idempotency-Key` header: a retry with the same key and body
+ * replays the original response instead of issuing a second invoice.
+ */
 invoices.post("/", zValidator("json", createBodySchema), async (c) => {
   const tenant = c.get("tenant");
+  const body = c.req.valid("json");
   try {
-    const invoice = await createInvoice(c.env, tenant.tenant_id, c.req.valid("json"));
-    return c.json(invoice, 201);
+    const { status, body: responseBody } = await withIdempotency<unknown>(
+      c.env.DB,
+      tenant.tenant_id,
+      "invoices.create",
+      c.req.header("Idempotency-Key"),
+      body,
+      async () => {
+        try {
+          const invoice = await createInvoice(c.env, tenant.tenant_id, body);
+          return { status: 201, body: invoice };
+        } catch (err) {
+          if (err instanceof FinanceError) {
+            return { status: err.httpStatus, body: { error: err.message, code: err.code } };
+          }
+          throw err;
+        }
+      },
+    );
+    return c.json(responseBody, status);
   } catch (err) {
-    return financeErrorResponse(c, err);
+    if (err instanceof IdempotencyConflict) {
+      return c.json({ error: err.message, code: err.code }, err.httpStatus);
+    }
+    throw err;
   }
 });
 

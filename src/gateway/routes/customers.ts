@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
+import { pageQuerySchema } from "../pagination";
 import {
   createCustomer,
   getCustomer,
@@ -18,9 +19,10 @@ const createBodySchema = z.object({
 
 export const customers = new Hono<AuthedEnv>();
 
-customers.get("/", async (c) => {
+customers.get("/", zValidator("query", pageQuerySchema), async (c) => {
   const tenant = c.get("tenant");
-  return c.json({ customers: await listCustomers(c.env.DB, tenant.tenant_id) });
+  const { cursor, limit } = c.req.valid("query");
+  return c.json(await listCustomers(c.env.DB, tenant.tenant_id, { cursor, limit }));
 });
 
 customers.post("/", zValidator("json", createBodySchema), async (c) => {

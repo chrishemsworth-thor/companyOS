@@ -1,5 +1,6 @@
 import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
+import { paginate } from "../../gateway/pagination";
 import type { Issue, IssuePriority, IssueStatus, Project } from "./types";
 
 /**
@@ -32,14 +33,27 @@ export async function getProject(
     .first<Project>();
 }
 
-export async function listProjects(db: D1Database, tenantId: string): Promise<Project[]> {
+export async function listProjects(
+  db: D1Database,
+  tenantId: string,
+  page: { cursor?: string; limit: number },
+): Promise<{ projects: Project[]; next_cursor: string | null }> {
+  const clauses = ["tenant_id = ?"];
+  const binds: unknown[] = [tenantId];
+  if (page.cursor) {
+    clauses.push("project_id > ?");
+    binds.push(page.cursor);
+  }
+  binds.push(page.limit + 1);
   const { results } = await db
     .prepare(
-      "SELECT project_id, name, status, created_at FROM projects WHERE tenant_id = ? ORDER BY created_at",
+      `SELECT project_id, name, status, created_at FROM projects WHERE ${clauses.join(" AND ")}
+       ORDER BY project_id ASC LIMIT ?`,
     )
-    .bind(tenantId)
+    .bind(...binds)
     .all<Project>();
-  return results;
+  const { items, next_cursor } = paginate(results, page.limit, "project_id");
+  return { projects: items, next_cursor };
 }
 
 export async function createProject(
@@ -81,8 +95,8 @@ export async function getIssue(
 export async function listIssues(
   db: D1Database,
   tenantId: string,
-  filter: { project_id?: string; status?: IssueStatus },
-): Promise<Issue[]> {
+  filter: { project_id?: string; status?: IssueStatus; cursor?: string; limit: number },
+): Promise<{ issues: Issue[]; next_cursor: string | null }> {
   const clauses = ["tenant_id = ?"];
   const binds: unknown[] = [tenantId];
   if (filter.project_id) {
@@ -93,11 +107,20 @@ export async function listIssues(
     clauses.push("status = ?");
     binds.push(filter.status);
   }
+  if (filter.cursor) {
+    clauses.push("issue_id > ?");
+    binds.push(filter.cursor);
+  }
+  binds.push(filter.limit + 1);
   const { results } = await db
-    .prepare(`SELECT ${ISSUE_COLUMNS} FROM issues WHERE ${clauses.join(" AND ")} ORDER BY created_at`)
+    .prepare(
+      `SELECT ${ISSUE_COLUMNS} FROM issues WHERE ${clauses.join(" AND ")}
+       ORDER BY issue_id ASC LIMIT ?`,
+    )
     .bind(...binds)
     .all<Issue>();
-  return results;
+  const { items, next_cursor } = paginate(results, filter.limit, "issue_id");
+  return { issues: items, next_cursor };
 }
 
 export async function createIssue(

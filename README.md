@@ -84,7 +84,7 @@ npm run seed:local
 This prints a tenant id, a plaintext API key (only shown here — the DB stores just its SHA-256 hash), and a ready-to-run curl command, e.g.:
 
 ```sh
-curl -X POST http://localhost:8787/v1/webhooks/erpnext \
+curl -X POST http://localhost:8787/v1/invoices \
   -H "Authorization: Bearer <printed_api_key>" \
   -H "Content-Type: application/json" \
   -d '{"customer_id":"cust_456","currency":"MYR","due_date":"2026-06-26","lines":[{"description":"Consulting","quantity":1,"unit_cents":450000}]}'
@@ -145,9 +145,10 @@ stops. Every decision (LLM or fallback) is audited into `events_log` as a
 ## Roadmap
 
 - **Phase 2** — make the agents smart (LLM-driven risk assessment and message
-  composition, ✅ Workstream 2) and wire real delivery providers
-  (email/WhatsApp) behind the `DeliveryProvider` port (✅ Workstream 1);
-  transactional outbox if new event types need it.
+  composition, ✅ Workstream 2), wire real delivery providers (email/WhatsApp)
+  behind the `DeliveryProvider` port (✅ Workstream 1), and idempotency keys +
+  cursor pagination (✅ Workstream 4); transactional outbox only if a new
+  event type needs it (Workstream 3 — not yet triggered).
   Full brief: [docs/architecture/phase-2-plan.md](docs/architecture/phase-2-plan.md).
 - **Phase 3** — People/HR module on the same pattern; cross-module Insights
   (the payoff of one database: support tickets × overdue invoices × open
