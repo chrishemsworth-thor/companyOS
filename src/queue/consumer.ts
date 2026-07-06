@@ -49,8 +49,20 @@ async function logEvent(env: Env, envelope: EventEnvelope): Promise<void> {
     .run();
 }
 
+/**
+ * Per-event-type routing map. Events not listed here (deal.*, ticket.*,
+ * issue.*, ...) are audit-logged only — future agents (SupportAgent, ...)
+ * claim their event types by adding entries.
+ */
+const AGENT_ROUTES: Record<string, "collections"> = {
+  "invoice.overdue": "collections",
+  "payment.received": "collections",
+};
+
 async function routeToAgent(env: Env, envelope: EventEnvelope): Promise<void> {
-  // Finance events carry customer_id; the agent DO is per (tenant, customer).
+  if (!AGENT_ROUTES[envelope.event_type]) return;
+
+  // Agent DOs are per (tenant, customer).
   const customerId = (envelope.payload as { customer_id?: string }).customer_id;
   if (!customerId) {
     throw new Error(`event ${envelope.event_id} has no customer_id to route on`);

@@ -10,6 +10,10 @@ import { dealStageChangedV1 } from "./deal.stage_changed.v1";
 import { dealWonV1 } from "./deal.won.v1";
 import { dealLostV1 } from "./deal.lost.v1";
 import { activityLoggedV1 } from "./activity.logged.v1";
+import { ticketCreatedV1 } from "./ticket.created.v1";
+import { ticketMessageAddedV1 } from "./ticket.message_added.v1";
+import { ticketStatusChangedV1 } from "./ticket.status_changed.v1";
+import { ticketResolvedV1 } from "./ticket.resolved.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -32,6 +36,10 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "deal.won": dealWonV1,
   "deal.lost": dealLostV1,
   "activity.logged": activityLoggedV1,
+  "ticket.created": ticketCreatedV1,
+  "ticket.message_added": ticketMessageAddedV1,
+  "ticket.status_changed": ticketStatusChangedV1,
+  "ticket.resolved": ticketResolvedV1,
 };
 
 export function validatePayload(
