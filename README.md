@@ -12,6 +12,11 @@ VPS. See [docs/architecture/phase-1-native.md](docs/architecture/phase-1-native.
 for the full design ([phase-0.md](docs/architecture/phase-0.md) records the
 earlier OSS-wrapping approach it replaced).
 
+Per-module references: [Finance](docs/modules/finance.md) ·
+[CRM](docs/modules/crm.md) · [Support](docs/modules/support.md) ·
+[Build](docs/modules/build.md). What's next:
+[Phase 2 plan](docs/architecture/phase-2-plan.md).
+
 ## Stack
 
 | Layer | Technology |
@@ -96,6 +101,7 @@ curl -X POST http://localhost:8787/v1/invoices \
 - **Phase 2** — make the agents smart (LLM-driven risk assessment and message
   composition) and wire real delivery providers (email/WhatsApp) behind the
   `DeliveryProvider` port; transactional outbox if new event types need it.
+  Full brief: [docs/architecture/phase-2-plan.md](docs/architecture/phase-2-plan.md).
 - **Phase 3** — People/HR module on the same pattern; cross-module Insights
   (the payoff of one database: support tickets × overdue invoices × open
   deals are plain SQL joins).

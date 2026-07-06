@@ -49,12 +49,15 @@ Consequences:
 
 ## Modules
 
-| Module | source_module | Tables | Routes |
-|---|---|---|---|
-| Finance | `finance` | accounts, journal_entries, journal_lines, invoices, invoice_lines, payments, payment_applications | `/v1/invoices`, `/v1/payments`, `/v1/ledger/*` |
-| CRM | `sales` | customers, pipeline_stages, deals, activities | `/v1/customers`, `/v1/deals`, `/v1/activities` |
-| Support | `support` | tickets, ticket_messages | `/v1/tickets` |
-| Build | `build` | projects, issues | `/v1/projects`, `/v1/issues` |
+| Module | source_module | Tables | Routes | Reference |
+|---|---|---|---|---|
+| Finance | `finance` | accounts, journal_entries, journal_lines, invoices, invoice_lines, payments, payment_applications | `/v1/invoices`, `/v1/payments`, `/v1/ledger/*` | [docs/modules/finance.md](../modules/finance.md) |
+| CRM | `sales` | customers, pipeline_stages, deals, activities | `/v1/customers`, `/v1/deals`, `/v1/activities` | [docs/modules/crm.md](../modules/crm.md) |
+| Support | `support` | tickets, ticket_messages | `/v1/tickets` | [docs/modules/support.md](../modules/support.md) |
+| Build | `build` | projects, issues | `/v1/projects`, `/v1/issues` | [docs/modules/build.md](../modules/build.md) |
+
+Phase 2 (smart agents, real delivery) is specified in
+[phase-2-plan.md](phase-2-plan.md).
 
 Each module follows the same shape: `src/modules/<domain>/service.ts` owns all
 writes (validate → atomic D1 batch → emit events); `src/gateway/routes/*`
