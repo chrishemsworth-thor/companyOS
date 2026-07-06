@@ -1,4 +1,4 @@
-import { ulid } from "ulid";
+import { ulid } from "../../lib/ulid";
 import type {
   Account,
   EntrySourceType,

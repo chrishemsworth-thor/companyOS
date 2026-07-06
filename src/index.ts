@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { Env } from "./env";
 import { apiKeyAuth, type AuthedEnv } from "./gateway/middleware/auth";
 import { invoices } from "./gateway/routes/invoices";
@@ -17,6 +18,17 @@ export { CollectionsAgent } from "./agents/collections";
 const app = new Hono<AuthedEnv>();
 
 app.get("/health", (c) => c.json({ ok: true, service: "companyos-gateway" }));
+
+// Browser clients (e.g. the operator UI) call this API cross-origin using a
+// bearer token, never cookies, so an open origin policy carries no CSRF risk.
+app.use(
+  "/v1/*",
+  cors({
+    origin: "*",
+    allowHeaders: ["Authorization", "Content-Type"],
+    allowMethods: ["GET", "POST", "OPTIONS"],
+  }),
+);
 
 // Everything under /v1 requires a tenant API key.
 app.use("/v1/*", apiKeyAuth());

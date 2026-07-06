@@ -1,4 +1,4 @@
-import { ulid } from "ulid";
+import { ulid } from "../lib/ulid";
 import type { Env } from "../env";
 import type { DeliveryChannel, DeliveryProvider, DeliveryProviderName } from "./types";
 import { ConsoleDelivery } from "./console";
