@@ -49,7 +49,7 @@ beforeAll(async () => {
   for (const [tenantId, key, name] of [
     [TENANT_A, API_KEY, "Events Tenant A"],
     [TENANT_B, OTHER_KEY, "Events Tenant B"],
-  ]) {
+  ] as const) {
     await env.DB.prepare(
       "INSERT OR IGNORE INTO tenants (tenant_id, name, api_key_hash) VALUES (?, ?, ?)",
     )
