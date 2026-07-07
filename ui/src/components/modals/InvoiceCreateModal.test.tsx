@@ -9,6 +9,7 @@ const fetchMock = vi.fn();
 beforeEach(() => {
   sessionStorage.setItem("companyos_api_key", "key_test");
   vi.stubGlobal("fetch", fetchMock);
+  fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
     if (String(url).includes("/v1/customers")) {
       return new Response(
