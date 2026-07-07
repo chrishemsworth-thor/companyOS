@@ -45,12 +45,12 @@ src/
     build/           Projects, issues
   delivery/          DeliveryProvider port (email/WhatsApp; console impl for dev)
   gateway/
-    routes/          /v1/invoices, payments, ledger, customers, deals, activities, tickets, projects, issues
+    routes/          /v1/invoices, payments, ledger, customers, deals, activities, tickets, projects, issues, events
     middleware/      API-key auth + tenant resolution (D1 truth, KV cache)
   agents/            CollectionsAgent Durable Object
   queue/             Event-bus consumer: validate → log → route to agent DO
 docs/architecture/   Design docs
-ui/                  Operator console (read-only dashboard + list/detail views), see ui/README.md
+ui/                  Operator console (dashboard, write actions, agent activity), see ui/README.md
 ```
 
 ## The vertical slice

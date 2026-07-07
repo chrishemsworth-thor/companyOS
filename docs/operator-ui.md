@@ -9,12 +9,22 @@ exercise, not a commitment; see the recommendation at the end.
 
 ## Status
 
-The §8 recommendation's first slice is built: a read-only dashboard +
-list/detail views across all four modules, with option-1 auth (paste an
-API key, session-storage only). Lives in [`../ui/`](../ui/), see its
-README to run it. CORS was added to the Worker (`src/index.ts`) to support
-it. The write-side forms, pagination/search, Kanban boards, and any
-auth upgrade from option 1 are still just scoped below, not built.
+The §8 recommendation's first slice is built and has since grown a write
+side: dashboard + list/detail views across all four modules, plus create
+and transition forms for invoices (create/send/reminder/record payment),
+ledger journal entries, customers (create/edit), deals (create/stage
+move), activities, tickets (create/reply/status), projects, and issues
+(create/status) — all against the existing `/v1/*` routes, with
+idempotency keys on invoice/payment creation. The UI also surfaces the
+collections agent: a tenant-wide **Agent activity** feed (`/agent`,
+backed by `GET /v1/events`), a per-customer agent snapshot
+(`GET /v1/customers/:id/agent`), and invoice-scoped event timelines.
+Auth remains option 1 (paste an API key, session-storage only). Lives in
+[`../ui/`](../ui/), see its README to run it. CORS on the Worker
+(`src/index.ts`) allows `Idempotency-Key` and `PATCH` for the browser.
+Still not built: pagination/search in lists, Kanban boards, a ledger
+entries list (and with it a reverse-entry UI), and any auth upgrade
+from option 1.
 
 ## 1. What exists to build on
 
