@@ -92,6 +92,18 @@ curl -X POST http://localhost:8787/v1/invoices \
 
 Pass `--tenant-id`, `--name`, or `--api-key` to `npm run seed:local` to customize the seeded tenant.
 
+To populate that tenant with a realistic dataset across every module (a few
+customers, invoices in different lifecycle states including one flipped to
+`overdue`, deals, tickets, a project with issues) instead of building it up
+by hand:
+
+```sh
+npm run seed:sample -- --api-key <printed_api_key>
+```
+
+Handy for poking around the [operator console](ui/README.md) without
+inventing data yourself.
+
 ## Deploying
 
 1. Create the resources and paste the returned IDs into `wrangler.jsonc` (they ship as placeholders):
