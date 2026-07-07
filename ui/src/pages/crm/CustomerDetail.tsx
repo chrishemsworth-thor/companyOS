@@ -1,14 +1,23 @@
-import { useParams, Link } from "react-router-dom";
+import { useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { Field } from "../../components/Field";
+import { CustomerFormModal } from "../../components/modals/CustomerFormModal";
+import { ActivityLogModal } from "../../components/modals/ActivityLogModal";
+import { DealCreateModal } from "../../components/modals/DealCreateModal";
+import { InvoiceCreateModal } from "../../components/modals/InvoiceCreateModal";
 import { formatMoney, formatDate } from "../../lib/format";
 import type { Customer, PaymentHistoryEntry, Activity } from "../../api/types";
+
+type OpenModal = "edit" | "activity" | "deal" | "invoice" | null;
 
 export function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAuth();
+  const navigate = useNavigate();
+  const [openModal, setOpenModal] = useState<OpenModal>(null);
 
   const customerQuery = useQuery({
     queryKey: ["customer", id],
@@ -37,7 +46,44 @@ export function CustomerDetail() {
       <Link to="/customers" className="back-link">
         ← Customers
       </Link>
-      <h1>{customer.name}</h1>
+      <div className="page-header">
+        <h1>{customer.name}</h1>
+        <div className="action-bar">
+          <button className="btn" onClick={() => setOpenModal("edit")}>
+            Edit
+          </button>
+          <button className="btn" onClick={() => setOpenModal("activity")}>
+            Log activity
+          </button>
+          <button className="btn" onClick={() => setOpenModal("deal")}>
+            New deal
+          </button>
+          <button className="btn" onClick={() => setOpenModal("invoice")}>
+            New invoice
+          </button>
+        </div>
+      </div>
+
+      {openModal === "edit" && (
+        <CustomerFormModal existing={customer} onClose={() => setOpenModal(null)} />
+      )}
+      {openModal === "activity" && (
+        <ActivityLogModal customerId={customer.customer_id} onClose={() => setOpenModal(null)} />
+      )}
+      {openModal === "deal" && (
+        <DealCreateModal
+          defaultCustomerId={customer.customer_id}
+          onClose={() => setOpenModal(null)}
+          onCreated={(deal) => navigate(`/deals/${deal.deal_id}`)}
+        />
+      )}
+      {openModal === "invoice" && (
+        <InvoiceCreateModal
+          defaultCustomerId={customer.customer_id}
+          onClose={() => setOpenModal(null)}
+          onCreated={(invoice) => navigate(`/invoices/${invoice.invoice_id}`)}
+        />
+      )}
 
       <div className="detail-grid">
         <Field label="Customer id">{customer.customer_id}</Field>

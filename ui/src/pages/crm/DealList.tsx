@@ -1,5 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { DealCreateModal } from "../../components/modals/DealCreateModal";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
@@ -12,7 +14,9 @@ const STATUSES: DealStatus[] = ["open", "won", "lost"];
 
 export function DealList() {
   const { client } = useAuth();
+  const navigate = useNavigate();
   const [status, setStatus] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const stagesQuery = useQuery({
     queryKey: ["deals", "stages"],
@@ -35,8 +39,19 @@ export function DealList() {
     <div>
       <div className="page-header">
         <h1>Deals</h1>
-        <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
+        <div className="action-bar">
+          <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
+          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            New deal
+          </button>
+        </div>
       </div>
+      {creating && (
+        <DealCreateModal
+          onClose={() => setCreating(false)}
+          onCreated={(deal) => navigate(`/deals/${deal.deal_id}`)}
+        />
+      )}
       {(dealsQuery.isLoading || stagesQuery.isLoading) && <LoadingState />}
       {(dealsQuery.error || stagesQuery.error) && (
         <ErrorState error={dealsQuery.error ?? stagesQuery.error} />
