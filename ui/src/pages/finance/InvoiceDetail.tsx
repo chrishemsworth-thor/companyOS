@@ -6,6 +6,7 @@ import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Field } from "../../components/Field";
 import { FormError } from "../../components/FormError";
+import { AgentEventFeed } from "../../components/AgentEventFeed";
 import { PaymentModal } from "../../components/modals/PaymentModal";
 import { ReminderModal } from "../../components/modals/ReminderModal";
 import { useApiMutation } from "../../hooks/useApiMutation";
@@ -109,6 +110,9 @@ export function InvoiceDetail() {
           ))}
         </tbody>
       </table>
+
+      <h2>Agent activity</h2>
+      <AgentEventFeed invoiceId={invoice.invoice_id} />
     </div>
   );
 }

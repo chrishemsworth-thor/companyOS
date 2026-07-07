@@ -9,8 +9,10 @@ import { ActivityLogModal } from "../../components/modals/ActivityLogModal";
 import { DealCreateModal } from "../../components/modals/DealCreateModal";
 import { InvoiceCreateModal } from "../../components/modals/InvoiceCreateModal";
 import { TicketCreateModal } from "../../components/modals/TicketCreateModal";
+import { AgentEventFeed } from "../../components/AgentEventFeed";
+import { StatusBadge } from "../../components/StatusBadge";
 import { formatMoney, formatDate } from "../../lib/format";
-import type { Customer, PaymentHistoryEntry, Activity } from "../../api/types";
+import type { AgentSnapshot, Customer, PaymentHistoryEntry, Activity } from "../../api/types";
 
 type OpenModal = "edit" | "activity" | "deal" | "invoice" | "ticket" | null;
 
@@ -34,6 +36,11 @@ export function CustomerDetail() {
   const activitiesQuery = useQuery({
     queryKey: ["customer", id, "activities"],
     queryFn: () => client!.get<{ activities: Activity[] }>(`/v1/customers/${id}/activities`),
+    enabled: !!client && !!id,
+  });
+  const agentQuery = useQuery({
+    queryKey: ["customer", id, "agent"],
+    queryFn: () => client!.get<{ agent_state: AgentSnapshot | null }>(`/v1/customers/${id}/agent`),
     enabled: !!client && !!id,
   });
 
@@ -101,6 +108,31 @@ export function CustomerDetail() {
         <Field label="Email">{customer.email ?? "—"}</Field>
         <Field label="Phone">{customer.phone ?? "—"}</Field>
       </div>
+
+      <h2>Collections agent</h2>
+      {agentQuery.data?.agent_state ? (
+        <div className="detail-grid">
+          <Field label="Risk score">{agentQuery.data.agent_state.risk_score}/100</Field>
+          <Field label="Escalation">
+            <StatusBadge status={agentQuery.data.agent_state.escalation_stage} />
+          </Field>
+          <Field label="Last contact">{formatDate(agentQuery.data.agent_state.last_contact)}</Field>
+          <Field label="Reminders sent">{agentQuery.data.agent_state.reminder_history.length}</Field>
+          <Field label="Open overdue invoices">
+            {agentQuery.data.agent_state.open_overdue_invoices.length === 0
+              ? "None"
+              : agentQuery.data.agent_state.open_overdue_invoices.map((invoiceId) => (
+                  <div key={invoiceId}>
+                    <Link to={`/invoices/${invoiceId}`}>{invoiceId}</Link>
+                  </div>
+                ))}
+          </Field>
+        </div>
+      ) : (
+        <div className="empty-state">The collections agent hasn't engaged this customer.</div>
+      )}
+      <h2>Agent activity</h2>
+      <AgentEventFeed customerId={id} showCustomer={false} />
 
       <h2>Payment history</h2>
       {historyQuery.isLoading && <LoadingState />}

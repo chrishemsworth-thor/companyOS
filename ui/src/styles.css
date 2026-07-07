@@ -540,3 +540,13 @@ textarea.input {
   gap: 0.6rem;
   margin-top: 1rem;
 }
+
+.event-message {
+  margin-top: 0.3rem;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+}
+.event-message summary {
+  cursor: pointer;
+  color: var(--accent);
+}
