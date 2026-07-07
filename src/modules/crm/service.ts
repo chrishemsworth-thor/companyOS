@@ -1,5 +1,6 @@
 import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
+import { paginate } from "../../gateway/pagination";
 import type {
   Activity,
   ActivityKind,
@@ -100,12 +101,27 @@ export async function getCustomer(
     .first<Customer>();
 }
 
-export async function listCustomers(db: D1Database, tenantId: string): Promise<Customer[]> {
+export async function listCustomers(
+  db: D1Database,
+  tenantId: string,
+  page: { cursor?: string; limit: number },
+): Promise<{ customers: Customer[]; next_cursor: string | null }> {
+  const clauses = ["tenant_id = ?"];
+  const binds: unknown[] = [tenantId];
+  if (page.cursor) {
+    clauses.push("customer_id > ?");
+    binds.push(page.cursor);
+  }
+  binds.push(page.limit + 1);
   const { results } = await db
-    .prepare("SELECT customer_id, name, email, phone FROM customers WHERE tenant_id = ? ORDER BY name")
-    .bind(tenantId)
+    .prepare(
+      `SELECT customer_id, name, email, phone FROM customers WHERE ${clauses.join(" AND ")}
+       ORDER BY customer_id ASC LIMIT ?`,
+    )
+    .bind(...binds)
     .all<Customer>();
-  return results;
+  const { items, next_cursor } = paginate(results, page.limit, "customer_id");
+  return { customers: items, next_cursor };
 }
 
 export async function createCustomer(
@@ -184,19 +200,28 @@ export async function getDeal(
 export async function listDeals(
   db: D1Database,
   tenantId: string,
-  filter: { status?: Deal["status"] },
-): Promise<Deal[]> {
-  const query = filter.status
-    ? db
-        .prepare(
-          `SELECT ${DEAL_COLUMNS} FROM deals WHERE tenant_id = ? AND status = ? ORDER BY created_at`,
-        )
-        .bind(tenantId, filter.status)
-    : db
-        .prepare(`SELECT ${DEAL_COLUMNS} FROM deals WHERE tenant_id = ? ORDER BY created_at`)
-        .bind(tenantId);
-  const { results } = await query.all<Deal>();
-  return results;
+  filter: { status?: Deal["status"]; cursor?: string; limit: number },
+): Promise<{ deals: Deal[]; next_cursor: string | null }> {
+  const clauses = ["tenant_id = ?"];
+  const binds: unknown[] = [tenantId];
+  if (filter.status) {
+    clauses.push("status = ?");
+    binds.push(filter.status);
+  }
+  if (filter.cursor) {
+    clauses.push("deal_id > ?");
+    binds.push(filter.cursor);
+  }
+  binds.push(filter.limit + 1);
+  const { results } = await db
+    .prepare(
+      `SELECT ${DEAL_COLUMNS} FROM deals WHERE ${clauses.join(" AND ")}
+       ORDER BY deal_id ASC LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<Deal>();
+  const { items, next_cursor } = paginate(results, filter.limit, "deal_id");
+  return { deals: items, next_cursor };
 }
 
 export async function createDeal(

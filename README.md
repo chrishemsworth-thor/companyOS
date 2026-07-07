@@ -157,9 +157,10 @@ stops. Every decision (LLM or fallback) is audited into `events_log` as a
 ## Roadmap
 
 - **Phase 2** — make the agents smart (LLM-driven risk assessment and message
-  composition, ✅ Workstream 2) and wire real delivery providers
-  (email/WhatsApp) behind the `DeliveryProvider` port (✅ Workstream 1);
-  transactional outbox if new event types need it.
+  composition, ✅ Workstream 2), wire real delivery providers (email/WhatsApp)
+  behind the `DeliveryProvider` port (✅ Workstream 1), and idempotency keys +
+  cursor pagination (✅ Workstream 4); transactional outbox only if a new
+  event type needs it (Workstream 3 — not yet triggered).
   Full brief: [docs/architecture/phase-2-plan.md](docs/architecture/phase-2-plan.md).
 - **Phase 3** — People/HR module on the same pattern; cross-module Insights
   (the payoff of one database: support tickets × overdue invoices × open

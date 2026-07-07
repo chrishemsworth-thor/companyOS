@@ -28,9 +28,7 @@ execFileSync("npx", ["wrangler", "d1", "execute", "companyos-db", "--local", "--
 console.log("\nSeeded local tenant:");
 console.log(`  tenant_id: ${tenantId}`);
 console.log(`  api_key:   ${apiKey}  (plaintext — only shown here, only the hash is stored)`);
-console.log("\nPopulate it with sample data across every module:");
-console.log(`  npm run seed:sample -- --api-key ${apiKey}`);
-console.log("\n...or try the vertical slice by hand:");
+console.log("\nTry the vertical slice:");
 console.log(`curl -X POST http://localhost:8787/v1/invoices \\
   -H "Authorization: Bearer ${apiKey}" \\
   -H "Content-Type: application/json" \\

@@ -42,13 +42,13 @@ Auth as everywhere (`Bearer <tenant_api_key>`). `CrmError` maps to 404
 
 | Method & path | Body | Returns |
 |---|---|---|
-| `GET /v1/customers` | — | `{customers: [...]}` |
+| `GET /v1/customers?limit=&cursor=` | — | `{customers: [...], next_cursor}` |
 | `POST /v1/customers` | `{name, email?, phone?}` | 201 customer |
 | `GET /v1/customers/:id` | — | customer or 404 |
 | `GET /v1/customers/:id/payment-history` | — | `{payments: [{payment_id, invoice_id, applied_cents, currency, received_at}]}` |
 | `GET /v1/customers/:id/activities` | — | `{activities: [...]}` ordered by `occurred_at` |
 | `GET /v1/deals/stages` | — | seeds + lists the pipeline |
-| `GET /v1/deals?status=` | — | `{deals: [...]}` |
+| `GET /v1/deals?status=&limit=&cursor=` | — | `{deals: [...], next_cursor}` |
 | `POST /v1/deals` | `{customer_id, title, value_cents, currency, stage_id?}` | 201 deal |
 | `GET /v1/deals/:id` | — | deal or 404 |
 | `POST /v1/deals/:id/stage` | `{stage_id}` | deal with updated stage/status |

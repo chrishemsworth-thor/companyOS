@@ -32,10 +32,10 @@ Auth as everywhere. `BuildError` maps to 404 (`not_found`) and 409
 
 | Method & path | Body | Returns |
 |---|---|---|
-| `GET /v1/projects` | — | `{projects: [...]}` |
+| `GET /v1/projects?limit=&cursor=` | — | `{projects: [...], next_cursor}` |
 | `POST /v1/projects` | `{name}` | 201 project (`active`) |
 | `GET /v1/projects/:id` | — | project or 404 |
-| `GET /v1/issues?project_id=&status=` | — | `{issues: [...]}` (both filters optional, combinable) |
+| `GET /v1/issues?project_id=&status=&limit=&cursor=` | — | `{issues: [...], next_cursor}` (filters optional, combinable) |
 | `POST /v1/issues` | `{project_id, title, description?, priority?, assignee?}` | 201 issue (`todo`); unknown project → 404 |
 | `GET /v1/issues/:id` | — | issue or 404 |
 | `POST /v1/issues/:id/status` | `{status}` | issue; settled→non-todo → 409; no-op moves return the issue unchanged |
