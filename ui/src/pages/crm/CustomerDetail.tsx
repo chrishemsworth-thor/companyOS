@@ -8,10 +8,11 @@ import { CustomerFormModal } from "../../components/modals/CustomerFormModal";
 import { ActivityLogModal } from "../../components/modals/ActivityLogModal";
 import { DealCreateModal } from "../../components/modals/DealCreateModal";
 import { InvoiceCreateModal } from "../../components/modals/InvoiceCreateModal";
+import { TicketCreateModal } from "../../components/modals/TicketCreateModal";
 import { formatMoney, formatDate } from "../../lib/format";
 import type { Customer, PaymentHistoryEntry, Activity } from "../../api/types";
 
-type OpenModal = "edit" | "activity" | "deal" | "invoice" | null;
+type OpenModal = "edit" | "activity" | "deal" | "invoice" | "ticket" | null;
 
 export function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
@@ -61,6 +62,9 @@ export function CustomerDetail() {
           <button className="btn" onClick={() => setOpenModal("invoice")}>
             New invoice
           </button>
+          <button className="btn" onClick={() => setOpenModal("ticket")}>
+            New ticket
+          </button>
         </div>
       </div>
 
@@ -82,6 +86,13 @@ export function CustomerDetail() {
           defaultCustomerId={customer.customer_id}
           onClose={() => setOpenModal(null)}
           onCreated={(invoice) => navigate(`/invoices/${invoice.invoice_id}`)}
+        />
+      )}
+      {openModal === "ticket" && (
+        <TicketCreateModal
+          defaultCustomerId={customer.customer_id}
+          onClose={() => setOpenModal(null)}
+          onCreated={(ticket) => navigate(`/tickets/${ticket.ticket_id}`)}
         />
       )}
 

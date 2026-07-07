@@ -1,16 +1,20 @@
-import { useParams, Link } from "react-router-dom";
+import { useState } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { StatusBadge } from "../../components/StatusBadge";
 import { DataTable } from "../../components/DataTable";
 import { Field } from "../../components/Field";
+import { IssueCreateModal } from "../../components/modals/IssueCreateModal";
 import { formatDate } from "../../lib/format";
 import type { Project, Issue } from "../../api/types";
 
 export function ProjectDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAuth();
+  const navigate = useNavigate();
+  const [creating, setCreating] = useState(false);
 
   const projectQuery = useQuery({
     queryKey: ["project", id],
@@ -35,8 +39,20 @@ export function ProjectDetail() {
       </Link>
       <div className="page-header">
         <h1>{project.name}</h1>
-        <StatusBadge status={project.status} />
+        <div className="action-bar">
+          <button className="btn btn-primary" onClick={() => setCreating(true)}>
+            New issue
+          </button>
+          <StatusBadge status={project.status} />
+        </div>
       </div>
+      {creating && (
+        <IssueCreateModal
+          defaultProjectId={project.project_id}
+          onClose={() => setCreating(false)}
+          onCreated={(issue) => navigate(`/issues/${issue.issue_id}`)}
+        />
+      )}
       <div className="detail-grid">
         <Field label="Created">{formatDate(project.created_at)}</Field>
       </div>
