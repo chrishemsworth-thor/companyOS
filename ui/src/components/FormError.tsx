@@ -7,6 +7,8 @@ export function FormError({ error }: { error: unknown }) {
       ? `${error.message}${error.code ? ` (${error.code})` : ""}`
       : error instanceof Error
         ? error.message
-        : "request failed";
+        : typeof error === "string"
+          ? error
+          : "request failed";
   return <div className="form-error">{message}</div>;
 }
