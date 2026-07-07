@@ -5,6 +5,8 @@ export default defineWorkersConfig(async () => {
   const migrations = await readD1Migrations(path.join(__dirname, "migrations"));
   return {
     test: {
+      // The UI package has its own jsdom-based vitest config (ui/vitest.config.ts).
+      include: ["test/**/*.test.ts"],
       setupFiles: ["./test/setup.ts"],
       poolOptions: {
         workers: {
