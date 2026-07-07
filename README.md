@@ -84,13 +84,25 @@ npm run seed:local
 This prints a tenant id, a plaintext API key (only shown here — the DB stores just its SHA-256 hash), and a ready-to-run curl command, e.g.:
 
 ```sh
-curl -X POST http://localhost:8787/v1/webhooks/erpnext \
+curl -X POST http://localhost:8787/v1/invoices \
   -H "Authorization: Bearer <printed_api_key>" \
   -H "Content-Type: application/json" \
   -d '{"customer_id":"cust_456","currency":"MYR","due_date":"2026-06-26","lines":[{"description":"Consulting","quantity":1,"unit_cents":450000}]}'
 ```
 
 Pass `--tenant-id`, `--name`, or `--api-key` to `npm run seed:local` to customize the seeded tenant.
+
+To populate that tenant with a realistic dataset across every module (a few
+customers, invoices in different lifecycle states including one flipped to
+`overdue`, deals, tickets, a project with issues) instead of building it up
+by hand:
+
+```sh
+npm run seed:sample -- --api-key <printed_api_key>
+```
+
+Handy for poking around the [operator console](ui/README.md) without
+inventing data yourself.
 
 ## Deploying
 

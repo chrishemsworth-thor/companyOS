@@ -28,8 +28,10 @@ execFileSync("npx", ["wrangler", "d1", "execute", "companyos-db", "--local", "--
 console.log("\nSeeded local tenant:");
 console.log(`  tenant_id: ${tenantId}`);
 console.log(`  api_key:   ${apiKey}  (plaintext — only shown here, only the hash is stored)`);
-console.log("\nTry the vertical slice:");
-console.log(`curl -X POST http://localhost:8787/v1/webhooks/erpnext \\
+console.log("\nPopulate it with sample data across every module:");
+console.log(`  npm run seed:sample -- --api-key ${apiKey}`);
+console.log("\n...or try the vertical slice by hand:");
+console.log(`curl -X POST http://localhost:8787/v1/invoices \\
   -H "Authorization: Bearer ${apiKey}" \\
   -H "Content-Type: application/json" \\
-  -d '{"doctype":"Sales Invoice","name":"inv_789","customer":"cust_456","status":"Overdue","outstanding_amount":4500,"currency":"MYR","due_date":"2026-06-26"}'`);
+  -d '{"customer_id":"cust_456","currency":"MYR","due_date":"2026-06-26","lines":[{"description":"Consulting","quantity":1,"unit_cents":450000}]}'`);

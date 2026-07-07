@@ -24,11 +24,15 @@ Opens on `http://localhost:5173`. It talks to the CompanyOS Worker over
 # in the repo root
 npm run dev
 npm run seed:local   # prints a tenant API key
+npm run seed:sample -- --api-key <printed_api_key>   # optional: populate sample data
 ```
 
 Paste the printed API key into the console's login screen (the base URL
 field defaults to `http://localhost:8787`, override it if your Worker runs
-elsewhere).
+elsewhere). `seed:sample` gives you something to look at immediately —
+customers, invoices in different states (including one flipped to
+`overdue`), deals, tickets, and a project with issues — instead of
+starting from an empty dashboard.
 
 ## Notes
 
