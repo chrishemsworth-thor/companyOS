@@ -10,6 +10,7 @@ import { deals } from "./gateway/routes/deals";
 import { activities } from "./gateway/routes/activities";
 import { tickets } from "./gateway/routes/tickets";
 import { projects, issues } from "./gateway/routes/projects";
+import { events } from "./gateway/routes/events";
 import { handleEventBatch } from "./queue/consumer";
 import { runOverdueSweep } from "./modules/finance/overdue-sweep";
 
@@ -25,8 +26,8 @@ app.use(
   "/v1/*",
   cors({
     origin: "*",
-    allowHeaders: ["Authorization", "Content-Type"],
-    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
+    allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
   }),
 );
 
@@ -41,6 +42,7 @@ app.route("/v1/activities", activities);
 app.route("/v1/tickets", tickets);
 app.route("/v1/projects", projects);
 app.route("/v1/issues", issues);
+app.route("/v1/events", events);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {
