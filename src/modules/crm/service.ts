@@ -161,6 +161,36 @@ export async function createCustomer(
   return { customer_id: customerId, name: input.name, email: input.email ?? null, phone: input.phone ?? null };
 }
 
+export async function updateCustomer(
+  db: D1Database,
+  tenantId: string,
+  customerId: string,
+  patch: { name?: string; email?: string; phone?: string },
+): Promise<Customer> {
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (patch.name !== undefined) {
+    sets.push("name = ?");
+    binds.push(patch.name);
+  }
+  if (patch.email !== undefined) {
+    sets.push("email = ?");
+    binds.push(patch.email);
+  }
+  if (patch.phone !== undefined) {
+    sets.push("phone = ?");
+    binds.push(patch.phone);
+  }
+  const result = await db
+    .prepare(`UPDATE customers SET ${sets.join(", ")} WHERE tenant_id = ? AND customer_id = ?`)
+    .bind(...binds, tenantId, customerId)
+    .run();
+  if (result.meta.changes === 0) {
+    throw new CrmError("not_found", "customer not found", 404);
+  }
+  return (await getCustomer(db, tenantId, customerId)) as Customer;
+}
+
 /** Real query over payments/applications — replaces the old Frappe call. */
 export async function getPaymentHistory(
   db: D1Database,

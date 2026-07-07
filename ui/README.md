@@ -1,13 +1,15 @@
 # CompanyOS Operator Console
 
-A read-only operator UI over the CompanyOS `/v1/*` API: a dashboard plus
-list/detail views for invoices, the ledger, customers, deals, tickets,
-projects, and issues. Scoped in [`../docs/operator-ui.md`](../docs/operator-ui.md);
-this is the MVP slice from that plan — read-only, single-operator auth
-(paste an API key, kept only in the browser tab's session storage).
-
-No write actions (create/send/pay/status-change) yet — see the scoping doc
-for what's deliberately deferred and why.
+An operator UI over the CompanyOS `/v1/*` API: a dashboard, list/detail
+views, and write actions for invoices (create/send/reminder/record
+payment), ledger journal entries, customers (create/edit), deals
+(create/stage move), activities, tickets (create/reply/status),
+projects, and issues (create/status). It also surfaces the collections
+agent: an **Agent activity** feed at `/agent`, a per-customer agent
+snapshot card, and invoice-scoped event timelines. Scoped in
+[`../docs/operator-ui.md`](../docs/operator-ui.md); auth is still the
+single-operator slice from that plan (paste an API key, kept only in
+the browser tab's session storage).
 
 ## Run it
 
@@ -42,4 +44,8 @@ starting from an empty dashboard.
   from a shared machine.
 - No pagination yet: list views fetch full result sets, matching the
   API's current behavior (documented as a known gap in the scoping doc).
-- Data layer: TanStack Query, no caching tricks beyond its defaults.
+- Data layer: TanStack Query. Mutations invalidate the affected query
+  keys rather than patching caches, except deal-stage and issue-status
+  moves, which apply optimistically and roll back on error. Invoice and
+  payment creation send an `Idempotency-Key` so retries can't
+  double-issue or double-charge.

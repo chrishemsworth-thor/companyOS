@@ -1,11 +1,14 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
+import { JournalEntryModal } from "../../components/modals/JournalEntryModal";
 import { formatCents } from "../../lib/format";
 import type { Account, AccountBalance } from "../../api/types";
 
 export function Ledger() {
   const { client } = useAuth();
+  const [posting, setPosting] = useState(false);
   const accountsQuery = useQuery({
     queryKey: ["ledger", "accounts"],
     queryFn: () => client!.get<{ accounts: Account[] }>("/v1/ledger/accounts"),
@@ -18,7 +21,13 @@ export function Ledger() {
 
   return (
     <div>
-      <h1>Chart of accounts</h1>
+      <div className="page-header">
+        <h1>Chart of accounts</h1>
+        <button className="btn btn-primary" onClick={() => setPosting(true)}>
+          New journal entry
+        </button>
+      </div>
+      {posting && <JournalEntryModal accounts={accounts} onClose={() => setPosting(false)} />}
       <table className="data-table">
         <thead>
           <tr>

@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
+import { AgentActivity } from "./pages/AgentActivity";
 import { InvoiceList } from "./pages/finance/InvoiceList";
 import { InvoiceDetail } from "./pages/finance/InvoiceDetail";
 import { Ledger } from "./pages/finance/Ledger";
@@ -42,6 +43,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="agent" element={<AgentActivity />} />
         <Route path="invoices" element={<InvoiceList />} />
         <Route path="invoices/:id" element={<InvoiceDetail />} />
         <Route path="ledger" element={<Ledger />} />

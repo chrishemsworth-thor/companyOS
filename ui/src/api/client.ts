@@ -37,6 +37,18 @@ export class ApiClient {
   get<T>(path: string): Promise<T> {
     return this.request<T>(path);
   }
+
+  post<T>(path: string, body?: unknown, opts?: { idempotencyKey?: string }): Promise<T> {
+    return this.request<T>(path, {
+      method: "POST",
+      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: opts?.idempotencyKey ? { "Idempotency-Key": opts.idempotencyKey } : undefined,
+    });
+  }
+
+  patch<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
+  }
 }
 
 /** Cheap, cheap read used only to confirm an API key actually resolves a tenant. */

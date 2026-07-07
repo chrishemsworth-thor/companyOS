@@ -122,6 +122,41 @@ export interface Project {
   created_at: string;
 }
 
+export interface AgentEvent {
+  event_id: string;
+  event_type: string;
+  source_module: string;
+  occurred_at: string;
+  trace_id: string;
+  payload: Record<string, unknown>;
+}
+
+export interface CollectionsDecisionPayload {
+  customer_id: string;
+  risk_score: number;
+  action: "remind" | "escalate" | "wait";
+  channel: "email" | "whatsapp";
+  message: string;
+  source: "llm" | "fallback";
+  trigger: "event" | "alarm";
+}
+
+export interface RiskFlaggedPayload {
+  customer_id: string;
+  risk_score: number;
+  open_invoices: string[];
+  total_due_cents: number;
+}
+
+export interface AgentSnapshot {
+  customer_id: string;
+  last_contact: string | null;
+  risk_score: number;
+  reminder_history: { invoice_id: string; sent_at: string; delivery_ref: string }[];
+  escalation_stage: "none" | "reminded" | "escalated";
+  open_overdue_invoices: string[];
+}
+
 export type IssueStatus = "todo" | "in_progress" | "done" | "cancelled";
 export type IssuePriority = "low" | "medium" | "high" | "urgent";
 
