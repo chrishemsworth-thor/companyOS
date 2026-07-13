@@ -2,9 +2,13 @@ import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../auth/AuthContext";
-import { LoadingState, ErrorState } from "../../components/AsyncState";
+import { LoadingState, ErrorState, EmptyState } from "../../components/AsyncState";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Field } from "../../components/Field";
+import { DetailGrid } from "../../components/DetailGrid";
+import { BackLink } from "../../components/BackLink";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
 import { FormError } from "../../components/FormError";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import { formatDate } from "../../lib/format";
@@ -56,60 +60,63 @@ export function TicketDetail() {
 
   return (
     <div>
-      <Link to="/tickets" className="back-link">
-        ← Tickets
-      </Link>
-      <div className="page-header">
-        <h1>{ticket.subject}</h1>
-        <div className="action-bar">
-          {nextStatuses.map((status) => (
-            <button
-              key={status}
-              className="btn btn-sm"
-              onClick={() => statusMutation.mutate(status)}
-              disabled={statusMutation.isPending}
-            >
-              Mark {status}
-            </button>
-          ))}
-          <StatusBadge status={ticket.status} />
-        </div>
-      </div>
+      <BackLink to="/tickets">Tickets</BackLink>
+      <PageHeader title={ticket.subject}>
+        {nextStatuses.map((status) => (
+          <Button
+            key={status}
+            size="sm"
+            onClick={() => statusMutation.mutate(status)}
+            disabled={statusMutation.isPending}
+          >
+            Mark {status}
+          </Button>
+        ))}
+        <StatusBadge status={ticket.status} />
+      </PageHeader>
       <FormError error={statusMutation.error} />
-      <div className="detail-grid">
+      <DetailGrid>
         <Field label="Customer">
-          <Link to={`/customers/${ticket.customer_id}`}>{ticket.customer_id}</Link>
+          <Link to={`/customers/${ticket.customer_id}`} className="font-mono">
+            {ticket.customer_id}
+          </Link>
         </Field>
         <Field label="Priority">
           <StatusBadge status={ticket.priority} />
         </Field>
         <Field label="Created">{formatDate(ticket.created_at)}</Field>
         <Field label="Resolved">{formatDate(ticket.resolved_at)}</Field>
-      </div>
+      </DetailGrid>
 
       <h2>Thread</h2>
-      {ticket.messages.length === 0 && <div className="empty-state">No messages yet.</div>}
-      <ul className="thread">
-        {ticket.messages.map((m) => (
-          <li key={m.message_id} className={`thread-message author-${m.author}`}>
-            <div className="thread-meta">
-              <span className="thread-author">{m.author}</span>
-              <span className="thread-time">{formatDate(m.created_at)}</span>
-            </div>
-            <div className="thread-body">{m.body}</div>
-          </li>
-        ))}
-      </ul>
+      {ticket.messages.length === 0 ? (
+        <EmptyState>No messages yet.</EmptyState>
+      ) : (
+        <ul className="flex list-none flex-col gap-3 p-0">
+          {ticket.messages.map((m) => (
+            <li
+              key={m.message_id}
+              className="rounded-lg border border-border bg-surface p-4 shadow-sm"
+            >
+              <div className="mb-1.5 flex items-center justify-between text-xs">
+                <span className="font-semibold capitalize text-fg">{m.author}</span>
+                <span className="text-subtle">{formatDate(m.created_at)}</span>
+              </div>
+              <div className="whitespace-pre-wrap text-sm text-fg">{m.body}</div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {ticket.status !== "closed" && (
         <form
-          className="reply-composer"
+          className="mt-6 flex flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (body.trim()) replyMutation.mutate({ author, body: body.trim() });
           }}
         >
-          <h2>Reply</h2>
+          <h2 className="m-0">Reply</h2>
           <textarea
             className="input"
             placeholder="Write a reply…"
@@ -119,7 +126,7 @@ export function TicketDetail() {
             required
           />
           <FormError error={replyMutation.error} />
-          <div className="action-bar">
+          <div className="flex flex-wrap items-center gap-2">
             <select
               className="input"
               style={{ width: "auto" }}
@@ -130,13 +137,14 @@ export function TicketDetail() {
               <option value="customer">as customer</option>
               <option value="system">as system</option>
             </select>
-            <button
+            <Button
               type="submit"
-              className="btn btn-primary"
+              variant="primary"
+              loading={replyMutation.isPending}
               disabled={replyMutation.isPending || !body.trim()}
             >
               {replyMutation.isPending ? "Sending…" : "Send reply"}
-            </button>
+            </Button>
           </div>
         </form>
       )}

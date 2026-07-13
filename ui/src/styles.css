@@ -372,8 +372,7 @@
   border-color: var(--badge-bad-text);
 }
 
-.activity-feed,
-.thread {
+.activity-feed {
   list-style: none;
   margin: 0;
   padding: 0;
@@ -409,36 +408,6 @@
   font-size: 0.78rem;
   color: var(--text-subtle);
   flex-shrink: 0;
-}
-
-.thread-message {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 0.8rem 1rem;
-  box-shadow: var(--elev-1);
-}
-
-.thread-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.78rem;
-  color: var(--text-muted);
-  margin-bottom: 0.35rem;
-}
-
-.thread-author {
-  text-transform: capitalize;
-  font-weight: 600;
-}
-
-.thread-time {
-  color: var(--text-subtle);
-}
-
-.thread-body {
-  font-size: 0.9rem;
-  white-space: pre-wrap;
 }
 
 .description {
@@ -575,13 +544,6 @@ textarea.input {
   gap: 0.6rem;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.reply-composer {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin-top: 1rem;
 }
 
 .event-message {
