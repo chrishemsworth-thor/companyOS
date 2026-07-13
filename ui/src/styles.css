@@ -239,25 +239,11 @@
 }
 
 /* ------------------------------------------------------------------ *
- * Legacy component classes — retained for pages/modals not yet migrated
- * to the component kit (Phase 2 removes each as its page is swept). They
- * read from the same tokens above, so they stay on-brand in the interim.
+ * Shared element classes still consumed by the form kit (FormRow/Field/
+ * FormError/CustomerSelect), raw modal inputs, and the two compact tables
+ * that render inside modals. Everything else now lives in the component
+ * kit as Tailwind utilities.
  * ------------------------------------------------------------------ */
-
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.25rem;
-}
-
-.back-link {
-  display: inline-block;
-  margin-bottom: 1rem;
-  font-size: 0.85rem;
-}
 
 .data-table {
   width: 100%;
@@ -288,64 +274,6 @@
   border-bottom: none;
 }
 
-.data-table tr.clickable {
-  cursor: pointer;
-}
-.data-table tr.clickable:hover {
-  background: var(--surface-2);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.15rem 0.55rem;
-  border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  text-transform: capitalize;
-}
-.badge-neutral {
-  background: var(--badge-neutral-bg);
-  color: var(--badge-neutral-text);
-}
-.badge-good {
-  background: var(--badge-good-bg);
-  color: var(--badge-good-text);
-}
-.badge-warn {
-  background: var(--badge-warn-bg);
-  color: var(--badge-warn-text);
-}
-.badge-bad {
-  background: var(--badge-bad-bg);
-  color: var(--badge-bad-text);
-}
-
-.filter-select {
-  padding: 0.45rem 0.7rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 0.9rem;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 1rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 1.1rem 1.3rem;
-  box-shadow: var(--elev-1);
-}
-
-.field {
-  min-width: 0;
-}
-
 .field-label {
   font-size: 0.72rem;
   color: var(--text-muted);
@@ -353,122 +281,10 @@
   letter-spacing: 0.04em;
 }
 
-.field-value {
-  font-size: 0.95rem;
-  margin-top: 0.2rem;
-  overflow-wrap: break-word;
-}
-
-.empty-state {
-  padding: 2.5rem 1rem;
-  text-align: center;
-  color: var(--text-muted);
-  background: var(--surface);
-  border: 1px dashed var(--border-strong);
-  border-radius: var(--radius-md);
-}
-.empty-state.error {
-  color: var(--badge-bad-text);
-  border-color: var(--badge-bad-text);
-}
-
-.activity-feed {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.activity-feed li {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 0.7rem 1rem;
-  display: flex;
-  gap: 0.75rem;
-  align-items: baseline;
-  font-size: 0.9rem;
-  box-shadow: var(--elev-1);
-}
-
-.activity-kind {
-  font-weight: 600;
-  text-transform: capitalize;
-  flex-shrink: 0;
-}
-
-.activity-body {
-  flex: 1;
-  color: var(--text-muted);
-}
-
-.activity-time {
-  font-size: 0.78rem;
-  color: var(--text-subtle);
-  flex-shrink: 0;
-}
-
 .muted {
   color: var(--text-muted);
   font-size: 0.85rem;
   line-height: 1.5;
-}
-
-.link-button {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 0;
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-.link-button:hover {
-  text-decoration: underline;
-}
-
-/* Buttons — retained for raw `.btn` usage on un-migrated pages/modals;
-   the new <Button> component uses Tailwind utilities instead. */
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.95rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 0.875rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 150ms ease, border-color 150ms ease, opacity 150ms ease;
-}
-.btn:hover:not(:disabled) {
-  background: var(--surface-2);
-}
-.btn:disabled {
-  opacity: 0.55;
-  cursor: default;
-}
-.btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-contrast);
-}
-.btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-.btn-danger {
-  color: var(--badge-bad-text);
-  border-color: var(--badge-bad-text);
-}
-.btn-sm {
-  padding: 0.3rem 0.65rem;
-  font-size: 0.78rem;
 }
 
 /* Form controls */
@@ -523,26 +339,9 @@ textarea.input {
   gap: 0.9rem;
 }
 
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.6rem;
-  margin-top: 0.5rem;
-}
-
 .action-bar {
   display: flex;
   gap: 0.6rem;
   align-items: center;
   flex-wrap: wrap;
-}
-
-.event-message {
-  margin-top: 0.3rem;
-  font-size: 0.85rem;
-  white-space: pre-wrap;
-}
-.event-message summary {
-  cursor: pointer;
-  color: var(--accent);
 }

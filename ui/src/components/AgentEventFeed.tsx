@@ -2,6 +2,8 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import { LoadingState, ErrorState, EmptyState } from "../components/AsyncState";
+import { Badge, type Tone } from "./Badge";
+import { Button } from "./Button";
 import { formatDate, formatCents } from "../lib/format";
 import type { AgentEvent, CollectionsDecisionPayload, RiskFlaggedPayload } from "../api/types";
 
@@ -18,7 +20,7 @@ interface FeedPage {
   next_cursor: string | null;
 }
 
-function eventBadge(event: AgentEvent): { label: string; tone: string } {
+function eventBadge(event: AgentEvent): { label: string; tone: Tone } {
   switch (event.event_type) {
     case "collections.decision": {
       const action = (event.payload as unknown as CollectionsDecisionPayload).action;
@@ -48,13 +50,15 @@ function EventSummary({ event, showCustomer }: { event: AgentEvent; showCustomer
   if (event.event_type === "collections.decision") {
     const p = payload as unknown as CollectionsDecisionPayload;
     return (
-      <span className="activity-body">
+      <span className="min-w-0 flex-1 text-muted">
         {customerLink} risk {p.risk_score}/100 · via {p.channel} ·{" "}
-        <span className="badge badge-neutral">{p.source}</span>
+        <Badge tone="neutral" dot={false}>
+          {p.source}
+        </Badge>
         {p.message && (
-          <details className="event-message">
-            <summary>message</summary>
-            {p.message}
+          <details className="mt-1 text-sm">
+            <summary className="cursor-pointer text-accent">message</summary>
+            <div className="mt-1 whitespace-pre-wrap">{p.message}</div>
           </details>
         )}
       </span>
@@ -63,7 +67,7 @@ function EventSummary({ event, showCustomer }: { event: AgentEvent; showCustomer
   if (event.event_type === "customer.risk_flagged") {
     const p = payload as unknown as RiskFlaggedPayload;
     return (
-      <span className="activity-body">
+      <span className="min-w-0 flex-1 text-muted">
         {customerLink} risk {p.risk_score}/100 · {p.open_invoices.length} open invoice
         {p.open_invoices.length === 1 ? "" : "s"} · {formatCents(p.total_due_cents)} due
       </span>
@@ -72,14 +76,14 @@ function EventSummary({ event, showCustomer }: { event: AgentEvent; showCustomer
   if (event.event_type === "invoice.overdue" || event.event_type === "invoice.sent") {
     const invoiceId = typeof payload.invoice_id === "string" ? payload.invoice_id : null;
     return (
-      <span className="activity-body">
+      <span className="min-w-0 flex-1 text-muted">
         {customerLink}{" "}
         {invoiceId && <Link to={`/invoices/${invoiceId}`}>{invoiceId}</Link>}
         {typeof payload.days_overdue === "number" && ` · ${payload.days_overdue}d overdue`}
       </span>
     );
   }
-  return <span className="activity-body">{customerLink}</span>;
+  return <span className="min-w-0 flex-1 text-muted">{customerLink}</span>;
 }
 
 export function AgentEventFeed({
@@ -115,27 +119,31 @@ export function AgentEventFeed({
 
   return (
     <div>
-      <ul className="activity-feed">
+      <ul className="flex list-none flex-col gap-2 p-0">
         {events.map((event) => {
           const badge = eventBadge(event);
           return (
-            <li key={event.event_id}>
-              <span className={`badge badge-${badge.tone}`}>{badge.label}</span>
+            <li
+              key={event.event_id}
+              className="flex items-baseline gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm shadow-sm"
+            >
+              <Badge tone={badge.tone}>{badge.label}</Badge>
               <EventSummary event={event} showCustomer={showCustomer} />
-              <span className="activity-time">{formatDate(event.occurred_at)}</span>
+              <span className="shrink-0 text-xs text-subtle">{formatDate(event.occurred_at)}</span>
             </li>
           );
         })}
       </ul>
       {query.hasNextPage && (
-        <button
-          className="btn btn-sm"
-          style={{ marginTop: "0.6rem" }}
-          onClick={() => void query.fetchNextPage()}
-          disabled={query.isFetchingNextPage}
-        >
-          {query.isFetchingNextPage ? "Loading…" : "Load more"}
-        </button>
+        <div className="mt-3">
+          <Button
+            size="sm"
+            onClick={() => void query.fetchNextPage()}
+            loading={query.isFetchingNextPage}
+          >
+            {query.isFetchingNextPage ? "Loading…" : "Load more"}
+          </Button>
+        </div>
       )}
     </div>
   );
