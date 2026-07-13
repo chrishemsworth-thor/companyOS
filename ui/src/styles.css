@@ -1,11 +1,70 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ *
+ * Design tokens
+ *
+ * Semantic CSS variables live in :root (and flip under the dark media
+ * query). `@theme inline` registers them with Tailwind so utilities like
+ * `bg-surface`, `text-muted`, `border-border`, `shadow-md` emit the live
+ * `var(...)` — meaning a single set of variables drives both the utility
+ * classes (new components) and the retained legacy classes (pages not yet
+ * migrated to the component kit).
+ * ------------------------------------------------------------------ */
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--text);
+  --color-muted: var(--text-muted);
+  --color-subtle: var(--text-subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-contrast: var(--accent-contrast);
+  --color-accent-soft: var(--accent-soft);
+  --color-good: var(--badge-good-text);
+  --color-good-bg: var(--badge-good-bg);
+  --color-warn: var(--badge-warn-text);
+  --color-warn-bg: var(--badge-warn-bg);
+  --color-bad: var(--badge-bad-text);
+  --color-bad-bg: var(--badge-bad-bg);
+  --color-neutral: var(--badge-neutral-text);
+  --color-neutral-bg: var(--badge-neutral-bg);
+  --color-ring: var(--ring);
+
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  --shadow-sm: var(--elev-1);
+  --shadow-md: var(--elev-2);
+  --shadow-lg: var(--elev-3);
+}
+
 :root {
-  --bg: #f7f7f8;
+  /* Surfaces & text */
+  --bg: #f6f7f9;
   --surface: #ffffff;
-  --border: #e2e2e6;
-  --text: #1a1a1e;
-  --text-muted: #6b6b74;
+  --surface-2: #f1f3f6;
+  --border: #e6e8ec;
+  --border-strong: #d4d8df;
+  --text: #16181d;
+  --text-muted: #5b6472;
+  --text-subtle: #8a92a1;
+
+  /* Accent */
   --accent: #4f46e5;
+  --accent-hover: #4338ca;
   --accent-contrast: #ffffff;
+  --accent-soft: #ecebfd;
+
+  /* Status tones (shared by new badges + legacy .badge classes) */
   --badge-neutral-bg: #eef0f3;
   --badge-neutral-text: #45464d;
   --badge-good-bg: #e3f6ea;
@@ -14,129 +73,184 @@
   --badge-warn-text: #92620b;
   --badge-bad-bg: #fbe6e6;
   --badge-bad-text: #b3261e;
+
+  /* Focus ring + overlay */
+  --ring: rgba(79, 70, 229, 0.45);
+  --overlay: rgba(17, 20, 28, 0.45);
+
+  /* Elevation (soft, layered) */
+  --elev-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.05);
+  --elev-2: 0 2px 4px rgba(16, 24, 40, 0.05), 0 6px 16px rgba(16, 24, 40, 0.08);
+  --elev-3: 0 12px 32px rgba(16, 24, 40, 0.14), 0 4px 10px rgba(16, 24, 40, 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16161a;
-    --surface: #1f1f24;
-    --border: #313138;
-    --text: #eceef1;
-    --text-muted: #9a9aa2;
-    --accent: #8583ff;
-    --accent-contrast: #101014;
-    --badge-neutral-bg: #2b2b32;
+    --bg: #0f1116;
+    --surface: #171a21;
+    --surface-2: #1e222b;
+    --border: #262b35;
+    --border-strong: #333a46;
+    --text: #e8eaed;
+    --text-muted: #9aa3b2;
+    --text-subtle: #6b7484;
+
+    --accent: #8b85ff;
+    --accent-hover: #a29cff;
+    --accent-contrast: #0f1116;
+    --accent-soft: #20213a;
+
+    --badge-neutral-bg: #2a2f3a;
     --badge-neutral-text: #c7c8cf;
-    --badge-good-bg: #16311f;
+    --badge-good-bg: #14311f;
     --badge-good-text: #6fd68f;
     --badge-warn-bg: #3a2c10;
     --badge-warn-text: #e0ac4c;
     --badge-bad-bg: #3a1616;
     --badge-bad-text: #f08b85;
+
+    --ring: rgba(139, 133, 255, 0.5);
+    --overlay: rgba(0, 0, 0, 0.6);
+
+    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --elev-2: 0 2px 6px rgba(0, 0, 0, 0.4), 0 8px 20px rgba(0, 0, 0, 0.35);
+    --elev-3: 0 16px 40px rgba(0, 0, 0, 0.55);
   }
 }
 
-* {
-  box-sizing: border-box;
+/* ------------------------------------------------------------------ *
+ * Base layer
+ * ------------------------------------------------------------------ */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    font-family: var(--font-sans);
+    background: var(--bg);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    margin: 0 0 1rem;
+  }
+
+  h2 {
+    font-size: 1.1rem;
+    font-weight: 620;
+    letter-spacing: -0.01em;
+    margin: 2rem 0 0.75rem;
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::selection {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+
+  /* Calmer scrollbars */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
 }
 
-body {
-  margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+/* ------------------------------------------------------------------ *
+ * Keyframes (used by Toast / Modal via arbitrary animate-[...] utils)
+ * ------------------------------------------------------------------ */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-h1 {
-  font-size: 1.5rem;
-  margin: 0 0 1rem;
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
-h2 {
-  font-size: 1.1rem;
-  margin: 2rem 0 0.75rem;
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-a:hover {
-  text-decoration: underline;
-}
-
-.app-shell {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  min-height: 100vh;
+@keyframes sheet-in {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.sidebar {
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  padding: 1.25rem 1rem;
-  display: flex;
-  flex-direction: column;
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
-.brand {
-  font-weight: 700;
-  font-size: 1.1rem;
-  margin-bottom: 1.5rem;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
-.nav-link {
-  display: block;
-  padding: 0.5rem 0.6rem;
-  border-radius: 6px;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-  margin-bottom: 2px;
-}
-.nav-link:hover {
-  background: var(--bg);
-  text-decoration: none;
-}
-.nav-link.active {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
-.sidebar-footer {
-  margin-top: auto;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.75rem;
-}
-
-.base-url {
-  color: var(--text-muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  margin-bottom: 0.5rem;
-}
-
-.link-button {
-  background: none;
-  border: none;
-  color: var(--accent);
-  cursor: pointer;
-  padding: 0;
-  font-size: 0.85rem;
-}
-
-.content {
-  padding: 2rem;
-  max-width: 1100px;
-}
+/* ------------------------------------------------------------------ *
+ * Legacy component classes — retained for pages/modals not yet migrated
+ * to the component kit (Phase 2 removes each as its page is swept). They
+ * read from the same tokens above, so they stay on-brand in the interim.
+ * ------------------------------------------------------------------ */
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
 }
 
 .back-link {
@@ -145,47 +259,18 @@ a:hover {
   font-size: 0.85rem;
 }
 
-.stat-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 1rem;
-}
-
-.stat-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1rem 1.1rem;
-}
-
-.stat-label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
-.stat-value {
-  font-size: 1.6rem;
-  font-weight: 700;
-  margin: 0.2rem 0;
-}
-
-.stat-sub {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-}
-
 .data-table {
   width: 100%;
   border-collapse: collapse;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
 }
 
 .data-table th,
 .data-table td {
-  padding: 0.6rem 0.8rem;
+  padding: 0.7rem 0.9rem;
   border-bottom: 1px solid var(--border);
   font-size: 0.9rem;
 }
@@ -193,9 +278,10 @@ a:hover {
 .data-table th {
   color: var(--text-muted);
   font-weight: 600;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
+  background: var(--surface-2);
 }
 
 .data-table tbody tr:last-child td {
@@ -206,11 +292,13 @@ a:hover {
   cursor: pointer;
 }
 .data-table tr.clickable:hover {
-  background: var(--bg);
+  background: var(--surface-2);
 }
 
 .badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
   font-size: 0.75rem;
@@ -235,11 +323,12 @@ a:hover {
 }
 
 .filter-select {
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
+  font-size: 0.9rem;
 }
 
 .detail-grid {
@@ -248,37 +337,35 @@ a:hover {
   gap: 1rem;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem 1.2rem;
+  border-radius: var(--radius-md);
+  padding: 1.1rem 1.3rem;
+  box-shadow: var(--elev-1);
 }
 
 .field {
-  /* Grid items default to a min-width based on their content; without this,
-     an unbroken id string forces the track wider than its share and
-     overflows into the next column instead of wrapping. */
   min-width: 0;
 }
 
 .field-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.04em;
 }
 
 .field-value {
   font-size: 0.95rem;
-  margin-top: 0.15rem;
+  margin-top: 0.2rem;
   overflow-wrap: break-word;
 }
 
 .empty-state {
-  padding: 2rem 1rem;
+  padding: 2.5rem 1rem;
   text-align: center;
   color: var(--text-muted);
   background: var(--surface);
-  border: 1px dashed var(--border);
-  border-radius: 8px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-md);
 }
 .empty-state.error {
   color: var(--badge-bad-text);
@@ -298,12 +385,13 @@ a:hover {
 .activity-feed li {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.6rem 0.9rem;
+  border-radius: var(--radius-md);
+  padding: 0.7rem 1rem;
   display: flex;
   gap: 0.75rem;
   align-items: baseline;
   font-size: 0.9rem;
+  box-shadow: var(--elev-1);
 }
 
 .activity-kind {
@@ -319,15 +407,16 @@ a:hover {
 
 .activity-time {
   font-size: 0.78rem;
-  color: var(--text-muted);
+  color: var(--text-subtle);
   flex-shrink: 0;
 }
 
 .thread-message {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 0.7rem 0.9rem;
+  border-radius: var(--radius-md);
+  padding: 0.8rem 1rem;
+  box-shadow: var(--elev-1);
 }
 
 .thread-meta {
@@ -343,6 +432,10 @@ a:hover {
   font-weight: 600;
 }
 
+.thread-time {
+  color: var(--text-subtle);
+}
+
 .thread-body {
   font-size: 0.9rem;
   white-space: pre-wrap;
@@ -351,93 +444,53 @@ a:hover {
 .description {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem 1.2rem;
+  border-radius: var(--radius-md);
+  padding: 1.1rem 1.3rem;
   white-space: pre-wrap;
-}
-
-.login-screen {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg);
-}
-
-.login-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 2rem;
-  width: 380px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
-.login-card h1 {
-  font-size: 1.3rem;
+  box-shadow: var(--elev-1);
 }
 
 .muted {
   color: var(--text-muted);
   font-size: 0.85rem;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
-.login-card label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-}
-
-.login-card input {
-  padding: 0.5rem 0.6rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 0.9rem;
-}
-
-.login-card button {
-  padding: 0.6rem;
-  border-radius: 6px;
+.link-button {
+  background: none;
   border: none;
-  background: var(--accent);
-  color: var(--accent-contrast);
-  font-weight: 600;
+  color: var(--accent);
   cursor: pointer;
-  font-size: 0.9rem;
-}
-.login-card button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.form-error {
-  color: var(--badge-bad-text);
+  padding: 0;
   font-size: 0.85rem;
+  font-weight: 500;
+}
+.link-button:hover {
+  text-decoration: underline;
 }
 
+/* Buttons — retained for raw `.btn` usage on un-migrated pages/modals;
+   the new <Button> component uses Tailwind utilities instead. */
 .btn {
-  display: inline-block;
-  padding: 0.45rem 0.9rem;
-  border-radius: 6px;
-  border: 1px solid var(--border);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.95rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, opacity 150ms ease;
 }
-.btn:hover {
-  background: var(--bg);
+.btn:hover:not(:disabled) {
+  background: var(--surface-2);
 }
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
 }
 .btn-primary {
@@ -446,69 +499,44 @@ a:hover {
   color: var(--accent-contrast);
 }
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent);
-  opacity: 0.9;
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 .btn-danger {
   color: var(--badge-bad-text);
   border-color: var(--badge-bad-text);
 }
 .btn-sm {
-  padding: 0.25rem 0.6rem;
+  padding: 0.3rem 0.65rem;
   font-size: 0.78rem;
 }
 
+/* Form controls */
 .input {
-  padding: 0.5rem 0.6rem;
-  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text);
   font-size: 0.9rem;
   font-family: inherit;
   width: 100%;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--ring);
 }
 textarea.input {
   resize: vertical;
   min-height: 4.5rem;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 8vh 1rem 1rem;
-  z-index: 20;
-  overflow-y: auto;
-}
-
-.modal {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 1.5rem;
-  width: 480px;
-  max-width: 100%;
-}
-
-.modal-title {
-  margin: 0 0 1rem;
-}
-
-.modal form,
-.modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 0.9rem;
-}
-
 .form-row {
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
 }
 
 .form-row-inline {
@@ -518,6 +546,21 @@ textarea.input {
 .form-row-inline > * {
   flex: 1;
   min-width: 0;
+}
+
+.form-error {
+  color: var(--badge-bad-text);
+  font-size: 0.85rem;
+}
+
+/* The new <Modal> wraps its children in .modal-content; un-migrated modals
+   render a <form> directly inside, which relied on the old `.modal form`
+   vertical rhythm. */
+.modal-content > form,
+.modal-content > .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
 }
 
 .modal-actions {
