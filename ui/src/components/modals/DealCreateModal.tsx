@@ -4,6 +4,8 @@ import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
 import { CustomerSelect } from "../CustomerSelect";
+import { Button } from "../Button";
+import { ModalActions } from "../ModalActions";
 import { useAuth } from "../../auth/AuthContext";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import { parseAmountToCents } from "../../lib/money";
@@ -108,18 +110,19 @@ export function DealCreateModal({
           </select>
         </FormRow>
         <FormError error={validationError ?? mutation.error} />
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+        <ModalActions>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className="btn btn-primary"
+            variant="primary"
+            loading={mutation.isPending}
             disabled={mutation.isPending || !customerId}
           >
             {mutation.isPending ? "Creating…" : "Create deal"}
-          </button>
-        </div>
+          </Button>
+        </ModalActions>
       </form>
     </Modal>
   );

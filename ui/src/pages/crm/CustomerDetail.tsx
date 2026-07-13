@@ -2,8 +2,13 @@ import { useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../auth/AuthContext";
-import { LoadingState, ErrorState } from "../../components/AsyncState";
+import { LoadingState, ErrorState, EmptyState } from "../../components/AsyncState";
 import { Field } from "../../components/Field";
+import { DetailGrid } from "../../components/DetailGrid";
+import { BackLink } from "../../components/BackLink";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
+import { DataTable } from "../../components/DataTable";
 import { CustomerFormModal } from "../../components/modals/CustomerFormModal";
 import { ActivityLogModal } from "../../components/modals/ActivityLogModal";
 import { DealCreateModal } from "../../components/modals/DealCreateModal";
@@ -51,29 +56,14 @@ export function CustomerDetail() {
 
   return (
     <div>
-      <Link to="/customers" className="back-link">
-        ← Customers
-      </Link>
-      <div className="page-header">
-        <h1>{customer.name}</h1>
-        <div className="action-bar">
-          <button className="btn" onClick={() => setOpenModal("edit")}>
-            Edit
-          </button>
-          <button className="btn" onClick={() => setOpenModal("activity")}>
-            Log activity
-          </button>
-          <button className="btn" onClick={() => setOpenModal("deal")}>
-            New deal
-          </button>
-          <button className="btn" onClick={() => setOpenModal("invoice")}>
-            New invoice
-          </button>
-          <button className="btn" onClick={() => setOpenModal("ticket")}>
-            New ticket
-          </button>
-        </div>
-      </div>
+      <BackLink to="/customers">Customers</BackLink>
+      <PageHeader title={customer.name}>
+        <Button onClick={() => setOpenModal("edit")}>Edit</Button>
+        <Button onClick={() => setOpenModal("activity")}>Log activity</Button>
+        <Button onClick={() => setOpenModal("deal")}>New deal</Button>
+        <Button onClick={() => setOpenModal("invoice")}>New invoice</Button>
+        <Button onClick={() => setOpenModal("ticket")}>New ticket</Button>
+      </PageHeader>
 
       {openModal === "edit" && (
         <CustomerFormModal existing={customer} onClose={() => setOpenModal(null)} />
@@ -103,15 +93,17 @@ export function CustomerDetail() {
         />
       )}
 
-      <div className="detail-grid">
-        <Field label="Customer id">{customer.customer_id}</Field>
+      <DetailGrid>
+        <Field label="Customer id">
+          <span className="font-mono">{customer.customer_id}</span>
+        </Field>
         <Field label="Email">{customer.email ?? "—"}</Field>
         <Field label="Phone">{customer.phone ?? "—"}</Field>
-      </div>
+      </DetailGrid>
 
       <h2>Collections agent</h2>
       {agentQuery.data?.agent_state ? (
-        <div className="detail-grid">
+        <DetailGrid>
           <Field label="Risk score">{agentQuery.data.agent_state.risk_score}/100</Field>
           <Field label="Escalation">
             <StatusBadge status={agentQuery.data.agent_state.escalation_stage} />
@@ -123,59 +115,57 @@ export function CustomerDetail() {
               ? "None"
               : agentQuery.data.agent_state.open_overdue_invoices.map((invoiceId) => (
                   <div key={invoiceId}>
-                    <Link to={`/invoices/${invoiceId}`}>{invoiceId}</Link>
+                    <Link to={`/invoices/${invoiceId}`} className="font-mono">
+                      {invoiceId}
+                    </Link>
                   </div>
                 ))}
           </Field>
-        </div>
+        </DetailGrid>
       ) : (
-        <div className="empty-state">The collections agent hasn't engaged this customer.</div>
+        <EmptyState>The collections agent hasn't engaged this customer.</EmptyState>
       )}
       <h2>Agent activity</h2>
       <AgentEventFeed customerId={id} showCustomer={false} />
 
       <h2>Payment history</h2>
       {historyQuery.isLoading && <LoadingState />}
-      {historyQuery.data && historyQuery.data.payments.length === 0 && (
-        <div className="empty-state">No payments yet.</div>
-      )}
-      {historyQuery.data && historyQuery.data.payments.length > 0 && (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Payment</th>
-              <th>Invoice</th>
-              <th style={{ textAlign: "right" }}>Applied</th>
-              <th>Received</th>
-            </tr>
-          </thead>
-          <tbody>
-            {historyQuery.data.payments.map((p) => (
-              <tr key={`${p.payment_id}-${p.invoice_id}`}>
-                <td>{p.payment_id}</td>
-                <td>
-                  <Link to={`/invoices/${p.invoice_id}`}>{p.invoice_id}</Link>
-                </td>
-                <td style={{ textAlign: "right" }}>{formatMoney(p.applied_cents, p.currency)}</td>
-                <td>{formatDate(p.received_at)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {historyQuery.data && (
+        <DataTable
+          rows={historyQuery.data.payments}
+          rowKey={(p) => `${p.payment_id}-${p.invoice_id}`}
+          emptyLabel="No payments yet."
+          columns={[
+            { header: "Payment", render: (p) => <span className="font-mono text-[0.85em]">{p.payment_id}</span> },
+            {
+              header: "Invoice",
+              render: (p) => (
+                <Link to={`/invoices/${p.invoice_id}`} className="font-mono text-[0.85em]">
+                  {p.invoice_id}
+                </Link>
+              ),
+            },
+            { header: "Applied", render: (p) => formatMoney(p.applied_cents, p.currency), align: "right" },
+            { header: "Received", render: (p) => formatDate(p.received_at) },
+          ]}
+        />
       )}
 
       <h2>Activity</h2>
       {activitiesQuery.isLoading && <LoadingState />}
       {activitiesQuery.data && activitiesQuery.data.activities.length === 0 && (
-        <div className="empty-state">No activity logged yet.</div>
+        <EmptyState>No activity logged yet.</EmptyState>
       )}
       {activitiesQuery.data && activitiesQuery.data.activities.length > 0 && (
-        <ul className="activity-feed">
+        <ul className="flex list-none flex-col gap-2 p-0">
           {activitiesQuery.data.activities.map((a) => (
-            <li key={a.activity_id}>
-              <span className="activity-kind">{a.kind.replace("_", " ")}</span>
-              <span className="activity-body">{a.body ?? "—"}</span>
-              <span className="activity-time">{formatDate(a.occurred_at)}</span>
+            <li
+              key={a.activity_id}
+              className="flex items-baseline gap-3 rounded-lg border border-border bg-surface px-4 py-3 text-sm shadow-sm"
+            >
+              <span className="shrink-0 font-semibold capitalize">{a.kind.replace("_", " ")}</span>
+              <span className="flex-1 text-muted">{a.body ?? "—"}</span>
+              <span className="shrink-0 text-xs text-subtle">{formatDate(a.occurred_at)}</span>
             </li>
           ))}
         </ul>

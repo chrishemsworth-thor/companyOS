@@ -5,6 +5,10 @@ import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Field } from "../../components/Field";
+import { DetailGrid } from "../../components/DetailGrid";
+import { BackLink } from "../../components/BackLink";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
 import { FormError } from "../../components/FormError";
 import { ActivityLogModal } from "../../components/modals/ActivityLogModal";
 import { formatMoney, formatDate } from "../../lib/format";
@@ -54,33 +58,26 @@ export function DealDetail() {
 
   return (
     <div>
-      <Link to="/deals" className="back-link">
-        ← Deals
-      </Link>
-      <div className="page-header">
-        <h1>{deal.title}</h1>
-        <div className="action-bar">
-          <button className="btn" onClick={() => setLoggingActivity(true)}>
-            Log activity
-          </button>
-          {deal.status === "open" && stages.length > 0 && (
-            <select
-              className="input"
-              style={{ width: "auto" }}
-              value={deal.stage_id}
-              onChange={(e) => stageMutation.mutate(e.target.value)}
-              disabled={stageMutation.isPending}
-            >
-              {stages.map((s) => (
-                <option key={s.stage_id} value={s.stage_id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          )}
-          <StatusBadge status={deal.status} />
-        </div>
-      </div>
+      <BackLink to="/deals">Deals</BackLink>
+      <PageHeader title={deal.title}>
+        <Button onClick={() => setLoggingActivity(true)}>Log activity</Button>
+        {deal.status === "open" && stages.length > 0 && (
+          <select
+            className="input"
+            style={{ width: "auto" }}
+            value={deal.stage_id}
+            onChange={(e) => stageMutation.mutate(e.target.value)}
+            disabled={stageMutation.isPending}
+          >
+            {stages.map((s) => (
+              <option key={s.stage_id} value={s.stage_id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        )}
+        <StatusBadge status={deal.status} />
+      </PageHeader>
       <FormError error={stageMutation.error} />
       {loggingActivity && (
         <ActivityLogModal
@@ -89,9 +86,11 @@ export function DealDetail() {
           onClose={() => setLoggingActivity(false)}
         />
       )}
-      <div className="detail-grid">
+      <DetailGrid>
         <Field label="Customer">
-          <Link to={`/customers/${deal.customer_id}`}>{deal.customer_id}</Link>
+          <Link to={`/customers/${deal.customer_id}`} className="font-mono">
+            {deal.customer_id}
+          </Link>
         </Field>
         <Field label="Stage">
           {stages.find((s) => s.stage_id === deal.stage_id)?.name ?? deal.stage_id}
@@ -99,7 +98,7 @@ export function DealDetail() {
         <Field label="Value">{formatMoney(deal.value_cents, deal.currency)}</Field>
         <Field label="Created">{formatDate(deal.created_at)}</Field>
         <Field label="Updated">{formatDate(deal.updated_at)}</Field>
-      </div>
+      </DetailGrid>
     </div>
   );
 }

@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
+import { Button } from "../Button";
+import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import type { Customer } from "../../api/types";
 
@@ -59,14 +61,14 @@ export function CustomerFormModal({
           <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </FormRow>
         <FormError error={mutation.error} />
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+        <ModalActions>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
+          </Button>
+          <Button type="submit" variant="primary" loading={mutation.isPending}>
             {mutation.isPending ? "Saving…" : existing ? "Save changes" : "Create customer"}
-          </button>
-        </div>
+          </Button>
+        </ModalActions>
       </form>
     </Modal>
   );
