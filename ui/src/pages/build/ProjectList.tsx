@@ -1,10 +1,13 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
 import { ProjectCreateModal } from "../../components/modals/ProjectCreateModal";
 import { formatDate } from "../../lib/format";
 import type { Project } from "../../api/types";
@@ -21,12 +24,11 @@ export function ProjectList() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Projects</h1>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>
+      <PageHeader title="Projects">
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
           New project
-        </button>
-      </div>
+        </Button>
+      </PageHeader>
       {creating && (
         <ProjectCreateModal
           onClose={() => setCreating(false)}

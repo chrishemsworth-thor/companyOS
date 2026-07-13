@@ -1,11 +1,16 @@
 import { useState } from "react";
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { StatusBadge } from "../../components/StatusBadge";
 import { DataTable } from "../../components/DataTable";
 import { Field } from "../../components/Field";
+import { DetailGrid } from "../../components/DetailGrid";
+import { BackLink } from "../../components/BackLink";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
 import { IssueCreateModal } from "../../components/modals/IssueCreateModal";
 import { formatDate } from "../../lib/format";
 import type { Project, Issue } from "../../api/types";
@@ -34,18 +39,13 @@ export function ProjectDetail() {
 
   return (
     <div>
-      <Link to="/projects" className="back-link">
-        ← Projects
-      </Link>
-      <div className="page-header">
-        <h1>{project.name}</h1>
-        <div className="action-bar">
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
-            New issue
-          </button>
-          <StatusBadge status={project.status} />
-        </div>
-      </div>
+      <BackLink to="/projects">Projects</BackLink>
+      <PageHeader title={project.name}>
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+          New issue
+        </Button>
+        <StatusBadge status={project.status} />
+      </PageHeader>
       {creating && (
         <IssueCreateModal
           defaultProjectId={project.project_id}
@@ -53,9 +53,12 @@ export function ProjectDetail() {
           onCreated={(issue) => navigate(`/issues/${issue.issue_id}`)}
         />
       )}
-      <div className="detail-grid">
+      <DetailGrid>
+        <Field label="Project id">
+          <span className="font-mono">{project.project_id}</span>
+        </Field>
         <Field label="Created">{formatDate(project.created_at)}</Field>
-      </div>
+      </DetailGrid>
 
       <h2>Issues</h2>
       {issuesQuery.isLoading && <LoadingState />}

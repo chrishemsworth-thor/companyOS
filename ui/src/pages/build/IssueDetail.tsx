@@ -4,6 +4,9 @@ import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Field } from "../../components/Field";
+import { DetailGrid } from "../../components/DetailGrid";
+import { BackLink } from "../../components/BackLink";
+import { PageHeader } from "../../components/PageHeader";
 import { FormError } from "../../components/FormError";
 import { formatDate } from "../../lib/format";
 import type { Issue, IssueStatus } from "../../api/types";
@@ -50,32 +53,29 @@ export function IssueDetail() {
 
   return (
     <div>
-      <Link to="/issues" className="back-link">
-        ← Issues
-      </Link>
-      <div className="page-header">
-        <h1>{issue.title}</h1>
-        <div className="action-bar">
-          <select
-            className="input"
-            style={{ width: "auto" }}
-            value={issue.status}
-            onChange={(e) => statusMutation.mutate(e.target.value as IssueStatus)}
-            disabled={statusMutation.isPending}
-          >
-            {legalStatuses(issue.status).map((s) => (
-              <option key={s} value={s}>
-                {s.replace("_", " ")}
-              </option>
-            ))}
-          </select>
-          <StatusBadge status={issue.status} />
-        </div>
-      </div>
+      <BackLink to="/issues">Issues</BackLink>
+      <PageHeader title={issue.title}>
+        <select
+          className="input"
+          style={{ width: "auto" }}
+          value={issue.status}
+          onChange={(e) => statusMutation.mutate(e.target.value as IssueStatus)}
+          disabled={statusMutation.isPending}
+        >
+          {legalStatuses(issue.status).map((s) => (
+            <option key={s} value={s}>
+              {s.replace("_", " ")}
+            </option>
+          ))}
+        </select>
+        <StatusBadge status={issue.status} />
+      </PageHeader>
       <FormError error={statusMutation.error} />
-      <div className="detail-grid">
+      <DetailGrid>
         <Field label="Project">
-          <Link to={`/projects/${issue.project_id}`}>{issue.project_id}</Link>
+          <Link to={`/projects/${issue.project_id}`} className="font-mono">
+            {issue.project_id}
+          </Link>
         </Field>
         <Field label="Priority">
           <StatusBadge status={issue.priority} />
@@ -83,11 +83,13 @@ export function IssueDetail() {
         <Field label="Assignee">{issue.assignee ?? "—"}</Field>
         <Field label="Created">{formatDate(issue.created_at)}</Field>
         <Field label="Updated">{formatDate(issue.updated_at)}</Field>
-      </div>
+      </DetailGrid>
       {issue.description && (
         <>
           <h2>Description</h2>
-          <p className="description">{issue.description}</p>
+          <p className="whitespace-pre-wrap rounded-lg border border-border bg-surface p-5 text-sm shadow-sm">
+            {issue.description}
+          </p>
         </>
       )}
     </div>
