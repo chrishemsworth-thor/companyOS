@@ -7,9 +7,10 @@ payment), ledger journal entries, customers (create/edit), deals
 projects, and issues (create/status). It also surfaces the collections
 agent: an **Agent activity** feed at `/agent`, a per-customer agent
 snapshot card, and invoice-scoped event timelines. Scoped in
-[`../docs/operator-ui.md`](../docs/operator-ui.md); auth is still the
-single-operator slice from that plan (paste an API key, kept only in
-the browser tab's session storage).
+[`../docs/operator-ui.md`](../docs/operator-ui.md). Auth is now a real
+session layer (option 2): operators sign in with email + password and
+ride an HttpOnly session cookie — the tenant API key never reaches the
+browser. Admins manage operators under **Users**.
 
 ## Run it
 
@@ -29,19 +30,21 @@ npm run seed:local   # prints a tenant API key
 npm run seed:sample -- --api-key <printed_api_key>   # optional: populate sample data
 ```
 
-Paste the printed API key into the console's login screen (the base URL
-field defaults to `http://localhost:8787`, override it if your Worker runs
-elsewhere). `seed:sample` gives you something to look at immediately —
+Sign in with the operator email + password that `seed:local` prints (the
+base URL field defaults to `http://localhost:8787`, override it if your
+Worker runs elsewhere). `seed:sample` gives you something to look at immediately —
 customers, invoices in different states (including one flipped to
 `overdue`), deals, tickets, and a project with issues — instead of
 starting from an empty dashboard.
 
 ## Notes
 
-- Auth is intentionally minimal (tenant API key, session-only storage) —
-  this is option 1 from the operator-ui scoping doc, appropriate for a
-  single trusted operator. Don't point this at a production tenant's key
-  from a shared machine.
+- Auth is a backend-for-frontend session layer (option 2 from the
+  operator-ui scoping doc): login exchanges email + password for an
+  HttpOnly, HMAC-signed session cookie; the browser never holds the tenant
+  API key. Mutating requests send an `X-CSRF-Token` header. For cookies to
+  work in production, serve the console and API under one registrable domain
+  (e.g. `app.` + `api.`) so `SameSite=Lax` applies.
 - No pagination yet: list views fetch full result sets, matching the
   API's current behavior (documented as a known gap in the scoping doc).
 - Data layer: TanStack Query. Mutations invalidate the affected query

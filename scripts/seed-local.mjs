@@ -3,7 +3,7 @@
 // Only the SHA-256 hash of the API key is ever stored (matches
 // src/gateway/middleware/auth.ts), so this script is the only place the
 // plaintext key is shown — copy it now.
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, pbkdf2Sync } from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 function arg(flag, fallback) {
@@ -14,12 +14,28 @@ function arg(flag, fallback) {
 const tenantId = arg("--tenant-id", "biz_abc123");
 const tenantName = arg("--name", "Test SME");
 const apiKey = arg("--api-key", `local_${randomBytes(16).toString("hex")}`);
+// First human operator, so the UI login screen is usable out of the box.
+const adminEmail = arg("--admin-email", "admin@example.com");
+const adminPassword = arg("--admin-password", "companyos-admin");
 
 const apiKeyHash = createHash("sha256").update(apiKey).digest("hex");
 
-const sql =
+// PBKDF2 params must match src/auth/password.ts (100k iters, SHA-256, 32-byte key).
+const PWD_ITER = 100_000;
+const pwdSalt = randomBytes(16);
+const pwdHash = pbkdf2Sync(adminPassword, pwdSalt, PWD_ITER, 32, "sha256").toString("hex");
+// Deterministic id from (tenant, email) so re-seeding replaces the same row
+// (resetting the password) instead of colliding on the unique email index.
+const adminUserId =
+  "usr_" + createHash("sha256").update(`${tenantId}:${adminEmail}`).digest("hex").slice(0, 24);
+
+const esc = (s) => s.replace(/'/g, "''");
+const sql = [
   "INSERT OR REPLACE INTO tenants (tenant_id, name, api_key_hash) VALUES " +
-  `('${tenantId}', '${tenantName.replace(/'/g, "''")}', '${apiKeyHash}');`;
+    `('${tenantId}', '${esc(tenantName)}', '${apiKeyHash}');`,
+  "INSERT OR REPLACE INTO users (user_id, tenant_id, email, display_name, role, pwd_hash, pwd_salt, pwd_iter) VALUES " +
+    `('${adminUserId}', '${tenantId}', '${esc(adminEmail)}', 'Seed Admin', 'admin', '${pwdHash}', '${pwdSalt.toString("hex")}', ${PWD_ITER});`,
+].join("\n");
 
 execFileSync("npx", ["wrangler", "d1", "execute", "companyos-db", "--local", "--command", sql], {
   stdio: "inherit",
@@ -28,6 +44,9 @@ execFileSync("npx", ["wrangler", "d1", "execute", "companyos-db", "--local", "--
 console.log("\nSeeded local tenant:");
 console.log(`  tenant_id: ${tenantId}`);
 console.log(`  api_key:   ${apiKey}  (plaintext — only shown here, only the hash is stored)`);
+console.log("\nOperator console login (http://localhost:5173):");
+console.log(`  email:     ${adminEmail}`);
+console.log(`  password:  ${adminPassword}`);
 console.log("\nTry the vertical slice:");
 console.log(`curl -X POST http://localhost:8787/v1/invoices \\
   -H "Authorization: Bearer ${apiKey}" \\

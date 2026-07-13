@@ -1,43 +1,129 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from "react";
-import { ApiClient } from "../api/client";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { ApiClient, ApiError } from "../api/client";
 
-const STORAGE_KEY = "companyos_api_key";
 const STORAGE_BASE_URL = "companyos_base_url";
 export const DEFAULT_BASE_URL = "http://localhost:8787";
 
+export type AuthStatus = "loading" | "authenticated" | "anonymous";
+
+export interface AuthUser {
+  user_id: string;
+  email: string;
+  display_name: string | null;
+  role: "admin" | "operator" | "finance" | "support" | "readonly";
+  status: "active" | "disabled";
+}
+
 interface AuthContextValue {
-  apiKey: string | null;
+  status: AuthStatus;
+  user: AuthUser | null;
   baseUrl: string;
   client: ApiClient | null;
-  login: (apiKey: string, baseUrl: string) => void;
-  logout: () => void;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => Promise<void>;
+  setBaseUrl: (url: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+async function postJson(baseUrl: string, path: string, body: unknown): Promise<Response> {
+  return fetch(`${baseUrl}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [apiKey, setApiKey] = useState<string | null>(() => sessionStorage.getItem(STORAGE_KEY));
-  const [baseUrl, setBaseUrl] = useState<string>(
-    () => sessionStorage.getItem(STORAGE_BASE_URL) ?? DEFAULT_BASE_URL,
+  const [baseUrl, setBaseUrlState] = useState<string>(
+    () => localStorage.getItem(STORAGE_BASE_URL) ?? DEFAULT_BASE_URL,
+  );
+  const [status, setStatus] = useState<AuthStatus>("loading");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  // CSRF token lives in a ref so the ApiClient's getter always reads the latest
+  // value without rebuilding the client on every token change.
+  const csrfRef = useRef<string | null>(null);
+
+  const client = useMemo(
+    () =>
+      new ApiClient(baseUrl, {
+        getCsrf: () => csrfRef.current,
+        onUnauthorized: () => {
+          csrfRef.current = null;
+          setUser(null);
+          setStatus("anonymous");
+        },
+      }),
+    [baseUrl],
   );
 
-  const login = (key: string, url: string) => {
-    sessionStorage.setItem(STORAGE_KEY, key);
-    sessionStorage.setItem(STORAGE_BASE_URL, url);
-    setApiKey(key);
-    setBaseUrl(url);
+  // Bootstrap: ask the server who we are (rides the session cookie, if any).
+  useEffect(() => {
+    let cancelled = false;
+    setStatus("loading");
+    fetch(`${baseUrl}/v1/auth/me`, { credentials: "include" })
+      .then(async (res) => {
+        if (cancelled) return;
+        if (!res.ok) {
+          setUser(null);
+          setStatus("anonymous");
+          return;
+        }
+        const body = (await res.json()) as { user: AuthUser; csrf_token: string };
+        csrfRef.current = body.csrf_token;
+        setUser(body.user);
+        setStatus("authenticated");
+      })
+      .catch(() => {
+        if (!cancelled) setStatus("anonymous");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUrl]);
+
+  const login = async (email: string, password: string) => {
+    const res = await postJson(baseUrl, "/v1/auth/login", { email, password });
+    const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+    if (!res.ok) {
+      throw new ApiError(
+        typeof body.error === "string" ? body.error : `login failed (${res.status})`,
+        res.status,
+        typeof body.code === "string" ? body.code : undefined,
+      );
+    }
+    const ok = body as { user: AuthUser; csrf_token: string };
+    csrfRef.current = ok.csrf_token;
+    setUser(ok.user);
+    setStatus("authenticated");
   };
 
-  const logout = () => {
-    sessionStorage.removeItem(STORAGE_KEY);
-    sessionStorage.removeItem(STORAGE_BASE_URL);
-    setApiKey(null);
+  const logout = async () => {
+    try {
+      await postJson(baseUrl, "/v1/auth/logout", {});
+    } finally {
+      csrfRef.current = null;
+      setUser(null);
+      setStatus("anonymous");
+    }
   };
 
-  const client = useMemo(() => (apiKey ? new ApiClient(baseUrl, apiKey) : null), [apiKey, baseUrl]);
+  const setBaseUrl = (url: string) => {
+    localStorage.setItem(STORAGE_BASE_URL, url);
+    setBaseUrlState(url);
+  };
 
   return (
-    <AuthContext.Provider value={{ apiKey, baseUrl, client, login, logout }}>
+    <AuthContext.Provider value={{ status, user, baseUrl, client, login, logout, setBaseUrl }}>
       {children}
     </AuthContext.Provider>
   );

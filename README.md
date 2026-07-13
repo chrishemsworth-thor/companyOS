@@ -24,7 +24,8 @@ Per-module references: [Finance](docs/modules/finance.md) ·
 | Runtime | Cloudflare Workers (TypeScript) |
 | HTTP framework | [Hono](https://hono.dev) |
 | Database | D1 (serverless **SQLite** — all module data incl. the append-only ledger) |
-| Cache | KV (tenant-auth read-through cache only) |
+| Cache | KV (`CONFIG_CACHE` tenant-auth read-through cache; `SESSIONS` operator session store) |
+| Human auth | Per-tenant users + server-side sessions (PBKDF2, HMAC-signed HttpOnly cookie, CSRF) — humans log in; agents keep per-tenant API keys |
 | Agent runtime | Durable Objects (`CollectionsAgent`, one per tenant+customer, with `alarm()` re-checks) |
 | Event bus | Cloudflare Queues (+ dead-letter queue) |
 | Scheduling | Cron trigger (daily overdue sweep) |
@@ -81,7 +82,9 @@ In a second terminal, seed a local tenant and try the vertical slice:
 npm run seed:local
 ```
 
-This prints a tenant id, a plaintext API key (only shown here — the DB stores just its SHA-256 hash), and a ready-to-run curl command, e.g.:
+This prints a tenant id, a plaintext API key (only shown here — the DB stores
+just its SHA-256 hash), a first **operator login** (email + password) for the
+console, and a ready-to-run curl command, e.g.:
 
 ```sh
 curl -X POST http://localhost:8787/v1/invoices \
@@ -110,11 +113,18 @@ inventing data yourself.
    ```sh
    npx wrangler d1 create companyos-db
    npx wrangler kv namespace create CONFIG_CACHE
+   npx wrangler kv namespace create SESSIONS       # operator session store
    npx wrangler queues create companyos-events
    npx wrangler queues create companyos-events-dlq
    ```
 2. `npm run db:migrate:remote`
-3. `npm run deploy`
+3. Set the session signing secret (a long random string) and the allowed browser
+   origin(s) for the operator console:
+   ```sh
+   npx wrangler secret put SESSION_SECRET          # overrides the dev placeholder in wrangler.jsonc
+   # set ALLOWED_ORIGINS in wrangler.jsonc "vars" to your console's origin(s)
+   ```
+4. `npm run deploy`
 
 ### Real delivery (email / WhatsApp)
 

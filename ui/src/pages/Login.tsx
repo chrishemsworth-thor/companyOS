@@ -1,32 +1,37 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth, DEFAULT_BASE_URL } from "../auth/AuthContext";
-import { verifyApiKey } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { ApiError } from "../api/client";
 
 export function Login() {
-  const { login } = useAuth();
+  const { login, baseUrl, setBaseUrl } = useAuth();
   const navigate = useNavigate();
-  const [baseUrl, setBaseUrl] = useState(DEFAULT_BASE_URL);
-  const [apiKey, setApiKey] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [url, setUrl] = useState(baseUrl);
   const [error, setError] = useState<string | null>(null);
-  const [checking, setChecking] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    setChecking(true);
+    setBusy(true);
     try {
-      const ok = await verifyApiKey(baseUrl, apiKey.trim());
-      if (!ok) {
-        setError("That API key was rejected by the server. Check the key and the API URL.");
-        return;
-      }
-      login(apiKey.trim(), baseUrl.trim());
+      if (url.trim() !== baseUrl) setBaseUrl(url.trim());
+      await login(email.trim(), password);
       navigate("/");
-    } catch {
-      setError(`Could not reach ${baseUrl}. Is the Worker running?`);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(
+          err.status === 401
+            ? "Invalid email or password."
+            : err.message || "Login failed.",
+        );
+      } else {
+        setError(`Could not reach ${url}. Is the Worker running?`);
+      }
     } finally {
-      setChecking(false);
+      setBusy(false);
     }
   }
 
@@ -35,27 +40,36 @@ export function Login() {
       <form className="login-card" onSubmit={onSubmit}>
         <h1>CompanyOS Operator Console</h1>
         <p className="muted">
-          Paste a tenant API key (from <code>npm run seed:local</code> or your own tenant) to
-          connect. This is a read-only console — the key is kept only in this browser tab's
-          session storage.
+          Sign in with your operator account. Your session is kept in a secure,
+          HttpOnly cookie — the tenant API key never touches the browser.
         </p>
         <label>
-          API base URL
-          <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} required />
-        </label>
-        <label>
-          Tenant API key
+          Email
           <input
-            type="password"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            placeholder="e.g. co_live_..."
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            autoComplete="username"
             required
           />
         </label>
+        <label>
+          Password
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="current-password"
+            required
+          />
+        </label>
+        <label>
+          API base URL
+          <input value={url} onChange={(e) => setUrl(e.target.value)} required />
+        </label>
         {error && <div className="form-error">{error}</div>}
-        <button type="submit" disabled={checking}>
-          {checking ? "Connecting…" : "Connect"}
+        <button type="submit" disabled={busy}>
+          {busy ? "Signing in…" : "Sign in"}
         </button>
       </form>
     </div>
