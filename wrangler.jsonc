@@ -4,7 +4,17 @@
   "name": "companyos",
   "main": "src/index.ts",
   "compatibility_date": "2025-04-01",
+  // nodejs_als enables node:async_hooks AsyncLocalStorage (request-scoped actor
+  // context for per-user event attribution) without the full nodejs_compat surface.
+  "compatibility_flags": ["nodejs_als"],
   "observability": { "enabled": true },
+
+  // Dev-only defaults. SESSION_SECRET MUST be overridden in production via
+  // `wrangler secret put SESSION_SECRET` (a secret shadows this var at runtime).
+  "vars": {
+    "SESSION_SECRET": "dev-insecure-session-secret-change-me",
+    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
+  },
 
   // Daily overdue sweep (01:00 UTC): marks past-due invoices and re-emits
   // invoice.overdue events while they stay unpaid.
@@ -25,6 +35,11 @@
       "binding": "CONFIG_CACHE",
       // Placeholder — replace with the real ID from `wrangler kv namespace create CONFIG_CACHE`.
       "id": "00000000000000000000000000000000"
+    },
+    {
+      "binding": "SESSIONS",
+      // Placeholder — replace with the real ID from `wrangler kv namespace create SESSIONS`.
+      "id": "00000000000000000000000000000001"
     }
   ],
 
