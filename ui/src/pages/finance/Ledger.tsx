@@ -3,15 +3,22 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { JournalEntryModal } from "../../components/modals/JournalEntryModal";
+import { JournalEntryDetailModal } from "../../components/modals/JournalEntryDetailModal";
 import { formatCents } from "../../lib/format";
-import type { Account, AccountBalance } from "../../api/types";
+import type { Account, AccountBalance, EntrySummary } from "../../api/types";
 
 export function Ledger() {
   const { client } = useAuth();
   const [posting, setPosting] = useState(false);
+  const [openEntry, setOpenEntry] = useState<string | null>(null);
   const accountsQuery = useQuery({
     queryKey: ["ledger", "accounts"],
     queryFn: () => client!.get<{ accounts: Account[] }>("/v1/ledger/accounts"),
+    enabled: !!client,
+  });
+  const entriesQuery = useQuery({
+    queryKey: ["ledger", "entries"],
+    queryFn: () => client!.get<{ entries: EntrySummary[] }>("/v1/ledger/entries"),
     enabled: !!client,
   });
 
@@ -28,6 +35,13 @@ export function Ledger() {
         </button>
       </div>
       {posting && <JournalEntryModal accounts={accounts} onClose={() => setPosting(false)} />}
+      {openEntry && (
+        <JournalEntryDetailModal
+          entryId={openEntry}
+          accounts={accounts}
+          onClose={() => setOpenEntry(null)}
+        />
+      )}
       <table className="data-table">
         <thead>
           <tr>
@@ -43,6 +57,35 @@ export function Ledger() {
           ))}
         </tbody>
       </table>
+
+      <h2>Journal entries</h2>
+      {entriesQuery.isLoading && <LoadingState />}
+      {entriesQuery.error && <ErrorState error={entriesQuery.error} />}
+      {entriesQuery.data && entriesQuery.data.entries.length === 0 && (
+        <div className="empty-state">No journal entries yet.</div>
+      )}
+      {entriesQuery.data && entriesQuery.data.entries.length > 0 && (
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Memo</th>
+              <th>Source</th>
+              <th style={{ textAlign: "right" }}>Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            {entriesQuery.data.entries.map((e) => (
+              <tr key={e.entry_id} className="clickable" onClick={() => setOpenEntry(e.entry_id)}>
+                <td>{e.entry_date}</td>
+                <td>{e.memo ?? "—"}</td>
+                <td>{e.source_type}</td>
+                <td style={{ textAlign: "right" }}>{formatCents(e.total_cents)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   );
 }

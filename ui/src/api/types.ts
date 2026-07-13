@@ -39,6 +39,36 @@ export interface AccountBalance {
   balance_cents: number;
 }
 
+export type EntrySourceType = "invoice" | "payment" | "manual" | "reversal";
+
+export interface EntrySummary {
+  entry_id: string;
+  entry_date: string;
+  memo: string | null;
+  currency: string;
+  source_type: EntrySourceType;
+  source_id: string | null;
+  reverses_entry_id: string | null;
+  total_cents: number;
+}
+
+export interface JournalLine {
+  line_no: number;
+  account_id: string;
+  amount_cents: number;
+}
+
+export interface JournalEntry {
+  entry_id: string;
+  entry_date: string;
+  memo: string | null;
+  currency: string;
+  source_type: EntrySourceType;
+  source_id: string | null;
+  reverses_entry_id: string | null;
+  lines: JournalLine[];
+}
+
 export interface Customer {
   customer_id: string;
   name: string;

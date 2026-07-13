@@ -29,9 +29,16 @@ model, admin `/v1/users` management, and per-user audit attribution on
 `authenticate()` accepts either. CORS is now credentialed against an
 `ALLOWED_ORIGINS` allowlist. Lives in [`../ui/`](../ui/), see its README.
 
-Still not built: pagination/search in lists, Kanban boards, a ledger
-entries list (and with it a reverse-entry UI), passkeys / password reset,
-and per-route business-role gating (phase-2 gates only admin surfaces).
+Built since: a **journal-entries list** (`GET /v1/ledger/entries`, cursor-
+paginated) with a detail view and a **reverse-entry** action; **multi-invoice
+payment allocation** (one payment split across several outstanding invoices);
+and the cross-module **insights** read-models (`/v1/insights/*`) behind the
+dashboard.
+
+Still not built: pagination/search on the other list views (invoices,
+customers, deals, tickets, issues — the API supports cursors; only the
+ledger list is wired so far), Kanban boards, passkeys / password reset, and
+per-route business-role gating (phase-2 gates only admin surfaces).
 
 ## 1. What exists to build on
 
