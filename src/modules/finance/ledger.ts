@@ -1,4 +1,5 @@
 import { ulid } from "../../lib/ulid";
+import { paginate } from "../../gateway/pagination";
 import type {
   Account,
   EntrySourceType,
@@ -204,6 +205,52 @@ export async function postEntry(
   );
   await db.batch(statements);
   return { entry_id };
+}
+
+export interface EntrySummary {
+  entry_id: string;
+  entry_date: string;
+  memo: string | null;
+  currency: string;
+  source_type: EntrySourceType;
+  source_id: string | null;
+  reverses_entry_id: string | null;
+  /** Sum of debit (positive) lines — the entry's magnitude for a list view. */
+  total_cents: number;
+}
+
+/**
+ * List journal entry headers (no lines), cursor-paginated on the ULID entry_id
+ * like the other list endpoints. `total_cents` is the debit total, so the UI
+ * can show an entry's size without a second round trip.
+ */
+export async function listEntries(
+  db: D1Database,
+  tenantId: string,
+  page: { cursor?: string; limit: number },
+): Promise<{ entries: EntrySummary[]; next_cursor: string | null }> {
+  const clauses = ["je.tenant_id = ?"];
+  const binds: unknown[] = [tenantId];
+  if (page.cursor) {
+    clauses.push("je.entry_id > ?");
+    binds.push(page.cursor);
+  }
+  binds.push(page.limit + 1);
+  const { results } = await db
+    .prepare(
+      `SELECT je.entry_id, je.entry_date, je.memo, je.currency, je.source_type,
+              je.source_id, je.reverses_entry_id,
+              COALESCE((SELECT SUM(amount_cents) FROM journal_lines jl
+                        WHERE jl.tenant_id = je.tenant_id AND jl.entry_id = je.entry_id
+                          AND jl.amount_cents > 0), 0) AS total_cents
+       FROM journal_entries je
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY je.entry_id ASC LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<EntrySummary>();
+  const { items, next_cursor } = paginate(results, page.limit, "entry_id");
+  return { entries: items, next_cursor };
 }
 
 export async function getEntry(

@@ -6,6 +6,7 @@ import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
 import { AgentActivity } from "./pages/AgentActivity";
+import { Users } from "./pages/Users";
 import { InvoiceList } from "./pages/finance/InvoiceList";
 import { InvoiceDetail } from "./pages/finance/InvoiceDetail";
 import { Ledger } from "./pages/finance/Ledger";
@@ -25,8 +26,9 @@ const queryClient = new QueryClient({
 });
 
 function RequireAuth({ children }: { children: ReactElement }) {
-  const { apiKey } = useAuth();
-  if (!apiKey) return <Navigate to="/login" replace />;
+  const { status } = useAuth();
+  if (status === "loading") return <div className="login-screen">Loading…</div>;
+  if (status === "anonymous") return <Navigate to="/login" replace />;
   return children;
 }
 
@@ -57,6 +59,7 @@ function AppRoutes() {
         <Route path="projects/:id" element={<ProjectDetail />} />
         <Route path="issues" element={<IssueList />} />
         <Route path="issues/:id" element={<IssueDetail />} />
+        <Route path="users" element={<Users />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

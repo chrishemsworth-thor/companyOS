@@ -34,8 +34,8 @@ function parseEnvelope(body: unknown): EventEnvelope {
 async function logEvent(env: Env, envelope: EventEnvelope): Promise<void> {
   await env.DB.prepare(
     `INSERT OR IGNORE INTO events_log
-       (event_id, event_type, source_module, tenant_id, occurred_at, trace_id, payload)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (event_id, event_type, source_module, tenant_id, occurred_at, trace_id, payload, actor_type, actor_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       envelope.event_id,
@@ -45,6 +45,8 @@ async function logEvent(env: Env, envelope: EventEnvelope): Promise<void> {
       envelope.occurred_at,
       envelope.trace_id,
       JSON.stringify(envelope.payload),
+      envelope.actor?.type ?? null,
+      envelope.actor?.id ?? null,
     )
     .run();
 }

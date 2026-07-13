@@ -1,7 +1,11 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { Env } from "./env";
-import { apiKeyAuth, type AuthedEnv } from "./gateway/middleware/auth";
+import { type AuthedEnv } from "./gateway/middleware/auth";
+import { authenticate } from "./gateway/middleware/session";
+import { auth } from "./gateway/routes/auth";
+import { users } from "./gateway/routes/users";
+import { insights } from "./gateway/routes/insights";
 import { invoices } from "./gateway/routes/invoices";
 import { customers } from "./gateway/routes/customers";
 import { ledger } from "./gateway/routes/ledger";
@@ -20,19 +24,35 @@ const app = new Hono<AuthedEnv>();
 
 app.get("/health", (c) => c.json({ ok: true, service: "companyos-gateway" }));
 
-// Browser clients (e.g. the operator UI) call this API cross-origin using a
-// bearer token, never cookies, so an open origin policy carries no CSRF risk.
+// The operator UI now authenticates with a session cookie (credentials:
+// 'include'), so CORS must echo an explicit origin from ALLOWED_ORIGINS and
+// allow credentials — a wildcard origin is illegal with credentialed requests.
+// Programmatic/agent callers use `Authorization: Bearer` and are unaffected.
 app.use(
   "/v1/*",
   cors({
-    origin: "*",
-    allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key"],
-    allowMethods: ["GET", "POST", "PATCH", "OPTIONS"],
+    origin: (origin, c) => {
+      const allowed = (c.env.ALLOWED_ORIGINS ?? "")
+        .split(",")
+        .map((s: string) => s.trim())
+        .filter(Boolean);
+      return allowed.includes(origin) ? origin : undefined;
+    },
+    credentials: true,
+    allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key", "X-CSRF-Token"],
+    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
 
-// Everything under /v1 requires a tenant API key.
-app.use("/v1/*", apiKeyAuth());
+// Session login surface — public (no session required), mounted before the
+// authenticate() guard so login/logout/me are reachable.
+app.route("/v1/auth", auth);
+
+// Everything else under /v1 requires either a session cookie (humans) or a
+// tenant API key (agents/programmatic). authenticate() resolves both.
+app.use("/v1/*", authenticate());
+app.route("/v1/users", users);
+app.route("/v1/insights", insights);
 app.route("/v1/invoices", invoices);
 app.route("/v1/customers", customers);
 app.route("/v1/ledger", ledger);

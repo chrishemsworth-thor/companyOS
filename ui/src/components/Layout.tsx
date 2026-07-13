@@ -14,18 +14,19 @@ const NAV_ITEMS = [
 ];
 
 export function Layout() {
-  const { logout, baseUrl } = useAuth();
+  const { logout, baseUrl, user } = useAuth();
+  const navItems = user?.role === "admin" ? [...NAV_ITEMS, { to: "/users", label: "Users" }] : NAV_ITEMS;
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">CompanyOS</div>
         <nav>
-          {NAV_ITEMS.map((item) => (
+          {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.end}
+              end={"end" in item ? item.end : undefined}
               className={({ isActive }) => "nav-link" + (isActive ? " active" : "")}
             >
               {item.label}
@@ -33,11 +34,16 @@ export function Layout() {
           ))}
         </nav>
         <div className="sidebar-footer">
+          {user && (
+            <div className="base-url" title={`${user.email} · ${user.role}`}>
+              {user.email} · {user.role}
+            </div>
+          )}
           <div className="base-url" title={baseUrl}>
             {baseUrl}
           </div>
           <button className="link-button" onClick={logout}>
-            Disconnect
+            Sign out
           </button>
         </div>
       </aside>

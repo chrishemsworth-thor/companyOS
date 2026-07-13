@@ -2,12 +2,14 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
+import { pageQuerySchema } from "../pagination";
 import {
   accountBalance,
   ensureSystemAccounts,
   getEntry,
   LedgerError,
   listAccounts,
+  listEntries,
   postEntry,
   reverseEntry,
 } from "../../modules/finance/ledger";
@@ -56,6 +58,12 @@ ledger.post("/entries", zValidator("json", entryBodySchema), async (c) => {
     if (err instanceof LedgerError) return c.json({ error: err.message, code: err.code }, 422);
     throw err;
   }
+});
+
+ledger.get("/entries", zValidator("query", pageQuerySchema), async (c) => {
+  const tenant = c.get("tenant");
+  const { cursor, limit } = c.req.valid("query");
+  return c.json(await listEntries(c.env.DB, tenant.tenant_id, { cursor, limit }));
 });
 
 ledger.get("/entries/:id", async (c) => {

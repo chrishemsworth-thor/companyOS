@@ -8,22 +8,43 @@ export class ApiError extends Error {
   }
 }
 
+const MUTATING = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+
+export interface ApiClientOptions {
+  /** Returns the current CSRF token, attached to mutating requests. */
+  getCsrf?: () => string | null;
+  /** Called when the server rejects a request as unauthenticated (401). */
+  onUnauthorized?: () => void;
+}
+
+/**
+ * Thin fetch wrapper for the CompanyOS API. Auth is cookie-based: every request
+ * sends `credentials: 'include'` so the HttpOnly session cookie rides along, and
+ * mutating requests attach the synchronizer CSRF token. The browser never holds
+ * the tenant API key.
+ */
 export class ApiClient {
   constructor(
     private baseUrl: string,
-    private apiKey: string,
+    private opts: ApiClientOptions = {},
   ) {}
 
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const method = (init?.method ?? "GET").toUpperCase();
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      ...(init?.headers as Record<string, string> | undefined),
+    };
+    if (MUTATING.has(method)) {
+      headers["X-CSRF-Token"] = this.opts.getCsrf?.() ?? "";
+    }
     const res = await fetch(`${this.baseUrl}${path}`, {
       ...init,
-      headers: {
-        Authorization: `Bearer ${this.apiKey}`,
-        "Content-Type": "application/json",
-        ...init?.headers,
-      },
+      credentials: "include",
+      headers,
     });
     if (!res.ok) {
+      if (res.status === 401) this.opts.onUnauthorized?.();
       const body = await res.json().catch(() => ({}) as Record<string, unknown>);
       throw new ApiError(
         typeof body.error === "string" ? body.error : `request failed (${res.status})`,
@@ -49,12 +70,4 @@ export class ApiClient {
   patch<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
   }
-}
-
-/** Cheap, cheap read used only to confirm an API key actually resolves a tenant. */
-export async function verifyApiKey(baseUrl: string, apiKey: string): Promise<boolean> {
-  const res = await fetch(`${baseUrl}/v1/customers`, {
-    headers: { Authorization: `Bearer ${apiKey}` },
-  });
-  return res.ok;
 }

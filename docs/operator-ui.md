@@ -19,12 +19,26 @@ idempotency keys on invoice/payment creation. The UI also surfaces the
 collections agent: a tenant-wide **Agent activity** feed (`/agent`,
 backed by `GET /v1/events`), a per-customer agent snapshot
 (`GET /v1/customers/:id/agent`), and invoice-scoped event timelines.
-Auth remains option 1 (paste an API key, session-storage only). Lives in
-[`../ui/`](../ui/), see its README to run it. CORS on the Worker
-(`src/index.ts`) allows `Idempotency-Key` and `PATCH` for the browser.
-Still not built: pagination/search in lists, Kanban boards, a ledger
-entries list (and with it a reverse-entry UI), and any auth upgrade
-from option 1.
+
+**Auth is now option 2** (§3): a backend-for-frontend session layer —
+per-tenant `users`, email + password login (`POST /v1/auth/login`), an
+HttpOnly HMAC-signed session cookie, CSRF on cookie writes, a 5-role
+model, admin `/v1/users` management, and per-user audit attribution on
+`events_log` (see migrations 0010/0011, `src/auth/*`,
+`src/gateway/middleware/session.ts`). Agents keep the tenant-API-key path;
+`authenticate()` accepts either. CORS is now credentialed against an
+`ALLOWED_ORIGINS` allowlist. Lives in [`../ui/`](../ui/), see its README.
+
+Built since: a **journal-entries list** (`GET /v1/ledger/entries`, cursor-
+paginated) with a detail view and a **reverse-entry** action; **multi-invoice
+payment allocation** (one payment split across several outstanding invoices);
+and the cross-module **insights** read-models (`/v1/insights/*`) behind the
+dashboard.
+
+Still not built: pagination/search on the other list views (invoices,
+customers, deals, tickets, issues — the API supports cursors; only the
+ledger list is wired so far), Kanban boards, passkeys / password reset, and
+per-route business-role gating (phase-2 gates only admin surfaces).
 
 ## 1. What exists to build on
 

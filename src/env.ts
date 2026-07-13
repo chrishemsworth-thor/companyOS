@@ -4,8 +4,19 @@
 export interface Env {
   DB: D1Database;
   CONFIG_CACHE: KVNamespace;
+  /** Hot lookup store for human operator sessions (see src/auth/session.ts). */
+  SESSIONS: KVNamespace;
   EVENTS: Queue;
   COLLECTIONS_AGENT: DurableObjectNamespace;
+
+  /**
+   * HMAC signing secret for session cookies. Production sets this via
+   * `wrangler secret put SESSION_SECRET`; wrangler.jsonc carries a dev-only
+   * placeholder so local dev and tests work out of the box.
+   */
+  SESSION_SECRET: string;
+  /** Comma-separated browser origins allowed to send credentialed requests. */
+  ALLOWED_ORIGINS?: string;
 
   // Optional delivery-provider secrets (`wrangler secret put ...`). When a
   // secret is absent the channel falls back to ConsoleDelivery — the test
