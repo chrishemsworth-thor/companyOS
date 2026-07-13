@@ -108,7 +108,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
                   onClick={onClose}
                   className={({ isActive }) =>
                     cn(
-                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium no-underline transition-colors hover:no-underline",
                       isActive
                         ? "bg-accent-soft text-accent"
                         : "text-muted hover:bg-surface-2 hover:text-fg",

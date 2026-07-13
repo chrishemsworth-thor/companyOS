@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
+import { DataTable } from "../../components/DataTable";
 import { JournalEntryModal } from "../../components/modals/JournalEntryModal";
 import { JournalEntryDetailModal } from "../../components/modals/JournalEntryDetailModal";
 import { formatCents } from "../../lib/format";
@@ -28,12 +32,11 @@ export function Ledger() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Chart of accounts</h1>
-        <button className="btn btn-primary" onClick={() => setPosting(true)}>
+      <PageHeader title="Chart of accounts">
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setPosting(true)}>
           New journal entry
-        </button>
-      </div>
+        </Button>
+      </PageHeader>
       {posting && <JournalEntryModal accounts={accounts} onClose={() => setPosting(false)} />}
       {openEntry && (
         <JournalEntryDetailModal
@@ -42,71 +45,46 @@ export function Ledger() {
           onClose={() => setOpenEntry(null)}
         />
       )}
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>Code</th>
-            <th>Name</th>
-            <th>Type</th>
-            <th style={{ textAlign: "right" }}>Balance</th>
-          </tr>
-        </thead>
-        <tbody>
-          {accounts.map((account) => (
-            <AccountRow key={account.account_id} account={account} />
-          ))}
-        </tbody>
-      </table>
+
+      <DataTable
+        rows={accounts}
+        rowKey={(a) => a.account_id}
+        columns={[
+          { header: "Code", render: (a) => <span className="font-mono text-[0.85em]">{a.code}</span> },
+          { header: "Name", render: (a) => a.name },
+          { header: "Type", render: (a) => <span className="capitalize">{a.type}</span> },
+          { header: "Balance", render: (a) => <AccountBalanceCell account={a} />, align: "right" },
+        ]}
+      />
 
       <h2>Journal entries</h2>
       {entriesQuery.isLoading && <LoadingState />}
       {entriesQuery.error && <ErrorState error={entriesQuery.error} />}
-      {entriesQuery.data && entriesQuery.data.entries.length === 0 && (
-        <div className="empty-state">No journal entries yet.</div>
-      )}
-      {entriesQuery.data && entriesQuery.data.entries.length > 0 && (
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Memo</th>
-              <th>Source</th>
-              <th style={{ textAlign: "right" }}>Amount</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entriesQuery.data.entries.map((e) => (
-              <tr key={e.entry_id} className="clickable" onClick={() => setOpenEntry(e.entry_id)}>
-                <td>{e.entry_date}</td>
-                <td>{e.memo ?? "—"}</td>
-                <td>{e.source_type}</td>
-                <td style={{ textAlign: "right" }}>{formatCents(e.total_cents)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {entriesQuery.data && (
+        <DataTable
+          rows={entriesQuery.data.entries}
+          rowKey={(e) => e.entry_id}
+          onRowClick={(e) => setOpenEntry(e.entry_id)}
+          emptyLabel="No journal entries yet."
+          columns={[
+            { header: "Date", render: (e) => e.entry_date },
+            { header: "Memo", render: (e) => e.memo ?? "—" },
+            { header: "Source", render: (e) => <span className="capitalize">{e.source_type}</span> },
+            { header: "Amount", render: (e) => formatCents(e.total_cents), align: "right" },
+          ]}
+        />
       )}
     </div>
   );
 }
 
-function AccountRow({ account }: { account: Account }) {
+function AccountBalanceCell({ account }: { account: Account }) {
   const { client } = useAuth();
   const balanceQuery = useQuery({
     queryKey: ["ledger", "balance", account.account_id],
-    queryFn: () =>
-      client!.get<AccountBalance>(`/v1/ledger/accounts/${account.account_id}/balance`),
+    queryFn: () => client!.get<AccountBalance>(`/v1/ledger/accounts/${account.account_id}/balance`),
     enabled: !!client,
   });
 
-  return (
-    <tr>
-      <td>{account.code}</td>
-      <td>{account.name}</td>
-      <td>{account.type}</td>
-      <td style={{ textAlign: "right" }}>
-        {balanceQuery.data ? formatCents(balanceQuery.data.balance_cents) : "…"}
-      </td>
-    </tr>
-  );
+  return <>{balanceQuery.data ? formatCents(balanceQuery.data.balance_cents) : "…"}</>;
 }

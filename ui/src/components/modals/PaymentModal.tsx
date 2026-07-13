@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
+import { Button } from "../Button";
+import { ModalActions } from "../ModalActions";
 import { useAuth } from "../../auth/AuthContext";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import { parseAmountToCents, centsToAmountString } from "../../lib/money";
@@ -104,6 +106,7 @@ export function PaymentModal({ invoice, onClose }: { invoice: Invoice; onClose: 
     <Modal title="Record payment" onClose={onClose}>
       <form onSubmit={submit}>
         <p className="muted">Allocate the payment across outstanding invoices ({invoice.currency}).</p>
+        <div className="overflow-x-auto">
         <table className="data-table">
           <thead>
             <tr>
@@ -133,6 +136,7 @@ export function PaymentModal({ invoice, onClose }: { invoice: Invoice; onClose: 
             ))}
           </tbody>
         </table>
+        </div>
         <FormRow label="Method (optional)">
           <input
             className="input"
@@ -145,14 +149,14 @@ export function PaymentModal({ invoice, onClose }: { invoice: Invoice; onClose: 
           <strong>Total: {formatMoney(totalCents, invoice.currency)}</strong>
         </p>
         <FormError error={validationError ?? mutation.error} />
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+        <ModalActions>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
+          </Button>
+          <Button type="submit" variant="primary" loading={mutation.isPending}>
             {mutation.isPending ? "Recording…" : "Record payment"}
-          </button>
-        </div>
+          </Button>
+        </ModalActions>
       </form>
     </Modal>
   );

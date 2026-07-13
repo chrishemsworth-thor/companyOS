@@ -1,7 +1,10 @@
 import { useState } from "react";
+import { Plus, X } from "lucide-react";
 import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
+import { Button } from "../Button";
+import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import { parseAmountToCents } from "../../lib/money";
 import type { Account } from "../../api/types";
@@ -147,39 +150,43 @@ export function JournalEntryModal({
               onChange={(e) => setLine(i, { amount: e.target.value })}
             />
             {lines.length > 2 && (
-              <button
+              <Button
                 type="button"
-                className="btn btn-sm"
+                size="sm"
+                variant="ghost"
+                aria-label="Remove line"
                 style={{ flex: "0 0 auto" }}
                 onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
               >
-                ✕
-              </button>
+                <X className="size-4" />
+              </Button>
             )}
           </div>
         ))}
         <div className="action-bar">
-          <button
+          <Button
             type="button"
-            className="btn btn-sm"
+            size="sm"
+            variant="secondary"
+            icon={<Plus className="size-4" />}
             onClick={() => setLines((prev) => [...prev, { ...EMPTY_LINE }])}
           >
-            + Add line
-          </button>
+            Add line
+          </Button>
           <span className="muted">
             {balance === 0 ? "Balanced" : `Out of balance by ${(balance / 100).toFixed(2)}`}
           </span>
         </div>
 
         <FormError error={validationError ?? mutation.error} />
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+        <ModalActions>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
+          </Button>
+          <Button type="submit" variant="primary" loading={mutation.isPending}>
             {mutation.isPending ? "Posting…" : "Post entry"}
-          </button>
-        </div>
+          </Button>
+        </ModalActions>
       </form>
     </Modal>
   );

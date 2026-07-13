@@ -20,16 +20,25 @@ export function DataTable<T>({
   columns,
   rowKey,
   rowHref,
+  onRowClick,
+  emptyLabel = "No records.",
 }: {
   rows: T[];
   columns: Column<T>[];
   rowKey: (row: T) => string;
   rowHref?: (row: T) => string;
+  onRowClick?: (row: T) => void;
+  emptyLabel?: string;
 }) {
   const navigate = useNavigate();
+  const activate = rowHref
+    ? (row: T) => navigate(rowHref(row))
+    : onRowClick
+      ? (row: T) => onRowClick(row)
+      : undefined;
 
   if (rows.length === 0) {
-    return <EmptyState>No records.</EmptyState>;
+    return <EmptyState>{emptyLabel}</EmptyState>;
   }
 
   return (
@@ -56,9 +65,9 @@ export function DataTable<T>({
                 key={rowKey(row)}
                 className={cn(
                   "border-b border-border last:border-0",
-                  rowHref && "cursor-pointer transition-colors hover:bg-surface-2",
+                  activate && "cursor-pointer transition-colors hover:bg-surface-2",
                 )}
-                onClick={rowHref ? () => navigate(rowHref(row)) : undefined}
+                onClick={activate ? () => activate(row) : undefined}
               >
                 {columns.map((col) => (
                   <td
@@ -90,16 +99,16 @@ export function DataTable<T>({
               ))}
             </div>
           );
-          return rowHref ? (
+          return activate ? (
             <div
               key={rowKey(row)}
-              role="link"
+              role={rowHref ? "link" : "button"}
               tabIndex={0}
-              onClick={() => navigate(rowHref(row))}
+              onClick={() => activate(row)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  navigate(rowHref(row));
+                  activate(row);
                 }
               }}
               className="cursor-pointer rounded-lg transition-transform active:scale-[0.99]"
