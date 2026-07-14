@@ -68,6 +68,10 @@ The proof loop, fully native (runnable locally with no external services):
 
 ## Development
 
+New here? [docs/running-locally.md](docs/running-locally.md) is a step-by-step
+guide to running the Worker + operator console locally and exercising the
+human-facing features (login, users/roles, insights, ledger reversals).
+
 ```sh
 npm install
 npm test                  # full suite in the Workers runtime
