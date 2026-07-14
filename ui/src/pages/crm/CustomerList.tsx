@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
 import { CustomerFormModal } from "../../components/modals/CustomerFormModal";
 import type { Customer } from "../../api/types";
 
@@ -19,12 +22,11 @@ export function CustomerList() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Customers</h1>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>
+      <PageHeader title="Customers">
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
           New customer
-        </button>
-      </div>
+        </Button>
+      </PageHeader>
       {creating && (
         <CustomerFormModal
           onClose={() => setCreating(false)}

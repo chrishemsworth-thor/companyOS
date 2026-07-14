@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { TicketCreateModal } from "../../components/modals/TicketCreateModal";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
 import { formatDate } from "../../lib/format";
 import type { Ticket, TicketStatus } from "../../api/types";
 
@@ -26,15 +29,12 @@ export function TicketList() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Tickets</h1>
-        <div className="action-bar">
-          <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
-            New ticket
-          </button>
-        </div>
-      </div>
+      <PageHeader title="Tickets">
+        <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+          New ticket
+        </Button>
+      </PageHeader>
       {creating && (
         <TicketCreateModal
           onClose={() => setCreating(false)}
@@ -50,7 +50,7 @@ export function TicketList() {
           rowHref={(r) => `/tickets/${r.ticket_id}`}
           columns={[
             { header: "Subject", render: (r) => r.subject },
-            { header: "Customer", render: (r) => r.customer_id },
+            { header: "Customer", render: (r) => <span className="font-mono text-[0.85em]">{r.customer_id}</span> },
             { header: "Status", render: (r) => <StatusBadge status={r.status} /> },
             { header: "Priority", render: (r) => <StatusBadge status={r.priority} /> },
             { header: "Updated", render: (r) => formatDate(r.updated_at) },

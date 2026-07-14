@@ -1,3 +1,5 @@
+import { ChevronDown } from "lucide-react";
+
 export function StatusFilter({
   value,
   options,
@@ -8,13 +10,23 @@ export function StatusFilter({
   onChange: (value: string) => void;
 }) {
   return (
-    <select className="filter-select" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">All statuses</option>
-      {options.map((opt) => (
-        <option key={opt} value={opt}>
-          {opt.replace(/_/g, " ")}
-        </option>
-      ))}
-    </select>
+    <div className="relative inline-flex">
+      <select
+        className="h-10 cursor-pointer appearance-none rounded-md border border-border bg-surface pl-3 pr-9 text-sm text-fg capitalize transition-colors hover:border-border-strong focus:border-accent focus:outline-none focus:ring-2 focus:ring-ring"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">All statuses</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt.replace(/_/g, " ")}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 text-subtle"
+        aria-hidden
+      />
+    </div>
   );
 }

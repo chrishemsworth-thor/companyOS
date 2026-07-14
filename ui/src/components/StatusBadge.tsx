@@ -1,4 +1,6 @@
-const TONE_BY_STATUS: Record<string, "neutral" | "good" | "bad" | "warn"> = {
+import { Badge, type Tone } from "./Badge";
+
+const TONE_BY_STATUS: Record<string, Tone> = {
   draft: "neutral",
   sent: "neutral",
   overdue: "bad",
@@ -25,5 +27,5 @@ const TONE_BY_STATUS: Record<string, "neutral" | "good" | "bad" | "warn"> = {
 
 export function StatusBadge({ status }: { status: string }) {
   const tone = TONE_BY_STATUS[status] ?? "neutral";
-  return <span className={`badge badge-${tone}`}>{status.replace(/_/g, " ")}</span>;
+  return <Badge tone={tone}>{status.replace(/_/g, " ")}</Badge>;
 }

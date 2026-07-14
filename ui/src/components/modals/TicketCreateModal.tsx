@@ -3,6 +3,8 @@ import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
 import { CustomerSelect } from "../CustomerSelect";
+import { Button } from "../Button";
+import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import type { Ticket, TicketPriority } from "../../api/types";
 
@@ -81,18 +83,19 @@ export function TicketCreateModal({
           />
         </FormRow>
         <FormError error={mutation.error} />
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+        <ModalActions>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className="btn btn-primary"
+            variant="primary"
+            loading={mutation.isPending}
             disabled={mutation.isPending || !customerId}
           >
             {mutation.isPending ? "Creating…" : "Create ticket"}
-          </button>
-        </div>
+          </Button>
+        </ModalActions>
       </form>
     </Modal>
   );

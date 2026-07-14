@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
+import { Button } from "../Button";
+import { ModalActions } from "../ModalActions";
 import { useAuth } from "../../auth/AuthContext";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import type { Issue, IssuePriority, Project } from "../../api/types";
@@ -123,18 +125,19 @@ export function IssueCreateModal({
           </FormRow>
         </div>
         <FormError error={mutation.error} />
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+        <ModalActions>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
-            className="btn btn-primary"
+            variant="primary"
+            loading={mutation.isPending}
             disabled={mutation.isPending || !projectId}
           >
             {mutation.isPending ? "Creating…" : "Create issue"}
-          </button>
-        </div>
+          </Button>
+        </ModalActions>
       </form>
     </Modal>
   );

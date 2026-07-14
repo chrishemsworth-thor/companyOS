@@ -2,6 +2,8 @@ import { useState } from "react";
 import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
+import { Button } from "../Button";
+import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
 
 /** Trigger an agent-composed payment nudge via the delivery port. */
@@ -43,14 +45,14 @@ export function ReminderModal({ invoiceId, onClose }: { invoiceId: string; onClo
           />
         </FormRow>
         <FormError error={mutation.error} />
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+        <ModalActions>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={mutation.isPending}>
+          </Button>
+          <Button type="submit" variant="primary" loading={mutation.isPending}>
             {mutation.isPending ? "Sending…" : "Send reminder"}
-          </button>
-        </div>
+          </Button>
+        </ModalActions>
       </form>
     </Modal>
   );

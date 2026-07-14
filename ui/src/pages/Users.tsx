@@ -1,9 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Plus } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { LoadingState, ErrorState } from "../components/AsyncState";
 import { DataTable } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
+import { PageHeader } from "../components/PageHeader";
+import { Button } from "../components/Button";
 import { UserFormModal, type AdminUser } from "../components/modals/UserFormModal";
 import { formatDate } from "../lib/format";
 
@@ -29,12 +32,11 @@ export function Users() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Users</h1>
-        <button className="btn btn-primary" onClick={() => setCreating(true)}>
+      <PageHeader title="Users">
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
           New user
-        </button>
-      </div>
+        </Button>
+      </PageHeader>
       {creating && <UserFormModal onClose={() => setCreating(false)} />}
       {editing && <UserFormModal existing={editing} onClose={() => setEditing(null)} />}
       {query.isLoading && <LoadingState />}
@@ -46,16 +48,16 @@ export function Users() {
           columns={[
             { header: "Email", render: (r) => r.email },
             { header: "Name", render: (r) => r.display_name ?? "—" },
-            { header: "Role", render: (r) => r.role },
+            { header: "Role", render: (r) => <span className="capitalize">{r.role}</span> },
             { header: "Status", render: (r) => <StatusBadge status={r.status} /> },
             { header: "Last login", render: (r) => formatDate(r.last_login_at) },
             {
               header: "",
               align: "right",
               render: (r) => (
-                <button className="link-button" onClick={() => setEditing(r)}>
+                <Button size="sm" variant="ghost" onClick={() => setEditing(r)}>
                   Edit
-                </button>
+                </Button>
               ),
             },
           ]}

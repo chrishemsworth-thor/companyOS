@@ -1,12 +1,15 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { DealCreateModal } from "../../components/modals/DealCreateModal";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
 import { formatMoney } from "../../lib/format";
 import type { Deal, DealStatus, PipelineStage } from "../../api/types";
 
@@ -37,15 +40,12 @@ export function DealList() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Deals</h1>
-        <div className="action-bar">
-          <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
-            New deal
-          </button>
-        </div>
-      </div>
+      <PageHeader title="Deals">
+        <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+          New deal
+        </Button>
+      </PageHeader>
       {creating && (
         <DealCreateModal
           onClose={() => setCreating(false)}
@@ -63,7 +63,7 @@ export function DealList() {
           rowHref={(r) => `/deals/${r.deal_id}`}
           columns={[
             { header: "Deal", render: (r) => r.title },
-            { header: "Customer", render: (r) => r.customer_id },
+            { header: "Customer", render: (r) => <span className="font-mono text-[0.85em]">{r.customer_id}</span> },
             { header: "Stage", render: (r) => stageNameById.get(r.stage_id) ?? r.stage_id },
             { header: "Status", render: (r) => <StatusBadge status={r.status} /> },
             { header: "Value", render: (r) => formatMoney(r.value_cents, r.currency), align: "right" },

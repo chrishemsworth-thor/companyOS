@@ -1,8 +1,11 @@
 import { useMemo, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
 import { CustomerSelect } from "../CustomerSelect";
+import { Button } from "../Button";
+import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import { parseAmountToCents } from "../../lib/money";
 import type { Invoice } from "../../api/types";
@@ -128,35 +131,48 @@ export function InvoiceCreateModal({
               onChange={(e) => setLine(i, { unitAmount: e.target.value })}
             />
             {lines.length > 1 && (
-              <button
+              <Button
                 type="button"
-                className="btn btn-sm"
+                size="sm"
+                variant="ghost"
+                aria-label="Remove line"
                 style={{ flex: "0 0 auto" }}
                 onClick={() => setLines((prev) => prev.filter((_, idx) => idx !== i))}
               >
-                ✕
-              </button>
+                <X className="size-4" />
+              </Button>
             )}
           </div>
         ))}
         <div className="action-bar">
-          <button type="button" className="btn btn-sm" onClick={() => setLines((prev) => [...prev, { ...EMPTY_LINE }])}>
-            + Add line
-          </button>
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            icon={<Plus className="size-4" />}
+            onClick={() => setLines((prev) => [...prev, { ...EMPTY_LINE }])}
+          >
+            Add line
+          </Button>
           <span className="muted">
             Total: {currency} {(totalCents / 100).toFixed(2)}
           </span>
         </div>
 
         <FormError error={validationError ?? mutation.error} />
-        <div className="modal-actions">
-          <button type="button" className="btn" onClick={onClose}>
+        <ModalActions>
+          <Button type="button" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={mutation.isPending || !customerId}>
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            loading={mutation.isPending}
+            disabled={mutation.isPending || !customerId}
+          >
             {mutation.isPending ? "Creating…" : "Create invoice"}
-          </button>
-        </div>
+          </Button>
+        </ModalActions>
       </form>
     </Modal>
   );

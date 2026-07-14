@@ -1,11 +1,14 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
+import { Plus } from "lucide-react";
 import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
 import { InvoiceCreateModal } from "../../components/modals/InvoiceCreateModal";
 import { formatMoney, formatDate } from "../../lib/format";
 import type { Invoice, InvoiceStatus } from "../../api/types";
@@ -26,15 +29,12 @@ export function InvoiceList() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Invoices</h1>
-        <div className="action-bar">
-          <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
-          <button className="btn btn-primary" onClick={() => setCreating(true)}>
-            New invoice
-          </button>
-        </div>
-      </div>
+      <PageHeader title="Invoices">
+        <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
+        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+          New invoice
+        </Button>
+      </PageHeader>
       {creating && (
         <InvoiceCreateModal
           onClose={() => setCreating(false)}
@@ -49,8 +49,8 @@ export function InvoiceList() {
           rowKey={(r) => r.invoice_id}
           rowHref={(r) => `/invoices/${r.invoice_id}`}
           columns={[
-            { header: "Invoice", render: (r) => r.invoice_id },
-            { header: "Customer", render: (r) => r.customer_id },
+            { header: "Invoice", render: (r) => <span className="font-mono text-[0.85em]">{r.invoice_id}</span> },
+            { header: "Customer", render: (r) => <span className="font-mono text-[0.85em]">{r.customer_id}</span> },
             { header: "Status", render: (r) => <StatusBadge status={r.status} /> },
             { header: "Total", render: (r) => formatMoney(r.total_cents, r.currency), align: "right" },
             {

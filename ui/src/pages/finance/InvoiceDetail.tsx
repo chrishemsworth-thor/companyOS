@@ -5,6 +5,11 @@ import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { StatusBadge } from "../../components/StatusBadge";
 import { Field } from "../../components/Field";
+import { DetailGrid } from "../../components/DetailGrid";
+import { BackLink } from "../../components/BackLink";
+import { PageHeader } from "../../components/PageHeader";
+import { Button } from "../../components/Button";
+import { DataTable } from "../../components/DataTable";
 import { FormError } from "../../components/FormError";
 import { AgentEventFeed } from "../../components/AgentEventFeed";
 import { PaymentModal } from "../../components/modals/PaymentModal";
@@ -39,43 +44,38 @@ export function InvoiceDetail() {
 
   return (
     <div>
-      <Link to="/invoices" className="back-link">
-        ← Invoices
-      </Link>
-      <div className="page-header">
-        <h1>{invoice.invoice_id}</h1>
-        <div className="action-bar">
-          {invoice.status === "draft" && (
-            <button
-              className="btn btn-primary"
-              onClick={() => sendMutation.mutate(invoice.invoice_id)}
-              disabled={sendMutation.isPending}
-            >
-              {sendMutation.isPending ? "Sending…" : "Send invoice"}
-            </button>
-          )}
-          {canRemind && (
-            <button className="btn" onClick={() => setReminderModalOpen(true)}>
-              Send reminder
-            </button>
-          )}
-          {canPay && (
-            <button className="btn btn-primary" onClick={() => setPayModalOpen(true)}>
-              Record payment
-            </button>
-          )}
-          <StatusBadge status={invoice.status} />
-        </div>
-      </div>
+      <BackLink to="/invoices">Invoices</BackLink>
+      <PageHeader title={<span className="font-mono">{invoice.invoice_id}</span>}>
+        {invoice.status === "draft" && (
+          <Button
+            variant="primary"
+            onClick={() => sendMutation.mutate(invoice.invoice_id)}
+            loading={sendMutation.isPending}
+          >
+            {sendMutation.isPending ? "Sending…" : "Send invoice"}
+          </Button>
+        )}
+        {canRemind && (
+          <Button onClick={() => setReminderModalOpen(true)}>Send reminder</Button>
+        )}
+        {canPay && (
+          <Button variant="primary" onClick={() => setPayModalOpen(true)}>
+            Record payment
+          </Button>
+        )}
+        <StatusBadge status={invoice.status} />
+      </PageHeader>
       <FormError error={sendMutation.error} />
       {payModalOpen && <PaymentModal invoice={invoice} onClose={() => setPayModalOpen(false)} />}
       {reminderModalOpen && (
         <ReminderModal invoiceId={invoice.invoice_id} onClose={() => setReminderModalOpen(false)} />
       )}
 
-      <div className="detail-grid">
+      <DetailGrid>
         <Field label="Customer">
-          <Link to={`/customers/${invoice.customer_id}`}>{invoice.customer_id}</Link>
+          <Link to={`/customers/${invoice.customer_id}`} className="font-mono">
+            {invoice.customer_id}
+          </Link>
         </Field>
         <Field label="Total">{formatMoney(invoice.total_cents, invoice.currency)}</Field>
         <Field label="Amount due">{formatMoney(invoice.amount_due_cents, invoice.currency)}</Field>
@@ -83,33 +83,28 @@ export function InvoiceDetail() {
         <Field label="Issued">{formatDate(invoice.issued_at)}</Field>
         <Field label="Sent">{formatDate(invoice.sent_at)}</Field>
         <Field label="Paid">{formatDate(invoice.paid_at)}</Field>
-      </div>
+      </DetailGrid>
 
       <h2>Line items</h2>
-      <table className="data-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Description</th>
-            <th style={{ textAlign: "right" }}>Qty</th>
-            <th style={{ textAlign: "right" }}>Unit price</th>
-            <th style={{ textAlign: "right" }}>Line total</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invoice.lines.map((line) => (
-            <tr key={line.line_no}>
-              <td>{line.line_no}</td>
-              <td>{line.description}</td>
-              <td style={{ textAlign: "right" }}>{line.quantity}</td>
-              <td style={{ textAlign: "right" }}>{formatMoney(line.unit_cents, invoice.currency)}</td>
-              <td style={{ textAlign: "right" }}>
-                {formatMoney(line.unit_cents * line.quantity, invoice.currency)}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <DataTable
+        rows={invoice.lines}
+        rowKey={(line) => String(line.line_no)}
+        columns={[
+          { header: "#", render: (line) => line.line_no },
+          { header: "Description", render: (line) => line.description },
+          { header: "Qty", render: (line) => line.quantity, align: "right" },
+          {
+            header: "Unit price",
+            render: (line) => formatMoney(line.unit_cents, invoice.currency),
+            align: "right",
+          },
+          {
+            header: "Line total",
+            render: (line) => formatMoney(line.unit_cents * line.quantity, invoice.currency),
+            align: "right",
+          },
+        ]}
+      />
 
       <h2>Agent activity</h2>
       <AgentEventFeed invoiceId={invoice.invoice_id} />
