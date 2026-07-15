@@ -31,6 +31,12 @@ from where the project started.
 - **Phase 2** (`docs/architecture/phase-2-plan.md`) is the near-term roadmap: smarter LLM
   agents, real outbound delivery, idempotency, cursor pagination, and a People/HR module.
 
+Two platform layers have since shipped on top of this spine:
+[multi-company identity](./architecture/multi-company-identity.md) (many isolated
+companies on one platform, workspace-scoped login, runtime provisioning) and
+[departments as a lens](./architecture/department-lens.md) (the full org chart —
+11 departments, `live` vs `planned` — mapped over the capability modules).
+
 The result is one platform, one API, one database, one auth model — and business logic
 that agents can drive end-to-end. The worked example today is the **CollectionsAgent**,
 which chases overdue invoices autonomously from detection to reminder.
@@ -76,6 +82,13 @@ CompanyOS provides for each today. "Module" names map to `src/modules/*` and the
 Note: `sourceModuleSchema` in `src/schemas/envelope.ts` already whitelists both `"sales"`
 and `"people"`, so those two departments are anticipated extension points even where no
 code exists yet.
+
+Since this matrix was first written, the [department lens](./architecture/department-lens.md)
+now models the **full org chart** explicitly: 11 departments, each marked `live` (backed by a
+shipped module) or `planned` (part of the model, shown disabled). The whitespace below —
+Marketing/Product/R&D, People/HR, Operations/Legal — is now *named* as `planned` departments
+rather than being invisible, so the build order stays legible even before the modules exist.
+`GET /v1/meta/departments` serves that taxonomy to agents.
 
 ## 4. Where we're strong vs. thin
 
