@@ -252,6 +252,28 @@ curl -s http://localhost:8787/v1/customers -H "Authorization: Bearer $GLOBEX_KEY
    **Expect:** now shows **Globex LLC**, and none of Acme's data is visible.
 5. Try a bad workspace (`nope`) → **Expect:** "Invalid email or password."
 
+### B9. Post-login smoke — the page actually renders (blank-page guard)
+
+Right after any successful UI login, confirm the app *painted* — not just that
+login returned 200. (A `200` login with a **blank page** means the React shell
+threw during render; see the note below.)
+
+**Expect, immediately after sign-in:**
+- The main content area shows the **Dashboard** (KPI tiles), not an empty page.
+- The **left sidebar** renders: an *Overview* group with **Departments**, one
+  group per live department (Finance, Sales…), a *Planned* group with disabled
+  "Soon" items, and the active **company name** in the footer.
+- Browser devtools **Console** has no uncaught `ReferenceError` / render error,
+  and the tab is not blank.
+
+> **Known regression this guards against:** the department sidebar
+> (`ui/src/components/Layout.tsx`) once referenced identifiers removed in the
+> department-lens merge, throwing at render and blanking the page right after a
+> successful login. Fixed by driving the sidebar off `departmentsForRole()`.
+> The automated guard is `ui/src/components/Layout.test.tsx` (Part D) — if it's
+> green, the shell mounts; if the browser still blanks, hard-refresh (Vite HMR)
+> and check the Console.
+
 ---
 
 ## 4. Part C — Multi-department (PR #15)
@@ -342,6 +364,15 @@ cd .. && npm run typecheck
   `GET /v1/meta/departments` role-filter behavior.
 - `ui/src/lib/departments.test.ts` — parity between the UI mirror and the server
   registry (fails if the two drift).
+- `ui/src/components/Layout.test.tsx` — **blank-page guard**: mounts the
+  authenticated shell and asserts the dashboard + department sidebar render, so a
+  render-time crash after login fails the suite instead of blanking the browser
+  (see B9).
+
+> The **UI typecheck** (`cd ui && npm run typecheck`) is the cheapest guard here
+> and catches this class of bug outright — the blank-page crash was an undefined
+> reference that `tsc` flags immediately. Treat it as a required gate before
+> shipping UI changes; `npm run build` runs it too.
 
 ---
 
@@ -361,6 +392,7 @@ cd .. && npm run typecheck
 - [ ] B6 unknown workspace → 401 identical to bad creds
 - [ ] B7 API-key data isolation holds
 - [ ] B8 UI workspace login switches companies correctly
+- [ ] B9 post-login page renders (dashboard + sidebar; no blank page / console error)
 
 **Multi-department**
 - [ ] C1 API key sees all 11 departments
