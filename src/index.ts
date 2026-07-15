@@ -5,6 +5,7 @@ import { type AuthedEnv } from "./gateway/middleware/auth";
 import { authenticate } from "./gateway/middleware/session";
 import { auth } from "./gateway/routes/auth";
 import { users } from "./gateway/routes/users";
+import { meta } from "./gateway/routes/meta";
 import { insights } from "./gateway/routes/insights";
 import { invoices } from "./gateway/routes/invoices";
 import { customers } from "./gateway/routes/customers";
@@ -52,6 +53,7 @@ app.route("/v1/auth", auth);
 // tenant API key (agents/programmatic). authenticate() resolves both.
 app.use("/v1/*", authenticate());
 app.route("/v1/users", users);
+app.route("/v1/meta", meta);
 app.route("/v1/insights", insights);
 app.route("/v1/invoices", invoices);
 app.route("/v1/customers", customers);
