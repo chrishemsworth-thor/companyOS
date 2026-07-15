@@ -65,7 +65,10 @@ function Brand() {
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
   const { logout, baseUrl, user, tenant } = useAuth();
-  const groups = NAV_GROUPS.filter((g) => !g.adminOnly || user?.role === "admin");
+  // Sidebar is the department lens, filtered to what the current role may see.
+  const visible = departmentsForRole(user?.role);
+  const live = visible.filter((d) => d.status === "live");
+  const planned = visible.filter((d) => d.status === "planned");
 
   return (
     <div className="flex h-full flex-col">
