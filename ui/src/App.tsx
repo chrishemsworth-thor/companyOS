@@ -6,6 +6,7 @@ import { ToastProvider } from "./components/Toast";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
 import { Dashboard } from "./pages/Dashboard";
+import { Departments } from "./pages/Departments";
 import { AgentActivity } from "./pages/AgentActivity";
 import { Users } from "./pages/Users";
 import { InvoiceList } from "./pages/finance/InvoiceList";
@@ -46,6 +47,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="departments" element={<Departments />} />
         <Route path="agent" element={<AgentActivity />} />
         <Route path="invoices" element={<InvoiceList />} />
         <Route path="invoices/:id" element={<InvoiceDetail />} />

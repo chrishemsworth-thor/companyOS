@@ -1,67 +1,56 @@
-import { useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Bot,
-  Receipt,
-  BookOpen,
-  Users,
-  TrendingUp,
-  LifeBuoy,
-  FolderKanban,
-  CircleDot,
-  Shield,
-  Menu,
-  X,
-  LogOut,
-} from "lucide-react";
+import { LayoutGrid, Shield, Menu, X, LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
+import { departmentsForRole } from "../lib/departments";
 
-interface NavItem {
+type Icon = ComponentType<{ className?: string }>;
+
+/** A labelled sidebar group (a department, or the Overview/Admin sections). */
+function NavSection({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div>
+      <div className="px-2 pb-1.5 text-[0.68rem] font-semibold uppercase tracking-wider text-subtle">
+        {label}
+      </div>
+      <div className="flex flex-col gap-0.5">{children}</div>
+    </div>
+  );
+}
+
+function NavItemLink({
+  to,
+  label,
+  icon: Icon,
+  end,
+  onClose,
+}: {
   to: string;
   label: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: Icon;
   end?: boolean;
+  onClose?: () => void;
+}) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      onClick={onClose}
+      className={({ isActive }) =>
+        cn(
+          "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium no-underline transition-colors hover:no-underline",
+          isActive
+            ? "bg-accent-soft text-accent"
+            : "text-muted hover:bg-surface-2 hover:text-fg",
+        )
+      }
+    >
+      <Icon className="size-4 shrink-0" />
+      {label}
+    </NavLink>
+  );
 }
-interface NavGroup {
-  label: string;
-  items: NavItem[];
-  adminOnly?: boolean;
-}
-
-const NAV_GROUPS: NavGroup[] = [
-  {
-    label: "Overview",
-    items: [
-      { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-      { to: "/agent", label: "Agent activity", icon: Bot },
-    ],
-  },
-  {
-    label: "Finance",
-    items: [
-      { to: "/invoices", label: "Invoices", icon: Receipt },
-      { to: "/ledger", label: "Ledger", icon: BookOpen },
-    ],
-  },
-  {
-    label: "CRM",
-    items: [
-      { to: "/customers", label: "Customers", icon: Users },
-      { to: "/deals", label: "Deals", icon: TrendingUp },
-    ],
-  },
-  { label: "Support", items: [{ to: "/tickets", label: "Tickets", icon: LifeBuoy }] },
-  {
-    label: "Build",
-    items: [
-      { to: "/projects", label: "Projects", icon: FolderKanban },
-      { to: "/issues", label: "Issues", icon: CircleDot },
-    ],
-  },
-  { label: "Admin", adminOnly: true, items: [{ to: "/users", label: "Users", icon: Shield }] },
-];
 
 function Brand() {
   return (
@@ -94,34 +83,53 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
-        {groups.map((group) => (
-          <div key={group.label}>
-            <div className="px-2 pb-1.5 text-[0.68rem] font-semibold uppercase tracking-wider text-subtle">
-              {group.label}
-            </div>
-            <div className="flex flex-col gap-0.5">
-              {group.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.end}
-                  onClick={onClose}
-                  className={({ isActive }) =>
-                    cn(
-                      "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium no-underline transition-colors hover:no-underline",
-                      isActive
-                        ? "bg-accent-soft text-accent"
-                        : "text-muted hover:bg-surface-2 hover:text-fg",
-                    )
-                  }
-                >
-                  <item.icon className="size-4 shrink-0" />
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          </div>
+        <NavSection label="Overview">
+          <NavItemLink to="/departments" label="Departments" icon={LayoutGrid} onClose={onClose} />
+        </NavSection>
+
+        {/* One group per live department; its tools are the module surfaces it owns. */}
+        {live.map((dept) => (
+          <NavSection key={dept.id} label={dept.label}>
+            {dept.tools.map((tool) => (
+              <NavItemLink
+                key={tool.route}
+                to={tool.route}
+                label={tool.label}
+                icon={tool.icon}
+                end={tool.route === "/"}
+                onClose={onClose}
+              />
+            ))}
+          </NavSection>
         ))}
+
+        {/* Planned departments: part of the org model, not yet built — shown
+            disabled so the taxonomy (and roadmap) stays visible. */}
+        {planned.length > 0 && (
+          <NavSection label="Planned">
+            {planned.map((dept) => (
+              <div
+                key={dept.id}
+                title={dept.summary}
+                className="flex cursor-default items-center justify-between gap-2 rounded-md px-2.5 py-2 text-sm font-medium text-subtle"
+              >
+                <span className="flex items-center gap-2.5">
+                  <dept.icon className="size-4 shrink-0" />
+                  {dept.label}
+                </span>
+                <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wide text-subtle">
+                  Soon
+                </span>
+              </div>
+            ))}
+          </NavSection>
+        )}
+
+        {user?.role === "admin" && (
+          <NavSection label="Admin">
+            <NavItemLink to="/users" label="Users" icon={Shield} onClose={onClose} />
+          </NavSection>
+        )}
       </nav>
 
       <div className="shrink-0 border-t border-border p-3">

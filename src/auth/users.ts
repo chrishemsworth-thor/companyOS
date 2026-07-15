@@ -6,8 +6,9 @@ import { hashPassword, verifyPassword, type PasswordHash } from "./password";
  * shapes never carry the password hash; the login path uses the private row.
  */
 
-export const ROLES = ["admin", "operator", "finance", "support", "readonly"] as const;
-export type Role = (typeof ROLES)[number];
+// Re-exported from the dependency-free leaf so existing importers are unaffected.
+export { ROLES, type Role } from "./roles";
+import type { Role } from "./roles";
 
 export interface UserPublic {
   user_id: string;
