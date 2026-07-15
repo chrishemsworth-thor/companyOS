@@ -64,10 +64,8 @@ function Brand() {
 }
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
-  const { logout, baseUrl, user } = useAuth();
-  const visible = departmentsForRole(user?.role);
-  const live = visible.filter((d) => d.status === "live");
-  const planned = visible.filter((d) => d.status === "planned");
+  const { logout, baseUrl, user, tenant } = useAuth();
+  const groups = NAV_GROUPS.filter((g) => !g.adminOnly || user?.role === "admin");
 
   return (
     <div className="flex h-full flex-col">
@@ -135,6 +133,14 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       </nav>
 
       <div className="shrink-0 border-t border-border p-3">
+        {tenant && (
+          <div className="mb-2 min-w-0 px-1.5" title={tenant.name}>
+            <div className="text-[0.68rem] font-semibold uppercase tracking-wider text-subtle">
+              Company
+            </div>
+            <div className="truncate text-sm font-semibold text-fg">{tenant.name}</div>
+          </div>
+        )}
         {user && (
           <div className="mb-2 min-w-0 px-1.5">
             <div className="truncate text-sm font-medium text-fg" title={user.email}>

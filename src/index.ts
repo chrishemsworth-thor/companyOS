@@ -4,6 +4,7 @@ import type { Env } from "./env";
 import { type AuthedEnv } from "./gateway/middleware/auth";
 import { authenticate } from "./gateway/middleware/session";
 import { auth } from "./gateway/routes/auth";
+import { platform } from "./gateway/routes/platform";
 import { users } from "./gateway/routes/users";
 import { meta } from "./gateway/routes/meta";
 import { insights } from "./gateway/routes/insights";
@@ -44,6 +45,11 @@ app.use(
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
+
+// Platform provisioning — internal/admin surface for onboarding whole
+// companies (create tenant + first admin). Not tenant-scoped, so it lives
+// outside /v1 and carries its own platform-admin-secret guard.
+app.route("/admin", platform);
 
 // Session login surface — public (no session required), mounted before the
 // authenticate() guard so login/logout/me are reachable.

@@ -86,9 +86,10 @@ In a second terminal, seed a local tenant and try the vertical slice:
 npm run seed:local
 ```
 
-This prints a tenant id, a plaintext API key (only shown here — the DB stores
-just its SHA-256 hash), a first **operator login** (email + password) for the
-console, and a ready-to-run curl command, e.g.:
+This prints a tenant id, a workspace **slug**, a plaintext API key (only shown
+here — the DB stores just its SHA-256 hash), a first **operator login**
+(workspace + email + password) for the console, and a ready-to-run curl
+command, e.g.:
 
 ```sh
 curl -X POST http://localhost:8787/v1/invoices \
@@ -97,7 +98,26 @@ curl -X POST http://localhost:8787/v1/invoices \
   -d '{"customer_id":"cust_456","currency":"MYR","due_date":"2026-06-26","lines":[{"description":"Consulting","quantity":1,"unit_cents":450000}]}'
 ```
 
-Pass `--tenant-id`, `--name`, or `--api-key` to `npm run seed:local` to customize the seeded tenant.
+Pass `--tenant-id`, `--name`, `--slug`, or `--api-key` to `npm run seed:local` to customize the seeded tenant.
+
+### Onboarding more companies
+
+CompanyOS is multi-tenant: every table is keyed by `tenant_id` and each company
+is fully isolated. New companies are provisioned through an internal admin API
+(guarded by `PLATFORM_ADMIN_SECRET`) that creates the tenant, its first admin
+user, and an API key in one call:
+
+```sh
+curl -X POST http://localhost:8787/admin/tenants \
+  -H "Authorization: Bearer $PLATFORM_ADMIN_SECRET" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Acme Inc","slug":"acme","admin_email":"admin@acme.com","admin_password":"a-strong-password"}'
+```
+
+The response returns the plaintext API key **once** (only its hash is stored).
+Operators then log into the console with their **workspace slug** + email +
+password — email is unique per company, so the same address can be used at more
+than one company.
 
 To populate that tenant with a realistic dataset across every module (a few
 customers, invoices in different lifecycle states including one flipped to
@@ -122,10 +142,12 @@ inventing data yourself.
    npx wrangler queues create companyos-events-dlq
    ```
 2. `npm run db:migrate:remote`
-3. Set the session signing secret (a long random string) and the allowed browser
-   origin(s) for the operator console:
+3. Set the session signing secret, the platform-admin secret (guards
+   `/admin/tenants` company provisioning), and the allowed browser origin(s) for
+   the operator console:
    ```sh
    npx wrangler secret put SESSION_SECRET          # overrides the dev placeholder in wrangler.jsonc
+   npx wrangler secret put PLATFORM_ADMIN_SECRET   # overrides the dev placeholder; guards /admin/*
    # set ALLOWED_ORIGINS in wrangler.jsonc "vars" to your console's origin(s)
    ```
 4. `npm run deploy`

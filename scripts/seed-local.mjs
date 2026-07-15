@@ -13,6 +13,9 @@ function arg(flag, fallback) {
 
 const tenantId = arg("--tenant-id", "biz_abc123");
 const tenantName = arg("--name", "Test SME");
+// Human-friendly workspace slug used at the operator-console login (migration
+// 0012). Login now takes workspace + email + password.
+const tenantSlug = arg("--slug", "test-sme");
 const apiKey = arg("--api-key", `local_${randomBytes(16).toString("hex")}`);
 // First human operator, so the UI login screen is usable out of the box.
 const adminEmail = arg("--admin-email", "admin@example.com");
@@ -31,8 +34,8 @@ const adminUserId =
 
 const esc = (s) => s.replace(/'/g, "''");
 const sql = [
-  "INSERT OR REPLACE INTO tenants (tenant_id, name, api_key_hash) VALUES " +
-    `('${tenantId}', '${esc(tenantName)}', '${apiKeyHash}');`,
+  "INSERT OR REPLACE INTO tenants (tenant_id, name, slug, api_key_hash) VALUES " +
+    `('${tenantId}', '${esc(tenantName)}', '${esc(tenantSlug)}', '${apiKeyHash}');`,
   "INSERT OR REPLACE INTO users (user_id, tenant_id, email, display_name, role, pwd_hash, pwd_salt, pwd_iter) VALUES " +
     `('${adminUserId}', '${tenantId}', '${esc(adminEmail)}', 'Seed Admin', 'admin', '${pwdHash}', '${pwdSalt.toString("hex")}', ${PWD_ITER});`,
 ].join("\n");
@@ -43,10 +46,16 @@ execFileSync("npx", ["wrangler", "d1", "execute", "companyos-db", "--local", "--
 
 console.log("\nSeeded local tenant:");
 console.log(`  tenant_id: ${tenantId}`);
+console.log(`  slug:      ${tenantSlug}  (the workspace you log in with)`);
 console.log(`  api_key:   ${apiKey}  (plaintext — only shown here, only the hash is stored)`);
 console.log("\nOperator console login (http://localhost:5173):");
+console.log(`  workspace: ${tenantSlug}`);
 console.log(`  email:     ${adminEmail}`);
 console.log(`  password:  ${adminPassword}`);
+console.log(
+  "\nCreate additional companies at runtime via the internal provisioning API:\n" +
+    "  POST /admin/tenants  (Authorization: Bearer <PLATFORM_ADMIN_SECRET>)",
+);
 console.log("\nTry the vertical slice:");
 console.log(`curl -X POST http://localhost:8787/v1/invoices \\
   -H "Authorization: Bearer ${apiKey}" \\

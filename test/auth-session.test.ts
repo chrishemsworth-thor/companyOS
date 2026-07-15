@@ -15,6 +15,7 @@ import { handleEventBatch } from "../src/queue/consumer";
 
 const API_KEY = "test_api_key_auth";
 const TENANT_ID = "biz_auth";
+const WORKSPACE = "auth-co";
 const ORIGIN = "http://localhost:5173";
 
 async function fetchWorker(path: string, init?: RequestInit): Promise<Response> {
@@ -25,11 +26,11 @@ async function fetchWorker(path: string, init?: RequestInit): Promise<Response> 
 }
 
 /** Log in and return the session cookie + csrf token. */
-async function login(email: string, password: string) {
+async function login(email: string, password: string, workspace: string = WORKSPACE) {
   const res = await fetchWorker("/v1/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: ORIGIN },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ workspace, email, password }),
   });
   const setCookie = res.headers.get("Set-Cookie") ?? "";
   const cookie = setCookie.split(";")[0] ?? "";
@@ -38,8 +39,10 @@ async function login(email: string, password: string) {
 }
 
 beforeAll(async () => {
-  await env.DB.prepare("INSERT OR IGNORE INTO tenants (tenant_id, name, api_key_hash) VALUES (?, ?, ?)")
-    .bind(TENANT_ID, "Auth Tenant", await sha256Hex(API_KEY))
+  await env.DB.prepare(
+    "INSERT OR IGNORE INTO tenants (tenant_id, name, slug, api_key_hash) VALUES (?, ?, ?, ?)",
+  )
+    .bind(TENANT_ID, "Auth Tenant", WORKSPACE, await sha256Hex(API_KEY))
     .run();
   await createUser(env.DB, {
     tenant_id: TENANT_ID,
@@ -67,7 +70,7 @@ describe("login + session", () => {
     const res = await fetchWorker("/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: "admin@auth.test", password: "nope" }),
+      body: JSON.stringify({ workspace: WORKSPACE, email: "admin@auth.test", password: "nope" }),
     });
     expect(res.status).toBe(401);
     expect(res.headers.get("Set-Cookie")).toBeNull();
