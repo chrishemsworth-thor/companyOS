@@ -50,9 +50,11 @@ export async function createUser(
     role?: Role;
   },
 ): Promise<UserPublic> {
+  // Email is unique per company (migration 0012), so the duplicate check is
+  // tenant-scoped — the same email may exist in a different company.
   const existing = await db
-    .prepare("SELECT user_id FROM users WHERE email = ?")
-    .bind(input.email)
+    .prepare("SELECT user_id FROM users WHERE tenant_id = ? AND email = ?")
+    .bind(input.tenant_id, input.email)
     .first<{ user_id: string }>();
   if (existing) throw new UserError("email_taken", "email already registered", 409);
 
@@ -127,20 +129,23 @@ export async function updateUser(
 }
 
 /**
- * Verify email + password. Returns the public user on success. Throws
- * UserError('invalid_credentials') for both unknown-email and wrong-password so
- * the caller can't distinguish them, and 'disabled' for a deactivated account.
+ * Verify email + password within a company. Returns the public user on success.
+ * Throws UserError('invalid_credentials') for both unknown-email and
+ * wrong-password so the caller can't distinguish them, and 'disabled' for a
+ * deactivated account. Login is scoped to a resolved tenant (migration 0012),
+ * because email is only unique within a company.
  */
 export async function authenticateUser(
   db: D1Database,
+  tenantId: string,
   email: string,
   password: string,
 ): Promise<{ tenant_id: string; user: UserPublic }> {
   const row = await db
     .prepare(
-      `SELECT ${PUBLIC_COLUMNS}, tenant_id, pwd_hash, pwd_salt, pwd_iter FROM users WHERE email = ?`,
+      `SELECT ${PUBLIC_COLUMNS}, tenant_id, pwd_hash, pwd_salt, pwd_iter FROM users WHERE tenant_id = ? AND email = ?`,
     )
-    .bind(email)
+    .bind(tenantId, email)
     .first<UserRow>();
   if (!row || !row.pwd_hash || !row.pwd_salt || row.pwd_iter == null) {
     throw new UserError("invalid_credentials", "invalid email or password", 401);

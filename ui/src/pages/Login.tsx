@@ -8,6 +8,7 @@ import { Button } from "../components/Button";
 export function Login() {
   const { login, baseUrl, setBaseUrl } = useAuth();
   const navigate = useNavigate();
+  const [workspace, setWorkspace] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [url, setUrl] = useState(baseUrl);
@@ -20,7 +21,7 @@ export function Login() {
     setBusy(true);
     try {
       if (url.trim() !== baseUrl) setBaseUrl(url.trim());
-      await login(email.trim(), password);
+      await login(workspace.trim(), email.trim(), password);
       navigate("/");
     } catch (err) {
       if (err instanceof ApiError) {
@@ -52,6 +53,20 @@ export function Login() {
           onSubmit={onSubmit}
           className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-6 shadow-md"
         >
+          <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
+            Company workspace
+            <input
+              type="text"
+              className="input"
+              value={workspace}
+              onChange={(e) => setWorkspace(e.target.value)}
+              placeholder="e.g. acme"
+              autoComplete="organization"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+            />
+          </label>
           <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
             Email
             <input

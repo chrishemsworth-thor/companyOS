@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
 import { authenticateUser, getUserById, UserError } from "../../auth/users";
+import { resolveTenantBySlug } from "../../auth/tenants";
 import {
   createSession,
   isSecureRequest,
@@ -21,14 +22,23 @@ import {
 export const auth = new Hono<AuthedEnv>();
 
 const loginSchema = z.object({
+  // The company/workspace slug. Email is only unique within a company, so login
+  // must name which company to authenticate against (migration 0012).
+  workspace: z.string().min(1).max(64),
   email: z.string().email(),
   password: z.string().min(1).max(512),
 });
 
 auth.post("/login", zValidator("json", loginSchema), async (c) => {
-  const { email, password } = c.req.valid("json");
+  const { workspace, email, password } = c.req.valid("json");
   try {
-    const { tenant_id, user } = await authenticateUser(c.env.DB, email, password);
+    const tenant = await resolveTenantBySlug(c.env.DB, workspace);
+    // Unknown workspace is reported exactly like bad credentials so login can't
+    // be used to enumerate which companies exist on the platform.
+    if (!tenant) {
+      return c.json({ error: "invalid email or password", code: "invalid_credentials" }, 401);
+    }
+    const { tenant_id, user } = await authenticateUser(c.env.DB, tenant.tenant_id, email, password);
     const { cookieValue, csrf_token } = await createSession(c.env, {
       tenant_id,
       user_id: user.user_id,
@@ -36,7 +46,7 @@ auth.post("/login", zValidator("json", loginSchema), async (c) => {
       user_agent: c.req.header("User-Agent") ?? undefined,
     });
     c.header("Set-Cookie", sessionSetCookie(cookieValue, isSecureRequest(c.req.raw)));
-    return c.json({ user, csrf_token, tenant_id });
+    return c.json({ user, csrf_token, tenant_id, tenant });
   } catch (err) {
     if (err instanceof UserError) return c.json({ error: err.message, code: err.code }, err.httpStatus);
     throw err;

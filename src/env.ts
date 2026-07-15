@@ -18,6 +18,16 @@ export interface Env {
   /** Comma-separated browser origins allowed to send credentialed requests. */
   ALLOWED_ORIGINS?: string;
 
+  /**
+   * Platform-admin bearer secret guarding the internal provisioning API
+   * (`/admin/*`, see src/gateway/routes/platform.ts) used to create new
+   * companies. Production sets this via `wrangler secret put
+   * PLATFORM_ADMIN_SECRET`; wrangler.jsonc carries a dev-only placeholder so
+   * local dev and tests work out of the box. When unset, the /admin routes
+   * refuse every request (fail closed).
+   */
+  PLATFORM_ADMIN_SECRET?: string;
+
   // Optional delivery-provider secrets (`wrangler secret put ...`). When a
   // secret is absent the channel falls back to ConsoleDelivery — the test
   // suite never configures them, so tests always hit the console provider.
