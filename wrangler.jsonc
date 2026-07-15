@@ -9,10 +9,12 @@
   "compatibility_flags": ["nodejs_als"],
   "observability": { "enabled": true },
 
-  // Dev-only defaults. SESSION_SECRET MUST be overridden in production via
-  // `wrangler secret put SESSION_SECRET` (a secret shadows this var at runtime).
+  // Dev-only defaults. SESSION_SECRET and PLATFORM_ADMIN_SECRET MUST be
+  // overridden in production via `wrangler secret put <NAME>` (a secret shadows
+  // these vars at runtime).
   "vars": {
     "SESSION_SECRET": "dev-insecure-session-secret-change-me",
+    "PLATFORM_ADMIN_SECRET": "dev-insecure-platform-admin-secret-change-me",
     "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
   },
 

@@ -22,12 +22,19 @@ export interface AuthUser {
   status: "active" | "disabled";
 }
 
+/** The company (tenant) the current session belongs to. */
+export interface AuthTenant {
+  tenant_id: string;
+  name: string;
+}
+
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
+  tenant: AuthTenant | null;
   baseUrl: string;
   client: ApiClient | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (workspace: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setBaseUrl: (url: string) => void;
 }
@@ -49,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [tenant, setTenant] = useState<AuthTenant | null>(null);
   // CSRF token lives in a ref so the ApiClient's getter always reads the latest
   // value without rebuilding the client on every token change.
   const csrfRef = useRef<string | null>(null);
@@ -60,6 +68,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         onUnauthorized: () => {
           csrfRef.current = null;
           setUser(null);
+          setTenant(null);
           setStatus("anonymous");
         },
       }),
@@ -75,12 +84,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (cancelled) return;
         if (!res.ok) {
           setUser(null);
+          setTenant(null);
           setStatus("anonymous");
           return;
         }
-        const body = (await res.json()) as { user: AuthUser; csrf_token: string };
+        const body = (await res.json()) as {
+          user: AuthUser;
+          tenant: AuthTenant | null;
+          csrf_token: string;
+        };
         csrfRef.current = body.csrf_token;
         setUser(body.user);
+        setTenant(body.tenant ?? null);
         setStatus("authenticated");
       })
       .catch(() => {
@@ -91,8 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [baseUrl]);
 
-  const login = async (email: string, password: string) => {
-    const res = await postJson(baseUrl, "/v1/auth/login", { email, password });
+  const login = async (workspace: string, email: string, password: string) => {
+    const res = await postJson(baseUrl, "/v1/auth/login", { workspace, email, password });
     const body = await res.json().catch(() => ({}) as Record<string, unknown>);
     if (!res.ok) {
       throw new ApiError(
@@ -101,9 +116,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         typeof body.code === "string" ? body.code : undefined,
       );
     }
-    const ok = body as { user: AuthUser; csrf_token: string };
+    const ok = body as { user: AuthUser; tenant?: AuthTenant; csrf_token: string };
     csrfRef.current = ok.csrf_token;
     setUser(ok.user);
+    setTenant(ok.tenant ?? null);
     setStatus("authenticated");
   };
 
@@ -113,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       csrfRef.current = null;
       setUser(null);
+      setTenant(null);
       setStatus("anonymous");
     }
   };
@@ -123,7 +140,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ status, user, baseUrl, client, login, logout, setBaseUrl }}>
+    <AuthContext.Provider
+      value={{ status, user, tenant, baseUrl, client, login, logout, setBaseUrl }}
+    >
       {children}
     </AuthContext.Provider>
   );
