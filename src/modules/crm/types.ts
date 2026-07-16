@@ -5,6 +5,29 @@ export interface Customer {
   name: string;
   email: string | null;
   phone: string | null;
+  // Organization-level fields (migration 0013) — used by the Quotes "To" block.
+  legal_name: string | null;
+  reg_no: string | null;
+  tax_no: string | null;
+  address_line1: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  postcode: string | null;
+  country: string | null;
+}
+
+/** A contact person at a customer organization. The quote "To" block names one. */
+export interface Contact {
+  contact_id: string;
+  customer_id: string;
+  name: string;
+  title: string | null;
+  department: string | null;
+  email: string | null;
+  phone: string | null;
+  is_primary: boolean;
+  created_at: string;
 }
 
 export interface PipelineStage {

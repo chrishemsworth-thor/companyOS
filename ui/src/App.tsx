@@ -22,6 +22,10 @@ import { ProjectList } from "./pages/build/ProjectList";
 import { ProjectDetail } from "./pages/build/ProjectDetail";
 import { IssueList } from "./pages/build/IssueList";
 import { IssueDetail } from "./pages/build/IssueDetail";
+import { QuoteList } from "./pages/quotes/QuoteList";
+import { QuoteDetail } from "./pages/quotes/QuoteDetail";
+import { CompanyProfile } from "./pages/settings/CompanyProfile";
+import { QuoteBranding } from "./pages/settings/QuoteBranding";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15_000 } },
@@ -56,6 +60,10 @@ function AppRoutes() {
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="deals" element={<DealList />} />
         <Route path="deals/:id" element={<DealDetail />} />
+        <Route path="quotes" element={<QuoteList />} />
+        <Route path="quotes/:id" element={<QuoteDetail />} />
+        <Route path="settings/company" element={<CompanyProfile />} />
+        <Route path="settings/quote-branding" element={<QuoteBranding />} />
         <Route path="tickets" element={<TicketList />} />
         <Route path="tickets/:id" element={<TicketDetail />} />
         <Route path="projects" element={<ProjectList />} />

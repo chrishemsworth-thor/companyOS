@@ -20,6 +20,12 @@ import { projectCreatedV1 } from "./project.created.v1";
 import { issueCreatedV1 } from "./issue.created.v1";
 import { issueStatusChangedV1 } from "./issue.status_changed.v1";
 import { issueCompletedV1 } from "./issue.completed.v1";
+import { quoteCreatedV1 } from "./quote.created.v1";
+import { quoteSentV1 } from "./quote.sent.v1";
+import { quoteAcceptedV1 } from "./quote.accepted.v1";
+import { quoteRejectedV1 } from "./quote.rejected.v1";
+import { quoteExpiredV1 } from "./quote.expired.v1";
+import { quoteConvertedV1 } from "./quote.converted.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -52,6 +58,12 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "issue.created": issueCreatedV1,
   "issue.status_changed": issueStatusChangedV1,
   "issue.completed": issueCompletedV1,
+  "quote.created": quoteCreatedV1,
+  "quote.sent": quoteSentV1,
+  "quote.accepted": quoteAcceptedV1,
+  "quote.rejected": quoteRejectedV1,
+  "quote.expired": quoteExpiredV1,
+  "quote.converted": quoteConvertedV1,
 };
 
 export function validatePayload(
