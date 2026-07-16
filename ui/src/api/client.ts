@@ -70,4 +70,8 @@ export class ApiClient {
   patch<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>(path, { method: "PATCH", body: JSON.stringify(body) });
   }
+
+  put<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>(path, { method: "PUT", body: JSON.stringify(body) });
+  }
 }

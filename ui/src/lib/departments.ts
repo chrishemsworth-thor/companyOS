@@ -18,6 +18,9 @@ import {
   UserRound,
   Scale,
   Boxes,
+  FileText,
+  Building2,
+  Palette,
 } from "lucide-react";
 
 /**
@@ -76,6 +79,7 @@ export const DEPARTMENTS: Department[] = [
     tools: [
       { label: "Customers", route: "/customers", icon: Users },
       { label: "Deals", route: "/deals", icon: TrendingUp },
+      { label: "Quotes", route: "/quotes", icon: FileText },
     ],
   },
   {
@@ -115,7 +119,11 @@ export const DEPARTMENTS: Department[] = [
     summary: "Cross-module overview stitched from one database.",
     roles: [...BROAD, "finance"],
     icon: LayoutDashboard,
-    tools: [{ label: "Dashboard", route: "/", icon: LayoutDashboard }],
+    tools: [
+      { label: "Dashboard", route: "/", icon: LayoutDashboard },
+      { label: "Company Profile", route: "/settings/company", icon: Building2 },
+      { label: "Quote Branding", route: "/settings/quote-branding", icon: Palette },
+    ],
   },
   {
     id: "product",

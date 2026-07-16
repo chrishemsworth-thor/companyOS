@@ -17,8 +17,11 @@ import { activities } from "./gateway/routes/activities";
 import { tickets } from "./gateway/routes/tickets";
 import { projects, issues } from "./gateway/routes/projects";
 import { events } from "./gateway/routes/events";
+import { quotes } from "./gateway/routes/quotes";
+import { settings } from "./gateway/routes/settings";
 import { handleEventBatch } from "./queue/consumer";
 import { runOverdueSweep } from "./modules/finance/overdue-sweep";
+import { runQuoteExpirySweep } from "./modules/quotes/expiry-sweep";
 
 export { CollectionsAgent } from "./agents/collections";
 
@@ -71,6 +74,8 @@ app.route("/v1/tickets", tickets);
 app.route("/v1/projects", projects);
 app.route("/v1/issues", issues);
 app.route("/v1/events", events);
+app.route("/v1/quotes", quotes);
+app.route("/v1/settings", settings);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {
@@ -81,8 +86,9 @@ app.onError((err, c) => {
 export default {
   fetch: app.fetch,
   queue: handleEventBatch,
-  // Daily overdue sweep — native replacement for ERPNext's due-date webhook.
+  // Daily sweeps: mark overdue invoices and expire lapsed quotes.
   scheduled(_controller, env, ctx) {
     ctx.waitUntil(runOverdueSweep(env));
+    ctx.waitUntil(runQuoteExpirySweep(env));
   },
 } satisfies ExportedHandler<Env>;

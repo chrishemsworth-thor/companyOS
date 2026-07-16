@@ -4,6 +4,7 @@ import { paginate } from "../../gateway/pagination";
 import type {
   Activity,
   ActivityKind,
+  Contact,
   Customer,
   Deal,
   PaymentHistoryEntry,
@@ -88,6 +89,33 @@ async function getStage(
 
 // ---- Customers ----
 
+/** Organization-level fields settable on create/patch (migration 0013). */
+export interface CustomerOrgFields {
+  legal_name?: string | null;
+  reg_no?: string | null;
+  tax_no?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  postcode?: string | null;
+  country?: string | null;
+}
+
+const ORG_FIELDS = [
+  "legal_name",
+  "reg_no",
+  "tax_no",
+  "address_line1",
+  "address_line2",
+  "city",
+  "state",
+  "postcode",
+  "country",
+] as const;
+
+const CUSTOMER_COLUMNS = `customer_id, name, email, phone, ${ORG_FIELDS.join(", ")}`;
+
 export async function getCustomer(
   db: D1Database,
   tenantId: string,
@@ -95,7 +123,7 @@ export async function getCustomer(
 ): Promise<Customer | null> {
   return db
     .prepare(
-      "SELECT customer_id, name, email, phone FROM customers WHERE tenant_id = ? AND customer_id = ?",
+      `SELECT ${CUSTOMER_COLUMNS} FROM customers WHERE tenant_id = ? AND customer_id = ?`,
     )
     .bind(tenantId, customerId)
     .first<Customer>();
@@ -115,7 +143,7 @@ export async function listCustomers(
   binds.push(page.limit + 1);
   const { results } = await db
     .prepare(
-      `SELECT customer_id, name, email, phone FROM customers WHERE ${clauses.join(" AND ")}
+      `SELECT ${CUSTOMER_COLUMNS} FROM customers WHERE ${clauses.join(" AND ")}
        ORDER BY customer_id ASC LIMIT ?`,
     )
     .bind(...binds)
@@ -127,12 +155,13 @@ export async function listCustomers(
 export async function createCustomer(
   env: { DB: D1Database; EVENTS: Queue },
   tenantId: string,
-  input: { name: string; email?: string; phone?: string },
+  input: { name: string; email?: string; phone?: string } & CustomerOrgFields,
 ): Promise<Customer> {
   const customerId = `cust_${ulid()}`;
+  const orgBinds = ORG_FIELDS.map((f) => input[f] ?? null);
   await env.DB.prepare(
-    `INSERT INTO customers (customer_id, tenant_id, name, email, phone, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO customers (customer_id, tenant_id, name, email, phone, created_at, ${ORG_FIELDS.join(", ")})
+     VALUES (?, ?, ?, ?, ?, ?, ${ORG_FIELDS.map(() => "?").join(", ")})`,
   )
     .bind(
       customerId,
@@ -141,6 +170,7 @@ export async function createCustomer(
       input.email ?? null,
       input.phone ?? null,
       new Date().toISOString(),
+      ...orgBinds,
     )
     .run();
 
@@ -158,28 +188,22 @@ export async function createCustomer(
     }),
   );
 
-  return { customer_id: customerId, name: input.name, email: input.email ?? null, phone: input.phone ?? null };
+  return (await getCustomer(env.DB, tenantId, customerId)) as Customer;
 }
 
 export async function updateCustomer(
   db: D1Database,
   tenantId: string,
   customerId: string,
-  patch: { name?: string; email?: string; phone?: string },
+  patch: { name?: string; email?: string; phone?: string } & CustomerOrgFields,
 ): Promise<Customer> {
   const sets: string[] = [];
   const binds: unknown[] = [];
-  if (patch.name !== undefined) {
-    sets.push("name = ?");
-    binds.push(patch.name);
-  }
-  if (patch.email !== undefined) {
-    sets.push("email = ?");
-    binds.push(patch.email);
-  }
-  if (patch.phone !== undefined) {
-    sets.push("phone = ?");
-    binds.push(patch.phone);
+  for (const field of ["name", "email", "phone", ...ORG_FIELDS] as const) {
+    if (patch[field] !== undefined) {
+      sets.push(`${field} = ?`);
+      binds.push(patch[field]);
+    }
   }
   const result = await db
     .prepare(`UPDATE customers SET ${sets.join(", ")} WHERE tenant_id = ? AND customer_id = ?`)
@@ -189,6 +213,91 @@ export async function updateCustomer(
     throw new CrmError("not_found", "customer not found", 404);
   }
   return (await getCustomer(db, tenantId, customerId)) as Customer;
+}
+
+// ---- Contacts ----
+
+interface ContactRow {
+  contact_id: string;
+  customer_id: string;
+  name: string;
+  title: string | null;
+  department: string | null;
+  email: string | null;
+  phone: string | null;
+  is_primary: number;
+  created_at: string;
+}
+
+const CONTACT_COLUMNS =
+  "contact_id, customer_id, name, title, department, email, phone, is_primary, created_at";
+
+function toContact(row: ContactRow): Contact {
+  return { ...row, is_primary: row.is_primary === 1 };
+}
+
+export async function getContact(
+  db: D1Database,
+  tenantId: string,
+  contactId: string,
+): Promise<Contact | null> {
+  const row = await db
+    .prepare(`SELECT ${CONTACT_COLUMNS} FROM contacts WHERE tenant_id = ? AND contact_id = ?`)
+    .bind(tenantId, contactId)
+    .first<ContactRow>();
+  return row ? toContact(row) : null;
+}
+
+export async function listContacts(
+  db: D1Database,
+  tenantId: string,
+  customerId: string,
+): Promise<Contact[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT ${CONTACT_COLUMNS} FROM contacts
+       WHERE tenant_id = ? AND customer_id = ? ORDER BY is_primary DESC, created_at`,
+    )
+    .bind(tenantId, customerId)
+    .all<ContactRow>();
+  return results.map(toContact);
+}
+
+export async function createContact(
+  db: D1Database,
+  tenantId: string,
+  input: {
+    customer_id: string;
+    name: string;
+    title?: string;
+    department?: string;
+    email?: string;
+    phone?: string;
+    is_primary?: boolean;
+  },
+): Promise<Contact> {
+  const customer = await getCustomer(db, tenantId, input.customer_id);
+  if (!customer) throw new CrmError("not_found", `customer ${input.customer_id} not found`, 404);
+
+  const contactId = `contact_${ulid()}`;
+  await db
+    .prepare(
+      `INSERT INTO contacts (contact_id, tenant_id, customer_id, name, title, department, email, phone, is_primary)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      contactId,
+      tenantId,
+      input.customer_id,
+      input.name,
+      input.title ?? null,
+      input.department ?? null,
+      input.email ?? null,
+      input.phone ?? null,
+      input.is_primary ? 1 : 0,
+    )
+    .run();
+  return (await getContact(db, tenantId, contactId)) as Contact;
 }
 
 /** Real query over payments/applications — replaces the old Frappe call. */

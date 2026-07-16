@@ -75,6 +75,7 @@ export const DEPARTMENTS: Department[] = [
     tools: [
       { label: "Customers", route: "/customers" },
       { label: "Deals", route: "/deals" },
+      { label: "Quotes", route: "/quotes" },
     ],
   },
   {
@@ -114,7 +115,11 @@ export const DEPARTMENTS: Department[] = [
     summary: "Cross-module overview stitched from one database.",
     modules: ["insights"],
     roles: [...BROAD, "finance"],
-    tools: [{ label: "Dashboard", route: "/" }],
+    tools: [
+      { label: "Dashboard", route: "/" },
+      { label: "Company Profile", route: "/settings/company" },
+      { label: "Quote Branding", route: "/settings/quote-branding" },
+    ],
   },
   {
     id: "product",
