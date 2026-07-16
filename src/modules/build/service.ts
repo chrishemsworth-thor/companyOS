@@ -1,7 +1,7 @@
 import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
 import { paginate } from "../../gateway/pagination";
-import type { Issue, IssuePriority, IssueStatus, Project } from "./types";
+import type { Issue, IssueOrigin, IssuePriority, IssueStatus, Project } from "./types";
 
 /**
  * Native build service. Issues have no formal transition table — unlike
@@ -79,7 +79,7 @@ export async function createProject(
 }
 
 const ISSUE_COLUMNS =
-  "issue_id, project_id, title, description, status, priority, assignee, created_at, updated_at";
+  "issue_id, project_id, title, description, status, priority, assignee, origin, created_at, updated_at";
 
 export async function getIssue(
   db: D1Database,
@@ -132,6 +132,9 @@ export async function createIssue(
     description?: string;
     priority?: IssuePriority;
     assignee?: string;
+    /** Set by webhook ingestion for issues mirrored from an external tracker. */
+    origin?: IssueOrigin;
+    external?: { provider: "jira" | "github" | "bitbucket"; external_id: string; external_url?: string };
   },
 ): Promise<Issue> {
   const project = await getProject(env.DB, tenantId, input.project_id);
@@ -140,8 +143,8 @@ export async function createIssue(
   const issueId = `iss_${ulid()}`;
   const priority = input.priority ?? "medium";
   await env.DB.prepare(
-    `INSERT INTO issues (issue_id, tenant_id, project_id, title, description, priority, assignee)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO issues (issue_id, tenant_id, project_id, title, description, priority, assignee, origin)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       issueId,
@@ -151,6 +154,7 @@ export async function createIssue(
       input.description ?? null,
       priority,
       input.assignee ?? null,
+      input.origin ?? "native",
     )
     .run();
 
@@ -159,11 +163,73 @@ export async function createIssue(
       event_type: "issue.created",
       source_module: "build",
       tenant_id: tenantId,
-      payload: { issue_id: issueId, project_id: input.project_id, title: input.title, priority },
+      payload: {
+        issue_id: issueId,
+        project_id: input.project_id,
+        title: input.title,
+        priority,
+        ...(input.external
+          ? {
+              provider: input.external.provider,
+              external_id: input.external.external_id,
+              ...(input.external.external_url ? { external_url: input.external.external_url } : {}),
+            }
+          : {}),
+      },
     }),
   );
 
   return (await getIssue(env.DB, tenantId, issueId))!;
+}
+
+/**
+ * Patch mutable issue fields (title/description/priority/assignee) without
+ * touching status. Used by webhook ingestion to keep mirrored issues in step
+ * with their external source; emits no event in phase 1 (there is no
+ * issue.updated type yet).
+ */
+export async function updateIssueDetails(
+  db: D1Database,
+  tenantId: string,
+  issueId: string,
+  patch: {
+    title?: string;
+    description?: string | null;
+    priority?: IssuePriority;
+    assignee?: string | null;
+  },
+): Promise<Issue> {
+  const issue = await getIssue(db, tenantId, issueId);
+  if (!issue) throw new BuildError("not_found", "issue not found", 404);
+
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  if (patch.title !== undefined) {
+    sets.push("title = ?");
+    binds.push(patch.title);
+  }
+  if (patch.description !== undefined) {
+    sets.push("description = ?");
+    binds.push(patch.description);
+  }
+  if (patch.priority !== undefined) {
+    sets.push("priority = ?");
+    binds.push(patch.priority);
+  }
+  if (patch.assignee !== undefined) {
+    sets.push("assignee = ?");
+    binds.push(patch.assignee);
+  }
+  if (sets.length === 0) return issue;
+
+  sets.push("updated_at = ?");
+  binds.push(new Date().toISOString(), tenantId, issueId);
+  await db
+    .prepare(`UPDATE issues SET ${sets.join(", ")} WHERE tenant_id = ? AND issue_id = ?`)
+    .bind(...binds)
+    .run();
+
+  return (await getIssue(db, tenantId, issueId))!;
 }
 
 const SETTLED: IssueStatus[] = ["done", "cancelled"];

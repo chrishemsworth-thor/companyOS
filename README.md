@@ -14,7 +14,9 @@ earlier OSS-wrapping approach it replaced).
 
 Per-module references: [Finance](docs/modules/finance.md) ·
 [CRM](docs/modules/crm.md) · [Support](docs/modules/support.md) ·
-[Build](docs/modules/build.md). Platform layers:
+[Build](docs/modules/build.md) ·
+[Webhook ingestion (JIRA/GitHub/Bitbucket)](docs/modules/webhooks.md).
+Platform layers:
 [Multi-company identity](docs/architecture/multi-company-identity.md) ·
 [Departments as a lens](docs/architecture/department-lens.md). What's next:
 [Phase 2 plan](docs/architecture/phase-2-plan.md).

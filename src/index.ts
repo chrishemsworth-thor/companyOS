@@ -19,6 +19,8 @@ import { projects, issues } from "./gateway/routes/projects";
 import { events } from "./gateway/routes/events";
 import { quotes } from "./gateway/routes/quotes";
 import { settings } from "./gateway/routes/settings";
+import { webhookSources } from "./gateway/routes/webhook-sources";
+import { webhooks } from "./webhooks/router";
 import { handleEventBatch } from "./queue/consumer";
 import { runOverdueSweep } from "./modules/finance/overdue-sweep";
 import { runQuoteExpirySweep } from "./modules/quotes/expiry-sweep";
@@ -54,6 +56,11 @@ app.use(
 // outside /v1 and carries its own platform-admin-secret guard.
 app.route("/admin", platform);
 
+// Inbound webhook ingress (JIRA/GitHub/Bitbucket → Build). Deliveries carry
+// no tenant credential, so this lives outside /v1 and authenticates each
+// request with the source's derived signing secret (see src/webhooks/).
+app.route("/webhooks", webhooks);
+
 // Session login surface — public (no session required), mounted before the
 // authenticate() guard so login/logout/me are reachable.
 app.route("/v1/auth", auth);
@@ -76,6 +83,7 @@ app.route("/v1/issues", issues);
 app.route("/v1/events", events);
 app.route("/v1/quotes", quotes);
 app.route("/v1/settings", settings);
+app.route("/v1/webhook-sources", webhookSources);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

@@ -26,6 +26,9 @@ import { quoteAcceptedV1 } from "./quote.accepted.v1";
 import { quoteRejectedV1 } from "./quote.rejected.v1";
 import { quoteExpiredV1 } from "./quote.expired.v1";
 import { quoteConvertedV1 } from "./quote.converted.v1";
+import { codePushV1 } from "./code.push.v1";
+import { codePrOpenedV1 } from "./code.pr_opened.v1";
+import { codePrMergedV1 } from "./code.pr_merged.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -64,6 +67,9 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "quote.rejected": quoteRejectedV1,
   "quote.expired": quoteExpiredV1,
   "quote.converted": quoteConvertedV1,
+  "code.push": codePushV1,
+  "code.pr_opened": codePrOpenedV1,
+  "code.pr_merged": codePrMergedV1,
 };
 
 export function validatePayload(
