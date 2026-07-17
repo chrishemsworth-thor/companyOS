@@ -28,6 +28,15 @@ export interface Env {
    */
   PLATFORM_ADMIN_SECRET?: string;
 
+  /**
+   * Master key from which per-source webhook signing secrets are derived
+   * (HMAC-SHA256(master, source_id) — see src/webhooks/verify.ts). Production
+   * sets this via `wrangler secret put WEBHOOK_MASTER_SECRET`; wrangler.jsonc
+   * carries a dev-only placeholder. When unset, /webhooks/* and webhook-source
+   * provisioning refuse every request (fail closed).
+   */
+  WEBHOOK_MASTER_SECRET?: string;
+
   // Optional delivery-provider secrets (`wrangler secret put ...`). When a
   // secret is absent the channel falls back to ConsoleDelivery — the test
   // suite never configures them, so tests always hit the console provider.
