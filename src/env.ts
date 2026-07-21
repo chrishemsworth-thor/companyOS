@@ -51,6 +51,24 @@ export interface Env {
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
 
+  // Google (Gmail/Workspace) email integration. All three are required to
+  // connect or use an account; when any is absent the /v1/google-accounts and
+  // /oauth/google routes fail closed (503). Production sets these via `wrangler
+  // secret put ...`; wrangler.jsonc carries dev-only placeholders.
+  //   - GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET: the OAuth 2.0 web client.
+  //   - GOOGLE_TOKEN_ENCRYPTION_KEY: base64 of 32 random bytes, the AES-256-GCM
+  //     key that encrypts stored refresh tokens (src/integrations/google/crypto.ts).
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_TOKEN_ENCRYPTION_KEY?: string;
+  /**
+   * Optional explicit OAuth redirect URI. When unset it is derived from the
+   * request origin as `${origin}/oauth/google/callback`. Set this when the
+   * public origin differs from what the Worker sees (e.g. behind a custom
+   * domain) — it must match a redirect URI registered on the OAuth client.
+   */
+  GOOGLE_OAUTH_REDIRECT_URI?: string;
+
   // Optional LLM configuration for the smart CollectionsAgent. The LLM port
   // (src/llm/) is provider-agnostic: set the API key for the provider you
   // use. Without any key the agent runs its deterministic fallback.
