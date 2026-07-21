@@ -6,8 +6,10 @@ import { FormError } from "../FormError";
 import { CustomerSelect } from "../CustomerSelect";
 import { Button } from "../Button";
 import { ModalActions } from "../ModalActions";
+import { CurrencySelect } from "../CurrencySelect";
 import { useAuth } from "../../auth/AuthContext";
 import { useApiMutation } from "../../hooks/useApiMutation";
+import { useBaseCurrency } from "../../hooks/useBaseCurrency";
 import { parseAmountToCents } from "../../lib/money";
 import type { Deal, PipelineStage } from "../../api/types";
 
@@ -24,7 +26,10 @@ export function DealCreateModal({
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
   const [title, setTitle] = useState("");
   const [value, setValue] = useState("");
-  const [currency, setCurrency] = useState("MYR");
+  // Defaults to the company base currency until the user picks one explicitly.
+  const baseCurrency = useBaseCurrency();
+  const [currencyOverride, setCurrencyOverride] = useState<string | null>(null);
+  const currency = currencyOverride ?? baseCurrency;
   const [stageId, setStageId] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
@@ -89,14 +94,7 @@ export function DealCreateModal({
             />
           </FormRow>
           <FormRow label="Currency">
-            <input
-              className="input"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              maxLength={3}
-              minLength={3}
-              required
-            />
+            <CurrencySelect value={currency} onChange={setCurrencyOverride} />
           </FormRow>
         </div>
         <FormRow label="Stage (optional — defaults to first stage)">

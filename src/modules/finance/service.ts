@@ -6,6 +6,7 @@ import {
   ensureSystemAccounts,
   getAccountByCode,
 } from "./ledger";
+import { resolveBaseCurrency } from "../quotes/settings";
 import type { Invoice, InvoiceLine, InvoiceStatus } from "./types";
 
 /**
@@ -39,7 +40,8 @@ export class FinanceError extends Error {
 
 export interface CreateInvoiceInput {
   customer_id: string;
-  currency: string;
+  /** ISO 4217; omitted => the company's base currency. */
+  currency?: string;
   due_date: string; // ISO date
   lines: { description: string; quantity: number; unit_cents: number }[];
 }
@@ -133,6 +135,10 @@ export async function createInvoice(
     throw new FinanceError("invalid_total", "invoice total must be positive");
   }
 
+  // Invoices stay multi-currency; the company base currency is only the
+  // default when the caller omits currency (same rule as quotes).
+  const currency = input.currency ?? (await resolveBaseCurrency(env.DB, tenantId));
+
   await ensureSystemAccounts(env.DB, tenantId);
   const ar = await getAccountByCode(env.DB, tenantId, "1100");
   const revenue = await getAccountByCode(env.DB, tenantId, "4000");
@@ -142,7 +148,7 @@ export async function createInvoice(
   const { statements: entryStatements } = buildEntryStatements(env.DB, tenantId, {
     entry_date: issuedAt.slice(0, 10),
     memo: `invoice ${invoiceId} issued`,
-    currency: input.currency,
+    currency,
     source_type: "invoice",
     source_id: invoiceId,
     lines: [
@@ -162,7 +168,7 @@ export async function createInvoice(
       input.customer_id,
       totalCents,
       totalCents,
-      input.currency,
+      currency,
       input.due_date,
       issuedAt,
     ),
@@ -184,7 +190,7 @@ export async function createInvoice(
         invoice_id: invoiceId,
         customer_id: input.customer_id,
         total_cents: totalCents,
-        currency: input.currency,
+        currency,
         due_date: input.due_date,
       },
     }),

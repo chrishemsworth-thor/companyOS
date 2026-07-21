@@ -60,4 +60,6 @@ export interface CompanyProfile {
   email: string | null;
   website: string | null;
   default_prepared_by: string | null;
+  /** Company-wide default currency for new documents (ISO 4217). */
+  base_currency: string;
 }

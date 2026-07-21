@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { ToastProvider } from "./components/Toast";
 import { Layout } from "./components/Layout";
@@ -29,15 +29,27 @@ import { QuoteBranding } from "./pages/settings/QuoteBranding";
 import { EmployeeList } from "./pages/people/EmployeeList";
 import { EmployeeDetail } from "./pages/people/EmployeeDetail";
 import { TeamList } from "./pages/people/TeamList";
+import { Onboarding } from "./pages/onboarding/Onboarding";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15_000 } },
 });
 
 function RequireAuth({ children }: { children: ReactElement }) {
-  const { status } = useAuth();
+  const { status, user, tenant } = useAuth();
+  const location = useLocation();
   if (status === "loading") return <div className="login-screen">Loading…</div>;
   if (status === "anonymous") return <Navigate to="/login" replace />;
+  // First-run: send the company's admin into the setup journey until it is
+  // finished or dismissed. Only admins — other roles can't create teams or
+  // employees, so the wizard would be a dead end for them.
+  if (
+    tenant?.onboarded_at === null &&
+    user?.role === "admin" &&
+    location.pathname !== "/onboarding"
+  ) {
+    return <Navigate to="/onboarding" replace />;
+  }
   return children;
 }
 
@@ -54,6 +66,7 @@ function AppRoutes() {
         }
       >
         <Route index element={<Dashboard />} />
+        <Route path="onboarding" element={<Onboarding />} />
         <Route path="departments" element={<Departments />} />
         <Route path="agent" element={<AgentActivity />} />
         <Route path="invoices" element={<InvoiceList />} />

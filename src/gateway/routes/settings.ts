@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
+import { requireRole } from "../middleware/session";
 import {
   getCompanyProfile,
   getQuoteBranding,
@@ -33,6 +34,12 @@ const companyProfileSchema = z.object({
   email: z.string().email().max(200).nullish(),
   website: nullableStr(200),
   default_prepared_by: nullableStr(200),
+  base_currency: z
+    .string()
+    .length(3)
+    .regex(/^[A-Za-z]{3}$/, "must be a 3-letter ISO 4217 code")
+    .transform((v) => v.toUpperCase())
+    .default("MYR"),
 });
 
 const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
@@ -67,4 +74,21 @@ settings.put("/quote-branding", zValidator("json", quoteBrandingSchema), async (
   const tenant = c.get("tenant");
   const branding = await upsertQuoteBranding(c.env.DB, tenant.tenant_id, c.req.valid("json"));
   return c.json(branding);
+});
+
+// Marks the first-run onboarding journey as done (finished or dismissed) so
+// the console stops redirecting into /onboarding. Admin-only: onboarding is
+// the company admin's flow, and this is a tenant-level, one-way switch.
+// Idempotent — completing twice keeps the original timestamp.
+settings.post("/onboarding/complete", requireRole("admin"), async (c) => {
+  const tenant = c.get("tenant");
+  await c.env.DB.prepare(
+    "UPDATE tenants SET onboarded_at = COALESCE(onboarded_at, ?) WHERE tenant_id = ?",
+  )
+    .bind(new Date().toISOString(), tenant.tenant_id)
+    .run();
+  const row = await c.env.DB.prepare("SELECT onboarded_at FROM tenants WHERE tenant_id = ?")
+    .bind(tenant.tenant_id)
+    .first<{ onboarded_at: string }>();
+  return c.json({ onboarded_at: row?.onboarded_at ?? null });
 });

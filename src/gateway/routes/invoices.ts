@@ -23,7 +23,8 @@ const listQuerySchema = pageQuerySchema.extend({
 
 const createBodySchema = z.object({
   customer_id: z.string().min(1),
-  currency: z.string().length(3),
+  // Optional: when omitted, the company's base currency applies (service-side).
+  currency: z.string().length(3).optional(),
   due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "due_date must be YYYY-MM-DD"),
   lines: z
     .array(
