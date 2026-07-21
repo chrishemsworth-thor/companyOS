@@ -37,11 +37,11 @@ The canonical, machine-readable taxonomy. Each `Department` declares:
 |---|---|
 | `id`, `label`, `summary` | Identity + human description |
 | `status` | `live` (backed by a shipped module, working console tools) or `planned` (part of the org model, not yet built — shown disabled so the taxonomy and build order stay visible) |
-| `modules` | Which capability modules it reads from (`finance` \| `crm` \| `support` \| `build` \| `insights` \| `agents`) |
+| `modules` | Which capability modules it reads from (`finance` \| `crm` \| `support` \| `build` \| `insights` \| `agents` \| `people`) |
 | `roles` | Which human roles may see it |
 | `tools` | Console routes it exposes (empty for `planned`) |
 
-**11 departments — 6 live, 5 planned:**
+**11 departments — 7 live, 4 planned:**
 
 | Department | Status | Modules | Tools |
 |---|---|---|---|
@@ -51,9 +51,9 @@ The canonical, machine-readable taxonomy. Each `Department` declares:
 | Technology / Engineering | live | build | Projects, Issues |
 | Data & AI | live | agents, insights | Agent activity |
 | Management | live | insights | Dashboard |
+| People | live | people | Employees, Teams |
 | Product | planned | build | — |
 | R&D / Innovation | planned | build | — |
-| People | planned | — | — |
 | Legal | planned | — | — |
 | Operations | planned | — | — |
 
@@ -116,9 +116,14 @@ The UI mirror can drift from the server registry. Two guards prevent it:
 
 A `planned` department is a visible placeholder in the org model. It becomes
 `live` by **building the underlying data module** and flipping its `status` —
-not by inventing a new silo. The intended build order is
-**People → Legal → Operations** (the three departments with no backing module
-today); Product and R&D are `planned` but already grouped over `build`.
+not by inventing a new silo. The intended build order was
+**People → Legal → Operations**; People graduated first (the `people` module,
+see [`../modules/people.md`](../modules/people.md)), leaving Legal and
+Operations with no backing module today. Product and R&D are `planned` but
+already grouped over `build`.
+
+Note People did **not** turn departments into data: employees reference the
+registry by id string, and the lens rule below is unchanged.
 
 This ties directly to the yardstick in [`../direction.md`](../direction.md): a
 department is "fully in CompanyOS" when it has a normalized data model, an event
@@ -129,7 +134,9 @@ but not yet built.
 ## 7. Scope
 
 - **No schema change** — the registry is code, not data; net-new data modules
-  (People, Legal, Operations) are a later iteration.
+  (Legal, Operations) are a later iteration. (People has since shipped as the
+  first — its tables reference the registry by id, keeping the registry code.)
 - **Role-filtering is visibility, not authorization** — the endpoint scopes what
   a role *sees*; per-route write authorization stays with `requireRole(...)` on
-  the business routes (e.g. `/v1/users`).
+  the business routes (e.g. `/v1/users`, and People writes via
+  `requireRole("admin", "operator")`).
