@@ -52,7 +52,7 @@ app.use(
     },
     credentials: true,
     allowHeaders: ["Authorization", "Content-Type", "Idempotency-Key", "X-CSRF-Token"],
-    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   }),
 );
 

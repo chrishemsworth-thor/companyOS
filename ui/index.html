@@ -4,6 +4,21 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CompanyOS Operator Console</title>
+    <script>
+      // Stamp the resolved theme before first paint so a stored dark/light
+      // preference doesn't flash the other palette. Mirrors src/lib/theme.ts
+      // (storage key + resolution rules) — keep the two in sync.
+      (function () {
+        var stored = localStorage.getItem("companyos_theme");
+        var pref = stored === "light" || stored === "dark" ? stored : "system";
+        document.documentElement.dataset.theme =
+          pref === "system"
+            ? window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : pref;
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

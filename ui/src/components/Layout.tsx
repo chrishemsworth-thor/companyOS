@@ -4,6 +4,7 @@ import { LayoutGrid, Shield, Menu, X, LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
 import { departmentsForRole } from "../lib/departments";
+import { ThemeToggle } from "./ThemeToggle";
 
 type Icon = ComponentType<{ className?: string }>;
 
@@ -154,6 +155,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             </div>
           </div>
         )}
+        <ThemeToggle />
         <button
           onClick={logout}
           className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
