@@ -31,11 +31,13 @@
     "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
   },
 
-  // Daily overdue sweep (01:00 UTC): marks past-due invoices and re-emits
-  // invoice.overdue events while they stay unpaid. On the free plan this is
-  // also the retry mechanism: an event dropped by the inline bus is re-emitted
-  // here on the next sweep while the invoice stays unpaid.
-  "triggers": { "crons": ["0 1 * * *"] },
+  // Cron triggers (Cron Triggers are available on the Workers Free plan):
+  //  - "0 1 * * *"     daily overdue/quote sweeps. On the free plan this also
+  //                    doubles as the event-retry net: an event dropped by the
+  //                    inline bus is re-emitted next sweep while still unpaid.
+  //  - "*/5 * * * *"   Google inbound email sync (must match INBOX_SYNC_CRON
+  //                    in src/index.ts).
+  "triggers": { "crons": ["0 1 * * *", "*/5 * * * *"] },
 
   "d1_databases": [
     {

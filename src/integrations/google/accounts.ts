@@ -165,6 +165,38 @@ export async function revokeAccount(
   return res.meta.changes > 0;
 }
 
+/**
+ * Every active account granted read scope, ACROSS ALL TENANTS. Deliberately not
+ * tenant-scoped: the inbox-sync cron (src/integrations/google/sync.ts) is a
+ * global system sweep, like runOverdueSweep. Per-account work still uses the
+ * tenant_id carried on each returned row.
+ */
+export async function listSyncableAccounts(db: D1Database): Promise<GoogleAccount[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT ${ACCOUNT_PUBLIC_COLUMNS} FROM google_accounts
+        WHERE status = 'active' AND scopes LIKE '%gmail.readonly%'
+        ORDER BY account_id ASC`,
+    )
+    .all<GoogleAccount>();
+  return results;
+}
+
+/** Advance the inbound sync checkpoint after processing a batch of history. */
+export async function updateHistoryId(
+  db: D1Database,
+  tenantId: string,
+  accountId: string,
+  historyId: string,
+): Promise<void> {
+  await db
+    .prepare(
+      "UPDATE google_accounts SET history_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE tenant_id = ? AND account_id = ?",
+    )
+    .bind(historyId, tenantId, accountId)
+    .run();
+}
+
 /** Record a failure (e.g. a refresh that returned invalid_grant) on the row. */
 export async function markAccountError(
   db: D1Database,

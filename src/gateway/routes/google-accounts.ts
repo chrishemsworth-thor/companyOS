@@ -143,7 +143,7 @@ googleAccounts.post("/:id/send", zValidator("json", sendSchema), async (c) => {
 
   const body = c.req.valid("json");
   try {
-    const accessToken = await getAccessToken(c.env, account, redirectUri(c));
+    const accessToken = await getAccessToken(c.env, account);
     const result = await sendGmailMessage(accessToken, {
       from: account.google_email,
       to: body.to,

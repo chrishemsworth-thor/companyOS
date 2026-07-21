@@ -9,8 +9,9 @@ external (Gmail draws no such distinction). Two kinds of connection:
 - **Send-as-user** (`kind: "user"`) — a personal mailbox an operator connects
   so CompanyOS can send as them. Private to that user within the tenant.
 
-**Phase-1 scope:** outbound send only. Inbound read (Gmail history sync,
-bus-events-only) is a planned Phase 2 — see [Phase 2](#phase-2-inbound-read).
+**Scope:** outbound send (standalone + invoice-reminder delivery) and inbound
+read (Gmail history sync, bus-events-only) — see
+[Inbound read](#inbound-read-gmail-sync).
 
 ## How it works
 
@@ -67,6 +68,42 @@ scopes — going past ~100 users needs Google's OAuth verification.
 | `POST /v1/google-accounts/:id/send` | `{ to[], cc?, subject, body_text?, body_html?, thread_id? }` → `{ delivery_ref, thread_id }`. |
 | `DELETE /v1/google-accounts/:id` | Revoke at Google (best-effort) and mark the row revoked. |
 
+## Invoice-reminder delivery through Gmail
+
+Point a tenant's email channel at a connected account by setting
+`delivery_config.google_account_id` (migration 0016). The delivery dispatcher
+(`src/delivery/dispatch.ts`) then routes invoice reminders through
+`GmailReminderAdapter` — a thin `DeliveryProvider` over the connected mailbox —
+instead of Resend, and logs the send to the `deliveries` audit table with
+`provider = 'google'`. If the named account is missing, revoked, or lacks the
+send scope, delivery falls back to the standard Resend/console path rather than
+failing. WhatsApp is unaffected.
+
+## Inbound read (Gmail sync)
+
+A frequent cron (`*/5 * * * *`, wired in `src/index.ts`, matching
+`INBOX_SYNC_CRON`) runs `runGoogleInboxSync` — a global sweep over every active,
+read-scoped account (`src/integrations/google/sync.ts`), mirroring
+`overdue-sweep.ts`:
+
+- **Checkpointing** uses Gmail's `historyId`, stored per account. First sight of
+  an account baselines to the current `historyId` **without backfilling** old
+  mail — only new mail flows.
+- Each newly *received* message (label `INBOX`; our own sends are skipped)
+  produces an **`email.received`** event on the bus (`source_module: comms`).
+  **Bus-events-only**: metadata only (Gmail `format=metadata`, no bodies), no
+  ticket auto-creation or inbox UI. A consumer that needs the body fetches it
+  from Gmail with `message_id`. Event ids are deterministic
+  (`evt_gm_<account>_<message>`) so the consumer's `INSERT OR IGNORE` dedupes
+  repeats.
+- If the stored checkpoint has **aged out** of Gmail's history window (HTTP
+  404), the account re-baselines to the current `historyId` and logs the gap
+  rather than crashing. Per-account failures are isolated so one bad mailbox
+  never stalls the sweep.
+
+**Later (not built):** auto-creating Support tickets or an inbox table/UI from
+`email.received`, and a Pub/Sub push path for lower latency than polling.
+
 ## Security
 
 - **Refresh tokens** are encrypted at rest (AES-256-GCM, fresh IV per record,
@@ -83,11 +120,3 @@ scopes — going past ~100 users needs Google's OAuth verification.
   (`include_granted_scopes`) lets a send-only account add read later without a
   full reconnect. The send path checks the granted scope and 403s with
   `missing_scope` if it's absent.
-
-## Phase 2 (inbound read)
-
-Planned, not yet built: poll each read-scoped account on the Workers cron
-(mirroring `overdue-sweep.ts`), advance a per-account Gmail `history_id`
-checkpoint (the column already exists on `google_accounts`), and **emit bus
-events only** — no ticket auto-creation or inbox UI in the first cut. Inbound
-needs a new `source_module` value (e.g. `comms`) on the event envelope.

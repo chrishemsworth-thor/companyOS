@@ -13,6 +13,8 @@ export const sourceModuleSchema = z.enum([
   "sales",
   "support",
   "build",
+  // Communications — inbound/outbound email (Google/Gmail integration).
+  "comms",
 ]);
 export type SourceModule = z.infer<typeof sourceModuleSchema>;
 
@@ -51,10 +53,16 @@ export function makeEnvelope(args: {
   trace_id?: string;
   occurred_at?: string;
   actor?: Actor;
+  /**
+   * Override the generated event_id. Pass a value derived from an upstream
+   * identity (e.g. a Gmail message id) to make emission idempotent — the
+   * consumer's INSERT OR IGNORE dedupes repeats by event_id.
+   */
+  event_id?: string;
 }): EventEnvelope {
   const actor = args.actor ?? currentActor();
   return {
-    event_id: `evt_${ulid()}`,
+    event_id: args.event_id ?? `evt_${ulid()}`,
     event_type: args.event_type,
     source_module: args.source_module,
     tenant_id: args.tenant_id,

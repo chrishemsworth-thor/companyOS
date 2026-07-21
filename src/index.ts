@@ -28,6 +28,7 @@ import { handleEventBatch } from "./queue/consumer";
 import { ensureEventBus } from "./queue/direct";
 import { runOverdueSweep } from "./modules/finance/overdue-sweep";
 import { runQuoteExpirySweep } from "./modules/quotes/expiry-sweep";
+import { runGoogleInboxSync } from "./integrations/google/sync";
 
 export { CollectionsAgent } from "./agents/collections";
 
@@ -106,13 +107,22 @@ app.onError((err, c) => {
 // ensureEventBus() lets the Worker run without Cloudflare Queues (free plan):
 // when the EVENTS binding is absent, events dispatch inline instead. See
 // docs/queue-send.md.
+// The frequent cron that drives Google inbound email sync. MUST match the
+// entry in wrangler.jsonc / wrangler.free.jsonc `triggers.crons`.
+const INBOX_SYNC_CRON = "*/5 * * * *";
+
 export default {
   fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
     app.fetch(request, ensureEventBus(env), ctx),
   queue: handleEventBatch,
-  // Daily sweeps: mark overdue invoices and expire lapsed quotes.
-  scheduled(_controller, env, ctx) {
+  scheduled(controller, env, ctx) {
     const busEnv = ensureEventBus(env);
+    if (controller.cron === INBOX_SYNC_CRON) {
+      // Frequent: poll connected Gmail inboxes for newly received mail.
+      ctx.waitUntil(runGoogleInboxSync(busEnv));
+      return;
+    }
+    // Daily sweeps: mark overdue invoices and expire lapsed quotes.
     ctx.waitUntil(runOverdueSweep(busEnv));
     ctx.waitUntil(runQuoteExpirySweep(busEnv));
   },
