@@ -1,0 +1,69 @@
+{
+  // CompanyOS — FREE-PLAN deploy config. Identical to wrangler.jsonc except it
+  // omits the `queues` block (Cloudflare Queues requires the Workers Paid
+  // plan). Without an EVENTS binding the Worker dispatches events inline
+  // through the direct bus (src/queue/direct.ts) — full runbook and
+  // trade-offs in docs/queue-send.md.
+  //
+  // Deploy with:  npm run deploy:free
+  // Keep the shared fields in sync with wrangler.jsonc when either changes.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "companyos",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-04-01",
+  "compatibility_flags": ["nodejs_als"],
+  "observability": { "enabled": true },
+
+  // Dev-only defaults. SESSION_SECRET and PLATFORM_ADMIN_SECRET MUST be
+  // overridden in production via `wrangler secret put <NAME>` (a secret shadows
+  // these vars at runtime).
+  "vars": {
+    "SESSION_SECRET": "dev-insecure-session-secret-change-me",
+    "PLATFORM_ADMIN_SECRET": "dev-insecure-platform-admin-secret-change-me",
+    "WEBHOOK_MASTER_SECRET": "dev-insecure-webhook-master-secret-change-me",
+    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
+  },
+
+  // Daily overdue sweep (01:00 UTC): marks past-due invoices and re-emits
+  // invoice.overdue events while they stay unpaid. On the free plan this is
+  // also the retry mechanism: an event dropped by the inline bus is re-emitted
+  // here on the next sweep while the invoice stays unpaid.
+  "triggers": { "crons": ["0 1 * * *"] },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "companyos-db",
+      // Placeholder — replace with the real ID from `wrangler d1 create companyos-db`.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  "kv_namespaces": [
+    {
+      "binding": "CONFIG_CACHE",
+      // Placeholder — replace with the real ID from `wrangler kv namespace create CONFIG_CACHE`.
+      "id": "00000000000000000000000000000000"
+    },
+    {
+      "binding": "SESSIONS",
+      // Placeholder — replace with the real ID from `wrangler kv namespace create SESSIONS`.
+      "id": "00000000000000000000000000000001"
+    }
+  ],
+
+  // No `queues` block: the absence of the EVENTS binding is what switches the
+  // Worker to inline event dispatch (see ensureEventBus in src/queue/direct.ts).
+
+  // SQLite-backed Durable Objects (`new_sqlite_classes`) are available on the
+  // Workers Free plan.
+  "durable_objects": {
+    "bindings": [
+      { "name": "COLLECTIONS_AGENT", "class_name": "CollectionsAgent" }
+    ]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["CollectionsAgent"] }
+  ]
+}

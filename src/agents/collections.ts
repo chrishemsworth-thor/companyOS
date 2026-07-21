@@ -7,6 +7,7 @@ import { DeliveryError, sendReminder } from "../delivery/dispatch";
 import { getLlmProvider } from "../llm";
 import { insertActivityRow, getCustomer, getPaymentHistory } from "../modules/crm/service";
 import { emitEvent } from "../queue/producer";
+import { ensureEventBus } from "../queue/direct";
 import {
   buildDecisionPrompt,
   collectionsDecisionSchema,
@@ -48,6 +49,14 @@ const LLM_MAX_TOKENS = 8192;
  * customer.risk_flagged.v1.
  */
 export class CollectionsAgent extends DurableObject<Env> {
+  constructor(ctx: DurableObjectState, env: Env) {
+    // The DO receives its own env from the runtime, so it needs the same
+    // queue-less fallback the Worker entry points apply (docs/queue-send.md):
+    // its audit events (collections.decision, customer.risk_flagged) must
+    // still flow when no EVENTS queue binding exists.
+    super(ctx, ensureEventBus(env));
+  }
+
   private async getState(): Promise<AgentState | null> {
     return (await this.ctx.storage.get<AgentState>("state")) ?? null;
   }
