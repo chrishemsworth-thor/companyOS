@@ -20,6 +20,8 @@ import { events } from "./gateway/routes/events";
 import { quotes } from "./gateway/routes/quotes";
 import { settings } from "./gateway/routes/settings";
 import { webhookSources } from "./gateway/routes/webhook-sources";
+import { googleAccounts } from "./gateway/routes/google-accounts";
+import { googleOAuth } from "./gateway/routes/google-oauth";
 import { webhooks } from "./webhooks/router";
 import { handleEventBatch } from "./queue/consumer";
 import { ensureEventBus } from "./queue/direct";
@@ -62,6 +64,12 @@ app.route("/admin", platform);
 // request with the source's derived signing secret (see src/webhooks/).
 app.route("/webhooks", webhooks);
 
+// Google OAuth callback. Google redirects the browser here with no bearer
+// token, so this lives outside /v1 and self-authenticates on the single-use
+// `state` nonce minted during the authenticated /connect call (see
+// src/gateway/routes/google-oauth.ts).
+app.route("/oauth/google", googleOAuth);
+
 // Session login surface — public (no session required), mounted before the
 // authenticate() guard so login/logout/me are reachable.
 app.route("/v1/auth", auth);
@@ -85,6 +93,7 @@ app.route("/v1/events", events);
 app.route("/v1/quotes", quotes);
 app.route("/v1/settings", settings);
 app.route("/v1/webhook-sources", webhookSources);
+app.route("/v1/google-accounts", googleAccounts);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

@@ -16,6 +16,13 @@
     "SESSION_SECRET": "dev-insecure-session-secret-change-me",
     "PLATFORM_ADMIN_SECRET": "dev-insecure-platform-admin-secret-change-me",
     "WEBHOOK_MASTER_SECRET": "dev-insecure-webhook-master-secret-change-me",
+    // Google email integration — dev-only placeholders. In production set these
+    // via `wrangler secret put GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|
+    // GOOGLE_TOKEN_ENCRYPTION_KEY`. The encryption key must be base64 of 32
+    // random bytes (`head -c 32 /dev/urandom | base64`).
+    "GOOGLE_CLIENT_ID": "dev-google-client-id.apps.googleusercontent.com",
+    "GOOGLE_CLIENT_SECRET": "dev-insecure-google-client-secret-change-me",
+    "GOOGLE_TOKEN_ENCRYPTION_KEY": "Djm23rEsvOTDcIZMknQbqVoeemLHXElQa28DBkXD7ts=",
     "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
   },
 
