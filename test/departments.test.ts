@@ -20,6 +20,7 @@ import {
 
 const API_KEY = "test_api_key_departments";
 const TENANT_ID = "biz_departments";
+const WORKSPACE = "departments";
 const ORIGIN = "http://localhost:5173";
 
 async function fetchWorker(path: string, init?: RequestInit): Promise<Response> {
@@ -33,7 +34,7 @@ async function login(email: string, password: string): Promise<string> {
   const res = await fetchWorker("/v1/auth/login", {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: ORIGIN },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ workspace: WORKSPACE, email, password }),
   });
   return (res.headers.get("Set-Cookie") ?? "").split(";")[0] ?? "";
 }
@@ -46,8 +47,8 @@ async function departmentsFor(headers: Record<string, string>): Promise<Departme
 }
 
 beforeAll(async () => {
-  await env.DB.prepare("INSERT OR IGNORE INTO tenants (tenant_id, name, api_key_hash) VALUES (?, ?, ?)")
-    .bind(TENANT_ID, "Departments Tenant", await sha256Hex(API_KEY))
+  await env.DB.prepare("INSERT OR IGNORE INTO tenants (tenant_id, name, slug, api_key_hash) VALUES (?, ?, ?, ?)")
+    .bind(TENANT_ID, "Departments Tenant", WORKSPACE, await sha256Hex(API_KEY))
     .run();
   await createUser(env.DB, { tenant_id: TENANT_ID, email: "admin@dep.test", password: "admin-password", role: "admin" });
   await createUser(env.DB, { tenant_id: TENANT_ID, email: "fin@dep.test", password: "finance-password", role: "finance" });

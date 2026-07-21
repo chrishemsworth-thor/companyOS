@@ -22,6 +22,7 @@ import { settings } from "./gateway/routes/settings";
 import { webhookSources } from "./gateway/routes/webhook-sources";
 import { webhooks } from "./webhooks/router";
 import { handleEventBatch } from "./queue/consumer";
+import { ensureEventBus } from "./queue/direct";
 import { runOverdueSweep } from "./modules/finance/overdue-sweep";
 import { runQuoteExpirySweep } from "./modules/quotes/expiry-sweep";
 
@@ -91,12 +92,17 @@ app.onError((err, c) => {
   return c.json({ error: "internal error" }, 500);
 });
 
+// ensureEventBus() lets the Worker run without Cloudflare Queues (free plan):
+// when the EVENTS binding is absent, events dispatch inline instead. See
+// docs/queue-send.md.
 export default {
-  fetch: app.fetch,
+  fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
+    app.fetch(request, ensureEventBus(env), ctx),
   queue: handleEventBatch,
   // Daily sweeps: mark overdue invoices and expire lapsed quotes.
   scheduled(_controller, env, ctx) {
-    ctx.waitUntil(runOverdueSweep(env));
-    ctx.waitUntil(runQuoteExpirySweep(env));
+    const busEnv = ensureEventBus(env);
+    ctx.waitUntil(runOverdueSweep(busEnv));
+    ctx.waitUntil(runQuoteExpirySweep(busEnv));
   },
 } satisfies ExportedHandler<Env>;

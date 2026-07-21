@@ -137,6 +137,11 @@ inventing data yourself.
 
 ## Deploying
 
+> **No Workers Paid plan?** Cloudflare Queues is the only paid-only piece of
+> the stack. The Worker runs without it — events dispatch inline instead of
+> through a queue. Deploy with `wrangler.free.jsonc` / `npm run deploy:free`;
+> full runbook and trade-offs in [docs/queue-send.md](docs/queue-send.md).
+
 1. Create the resources and paste the returned IDs into `wrangler.jsonc` (they ship as placeholders):
    ```sh
    npx wrangler d1 create companyos-db

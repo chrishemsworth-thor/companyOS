@@ -11,15 +11,24 @@ import type { CollectionsAgent } from "../agents/collections";
 export async function handleEventBatch(batch: MessageBatch<unknown>, env: Env): Promise<void> {
   for (const message of batch.messages) {
     try {
-      const envelope = parseEnvelope(message.body);
-      await logEvent(env, envelope);
-      await routeToAgent(env, envelope);
+      await processEvent(env, message.body);
       message.ack();
     } catch (err) {
       console.error(`[consumer] event failed, will retry → DLQ: ${String(err)}`);
       message.retry();
     }
   }
+}
+
+/**
+ * One event's full processing: validate → audit-log → route to agent. Shared
+ * by the queue consumer and the queue-less direct bus (src/queue/direct.ts),
+ * so both paths stay behaviorally identical.
+ */
+export async function processEvent(env: Env, body: unknown): Promise<void> {
+  const envelope = parseEnvelope(body);
+  await logEvent(env, envelope);
+  await routeToAgent(env, envelope);
 }
 
 function parseEnvelope(body: unknown): EventEnvelope {
