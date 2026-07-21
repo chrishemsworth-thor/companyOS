@@ -19,6 +19,7 @@ import { projects, issues } from "./gateway/routes/projects";
 import { events } from "./gateway/routes/events";
 import { quotes } from "./gateway/routes/quotes";
 import { settings } from "./gateway/routes/settings";
+import { people } from "./gateway/routes/people";
 import { webhookSources } from "./gateway/routes/webhook-sources";
 import { webhooks } from "./webhooks/router";
 import { handleEventBatch } from "./queue/consumer";
@@ -83,6 +84,7 @@ app.route("/v1/issues", issues);
 app.route("/v1/events", events);
 app.route("/v1/quotes", quotes);
 app.route("/v1/settings", settings);
+app.route("/v1/people", people);
 app.route("/v1/webhook-sources", webhookSources);
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
