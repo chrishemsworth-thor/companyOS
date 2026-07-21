@@ -6,6 +6,13 @@ export interface Env {
   CONFIG_CACHE: KVNamespace;
   /** Hot lookup store for human operator sessions (see src/auth/session.ts). */
   SESSIONS: KVNamespace;
+  /**
+   * Event-bus producer. On the paid plan this is the Cloudflare Queues
+   * binding (wrangler.jsonc); on a free-plan deploy (wrangler.free.jsonc) the
+   * binding is absent at runtime and every entry point substitutes the
+   * inline direct bus via ensureEventBus() before anything reads it — see
+   * src/queue/direct.ts and docs/queue-send.md.
+   */
   EVENTS: Queue;
   COLLECTIONS_AGENT: DurableObjectNamespace;
 
