@@ -3,8 +3,8 @@
 /* ------------------------------------------------------------------ *
  * Design tokens
  *
- * Semantic CSS variables live in :root (and flip under the dark media
- * query). `@theme inline` registers them with Tailwind so utilities like
+ * Semantic CSS variables live in :root (and flip under
+ * [data-theme="dark"]). `@theme inline` registers them with Tailwind so utilities like
  * `bg-surface`, `text-muted`, `border-border`, `shadow-md` emit the live
  * `var(...)` — meaning a single set of variables drives both the utility
  * classes (new components) and the retained legacy classes (pages not yet
@@ -48,6 +48,9 @@
 }
 
 :root {
+  /* Native form controls & scrollbars follow the active palette */
+  color-scheme: light;
+
   /* Surfaces & text */
   --bg: #f6f7f9;
   --surface: #ffffff;
@@ -84,38 +87,42 @@
   --elev-3: 0 12px 32px rgba(16, 24, 40, 0.14), 0 4px 10px rgba(16, 24, 40, 0.08);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0f1116;
-    --surface: #171a21;
-    --surface-2: #1e222b;
-    --border: #262b35;
-    --border-strong: #333a46;
-    --text: #e8eaed;
-    --text-muted: #9aa3b2;
-    --text-subtle: #6b7484;
+/* Dark tokens key off the data-theme attribute, not the media query: the
+ * pre-paint script in index.html (and src/lib/theme.ts at runtime) resolves
+ * the stored preference — system / light / dark — and stamps the result on
+ * <html>, so an explicit user choice can override the OS appearance. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
 
-    --accent: #8b85ff;
-    --accent-hover: #a29cff;
-    --accent-contrast: #0f1116;
-    --accent-soft: #20213a;
+  --bg: #0f1116;
+  --surface: #171a21;
+  --surface-2: #1e222b;
+  --border: #262b35;
+  --border-strong: #333a46;
+  --text: #e8eaed;
+  --text-muted: #9aa3b2;
+  --text-subtle: #6b7484;
 
-    --badge-neutral-bg: #2a2f3a;
-    --badge-neutral-text: #c7c8cf;
-    --badge-good-bg: #14311f;
-    --badge-good-text: #6fd68f;
-    --badge-warn-bg: #3a2c10;
-    --badge-warn-text: #e0ac4c;
-    --badge-bad-bg: #3a1616;
-    --badge-bad-text: #f08b85;
+  --accent: #8b85ff;
+  --accent-hover: #a29cff;
+  --accent-contrast: #0f1116;
+  --accent-soft: #20213a;
 
-    --ring: rgba(139, 133, 255, 0.5);
-    --overlay: rgba(0, 0, 0, 0.6);
+  --badge-neutral-bg: #2a2f3a;
+  --badge-neutral-text: #c7c8cf;
+  --badge-good-bg: #14311f;
+  --badge-good-text: #6fd68f;
+  --badge-warn-bg: #3a2c10;
+  --badge-warn-text: #e0ac4c;
+  --badge-bad-bg: #3a1616;
+  --badge-bad-text: #f08b85;
 
-    --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --elev-2: 0 2px 6px rgba(0, 0, 0, 0.4), 0 8px 20px rgba(0, 0, 0, 0.35);
-    --elev-3: 0 16px 40px rgba(0, 0, 0, 0.55);
-  }
+  --ring: rgba(139, 133, 255, 0.5);
+  --overlay: rgba(0, 0, 0, 0.6);
+
+  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --elev-2: 0 2px 6px rgba(0, 0, 0, 0.4), 0 8px 20px rgba(0, 0, 0, 0.35);
+  --elev-3: 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
 /* ------------------------------------------------------------------ *
