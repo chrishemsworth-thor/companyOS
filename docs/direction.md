@@ -76,17 +76,17 @@ CompanyOS provides for each today. "Module" names map to `src/modules/*` and the
 | **Engineering / Product** | `build` — projects and issues (board) | ❌ | Basic board. |
 | **Cross-functional / BI** | `insights` — read-only cross-module SQL aggregates for the dashboard | n/a (read-model) | Reporting only; no write path, by design. |
 | **Marketing** | — | — | Not present. Natural neighbor to Sales. |
-| **People / HR** | — (`"people"` is already reserved in the module enum; roadmap phase-2/3) | — | Not present yet; anticipated. |
+| **People / HR** | `people` — employee directory, teams, reporting lines ([docs](./modules/people.md)) | ❌ | Directory + org structure shipped; leave/HR workflows are the remaining gap. |
 | **Operations / Legal / IT** | — | — | Whitespace. |
 
-Note: `sourceModuleSchema` in `src/schemas/envelope.ts` already whitelists both `"sales"`
-and `"people"`, so those two departments are anticipated extension points even where no
-code exists yet.
+Note: `sourceModuleSchema` in `src/schemas/envelope.ts` whitelisted both `"sales"` and
+`"people"` ahead of time as anticipated extension points; People has since cashed that
+reservation in with the `people` module.
 
 Since this matrix was first written, the [department lens](./architecture/department-lens.md)
 now models the **full org chart** explicitly: 11 departments, each marked `live` (backed by a
 shipped module) or `planned` (part of the model, shown disabled). The whitespace below —
-Marketing/Product/R&D, People/HR, Operations/Legal — is now *named* as `planned` departments
+Marketing/Product/R&D, Operations/Legal — is now *named* as `planned` departments
 rather than being invisible, so the build order stays legible even before the modules exist.
 `GET /v1/meta/departments` serves that taxonomy to agents.
 
@@ -102,8 +102,9 @@ rather than being invisible, so the build order stays legible even before the mo
   [Sales Module design doc](./architecture/sales-module-design.md).
 - **Thin — Support & Build.** Good records and (for support) lifecycle, but no agents.
   Obvious future homes for triage/resolution and issue-grooming agents respectively.
-- **Whitespace — Marketing, People/HR, Operations/Legal/IT.** Not yet modeled. People/HR
-  is already anticipated in the roadmap and the module enum.
+- **Thin — People/HR.** The `people` module ships the directory, teams, and manager
+  hierarchy, but no leave/approval workflows and no agent yet.
+- **Whitespace — Marketing, Operations/Legal/IT.** Not yet modeled.
 
 ## 5. Guiding principle for new modules
 

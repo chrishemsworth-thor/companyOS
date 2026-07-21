@@ -305,3 +305,36 @@ export interface Issue {
   created_at: string;
   updated_at: string;
 }
+
+export type EmploymentType = "full_time" | "part_time" | "contract" | "intern";
+export type EmployeeStatus = "active" | "inactive";
+
+export interface Employee {
+  employee_id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  job_title: string | null;
+  department_id: string;
+  team_id: string | null;
+  manager_employee_id: string | null;
+  user_id: string | null;
+  employment_type: EmploymentType;
+  status: EmployeeStatus;
+  start_date: string | null;
+  end_date: string | null;
+  location: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Team {
+  team_id: string;
+  name: string;
+  description: string | null;
+  department_id: string | null;
+  lead_employee_id: string | null;
+  created_at: string;
+  updated_at: string;
+}

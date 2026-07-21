@@ -26,6 +26,9 @@ import { QuoteList } from "./pages/quotes/QuoteList";
 import { QuoteDetail } from "./pages/quotes/QuoteDetail";
 import { CompanyProfile } from "./pages/settings/CompanyProfile";
 import { QuoteBranding } from "./pages/settings/QuoteBranding";
+import { EmployeeList } from "./pages/people/EmployeeList";
+import { EmployeeDetail } from "./pages/people/EmployeeDetail";
+import { TeamList } from "./pages/people/TeamList";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15_000 } },
@@ -70,6 +73,9 @@ function AppRoutes() {
         <Route path="projects/:id" element={<ProjectDetail />} />
         <Route path="issues" element={<IssueList />} />
         <Route path="issues/:id" element={<IssueDetail />} />
+        <Route path="employees" element={<EmployeeList />} />
+        <Route path="employees/:id" element={<EmployeeDetail />} />
+        <Route path="teams" element={<TeamList />} />
         <Route path="users" element={<Users />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

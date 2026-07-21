@@ -121,13 +121,84 @@ successful send; consumer dedupe already exists (`INSERT OR IGNORE` by
 - **Phase 3 pointer (do not build now):** People/HR module on the same
   pattern; cross-module Insights (SQL joins over tickets × invoices × deals).
 
+## Workstream 5 — Apollo CRM integration (contact enrichment + lead import)
+
+**Goal:** turn thin CRM records into rich ones and let the pipeline fill
+itself. Apollo.io is the source of truth for B2B people/company data;
+CompanyOS's `customers` (and the org/contacts tables from the Quotes work)
+stay the system of record. Apollo *enriches* and *seeds* — it never owns a row.
+
+Apollo's REST API is plain HTTPS + an `X-Api-Key` header, so it works natively
+on Workers with `fetch` — the same shape as the delivery providers. Follow the
+port pattern so the suite never touches the live API.
+
+- **Provider port:** `src/enrichment/types.ts` defines
+  `EnrichmentProvider.enrichPerson(req) → PersonMatch` and
+  `.searchPeople(query) → PersonMatch[]`; `src/enrichment/apollo.ts` is the
+  real implementation (People Enrichment `POST /v1/people/match`, Organization
+  Enrichment `POST /v1/organizations/enrich`, prospecting via
+  `POST /v1/mixed_people/search`). `src/enrichment/none.ts` is a no-op default,
+  and `getEnrichmentProvider(env)` returns Apollo only when `APOLLO_API_KEY` is
+  configured — else the no-op, so tests and un-provisioned tenants stay inert.
+  Secret via `wrangler secret put APOLLO_API_KEY`; add the optional field to
+  `src/env.ts`.
+- **Data model (next migration, `0015_apollo_enrichment.sql`):**
+  - `apollo_links` — maps a local row to its Apollo entity so re-enrichment is
+    idempotent and we never double-import: `(tenant_id, entity_type, entity_id)`
+    PK where `entity_type ∈ ('customer','org','contact')`, plus
+    `apollo_id`, `matched_at`, `confidence`. `UNIQUE (tenant_id, apollo_id,
+    entity_type)` stops two local rows claiming the same Apollo person.
+  - `enrichment_log` — one row per API call (`entity_id`, `provider`,
+    `outcome ∈ matched|no_match|error`, `cost_credits?`, `created_at`) so
+    Apollo credit spend is auditable and Phase 3 insights can see it.
+  - Enriched fields (title, company, LinkedIn URL, seniority, location) land on
+    the existing contact/org columns where they exist; anything without a home
+    goes in a small `contact_enrichment` side table keyed by `contact_id`
+    rather than widening the core tables.
+- **Enrichment flow:** `POST /v1/customers/:id/enrich` resolves the customer,
+  calls the port, writes the enriched fields + an `apollo_links` row + an
+  `enrichment_log` row, and logs an `activity` (`kind: note`,
+  `"Enriched from Apollo"`) so the touch history shows it. Re-enriching an
+  already-linked row updates in place (no duplicate link). Missing
+  `APOLLO_API_KEY` → 422 `enrichment_unconfigured`; Apollo no-match → 200 with
+  `{matched: false}`, no partial writes.
+- **Lead import / prospecting:** `POST /v1/leads/import` takes an Apollo search
+  query (title, seniority, industry, headcount), calls `searchPeople`, and for
+  each hit **upserts** a `customer` (dedupe on email, then on `apollo_id` via
+  `apollo_links`) and drops a `deal` into the first pipeline stage (`Lead`) so
+  imported prospects enter the funnel exactly like manual ones. Cap batch size
+  (e.g. 25/call) and honor `Idempotency-Key` (Workstream 4) — re-running an
+  import must not fan out duplicate deals.
+- **Events:** `customer.enriched.v1`
+  (`customer_id, apollo_id, fields_updated[], confidence`) and
+  `lead.imported.v1` (`customer_id, deal_id, apollo_id, source: "apollo"`) —
+  new Zod schemas in `src/schemas/events/` + `registry.ts` entries. Audit-log
+  only for now; a future SalesAgent (Phase 3) claims them via `AGENT_ROUTES`.
+- **Safety / limits:** Apollo bills per credit — never enrich the same row
+  twice within 30 days (check `apollo_links.matched_at`) unless `?force=true`;
+  cap prospecting result count; never send PII to Apollo beyond what the match
+  endpoint needs (email/name/domain). All outbound calls go through the port so
+  a tenant with no key can't spend credits by accident.
+
+**Acceptance:** with `APOLLO_API_KEY` set and `fetch` stubbed
+(`vi.stubGlobal`) to return a canned Apollo match, `POST /v1/customers/:id/enrich`
+writes the enriched fields, an `apollo_links` row, an `enrichment_log` row, an
+activity, and emits `customer.enriched`; a second enrich of the same customer
+updates in place with no duplicate link. `POST /v1/leads/import` upserts
+customers + `Lead`-stage deals and is idempotent under a repeated
+`Idempotency-Key`. Without the key, both endpoints stay inert (422 / no-op
+provider) and the rest of the suite is unaffected.
+
 ## Recommended order
 
 1. Workstream 1 (delivery) — smallest, unblocks real-world value, and
    Workstream 2 composes messages into it.
 2. Workstream 2 (smart agent) — the headline feature.
-3. Workstream 4 idempotency keys — before any agent is given retry authority.
-4. Workstream 3 — only when its trigger fires.
+3. Workstream 4 idempotency keys — before any agent is given retry authority
+   (Workstream 5's lead import depends on them).
+4. Workstream 5 (Apollo CRM) — fills the pipeline; reuses the delivery port
+   pattern and the idempotency work above.
+5. Workstream 3 — only when its trigger fires.
 
 Commit per workstream; keep `npm test` + `npm run typecheck` green at every
 commit (61-test baseline at the time of writing).
