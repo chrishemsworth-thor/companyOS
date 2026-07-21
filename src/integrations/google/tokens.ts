@@ -23,30 +23,30 @@ export class GoogleTokenError extends Error {
   }
 }
 
-/** Build the OAuth client config from env, or throw when Google isn't configured. */
-export function oauthClient(env: Env, redirectUri: string): OAuthClient {
+/**
+ * Build the OAuth client config from env, or throw when Google isn't configured.
+ * `redirectUri` matters only to the authorize/code-exchange flow; token REFRESH
+ * never sends it, so this path leaves it empty.
+ */
+export function oauthClient(env: Env): OAuthClient {
   if (!env.GOOGLE_CLIENT_ID || !env.GOOGLE_CLIENT_SECRET || !env.GOOGLE_TOKEN_ENCRYPTION_KEY) {
     throw new GoogleTokenError("not_configured", "google integration is not configured");
   }
   return {
     clientId: env.GOOGLE_CLIENT_ID,
     clientSecret: env.GOOGLE_CLIENT_SECRET,
-    redirectUri,
+    redirectUri: "",
   };
 }
 
 export const accessTokenCacheKey = (accountId: string) => `google-access-token:${accountId}`;
 
-export async function getAccessToken(
-  env: Env,
-  account: GoogleAccount,
-  redirectUri: string,
-): Promise<string> {
+export async function getAccessToken(env: Env, account: GoogleAccount): Promise<string> {
   const cacheKey = accessTokenCacheKey(account.account_id);
   const cached = await env.CONFIG_CACHE.get(cacheKey);
   if (cached) return cached;
 
-  const client = oauthClient(env, redirectUri);
+  const client = oauthClient(env);
   const sealed = await loadSealedToken(env.DB, account.tenant_id, account.account_id);
   if (!sealed) {
     throw new GoogleTokenError("no_credentials", "account has no stored credentials (revoked?)");

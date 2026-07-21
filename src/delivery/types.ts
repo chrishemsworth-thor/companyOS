@@ -6,7 +6,7 @@
 
 export type DeliveryChannel = "email" | "whatsapp";
 
-export type DeliveryProviderName = "console" | "resend" | "twilio";
+export type DeliveryProviderName = "console" | "resend" | "twilio" | "google";
 
 export interface ReminderRequest {
   invoice_id: string;

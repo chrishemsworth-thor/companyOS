@@ -4,6 +4,9 @@ import type { DeliveryChannel, DeliveryProvider, DeliveryProviderName } from "./
 import { ConsoleDelivery } from "./console";
 import { ResendDelivery } from "./resend";
 import { TwilioDelivery } from "./twilio";
+import { getAccount } from "../integrations/google/accounts";
+import { GmailReminderAdapter } from "../integrations/google/delivery";
+import { GMAIL_SEND_SCOPE, hasScope } from "../integrations/google/types";
 
 export class DeliveryError extends Error {
   constructor(
@@ -47,6 +50,27 @@ export interface SendReminderResult {
 interface DeliveryConfigRow {
   from_address: string;
   enabled: number;
+  google_account_id: string | null;
+}
+
+/**
+ * Resolve the provider for an opted-in email send: a connected Gmail account
+ * when the tenant's config names one (and it can still send), otherwise the
+ * standard secret-driven selection (Resend → console). WhatsApp is unaffected.
+ */
+async function resolveEmailProvider(
+  env: Env,
+  tenantId: string,
+  config: DeliveryConfigRow,
+): Promise<DeliveryProvider> {
+  if (config.google_account_id) {
+    const account = await getAccount(env.DB, tenantId, config.google_account_id);
+    if (account && account.status === "active" && hasScope(account.scopes, GMAIL_SEND_SCOPE)) {
+      return new GmailReminderAdapter(env, account);
+    }
+    // Named account is gone/revoked/under-scoped — fall back rather than fail.
+  }
+  return getDeliveryProvider(env, "email");
 }
 
 /**
@@ -85,15 +109,22 @@ export async function sendReminder(
   const to = address[channel] as string;
 
   const config = await env.DB.prepare(
-    "SELECT from_address, enabled FROM delivery_config WHERE tenant_id = ? AND channel = ?",
+    "SELECT from_address, enabled, google_account_id FROM delivery_config WHERE tenant_id = ? AND channel = ?",
   )
     .bind(tenantId, channel)
     .first<DeliveryConfigRow>();
 
   // Tenant-level opt-in: without an enabled delivery_config row the send
-  // stays on the console even when provider secrets are configured.
-  const provider =
-    config?.enabled === 1 ? getDeliveryProvider(env, channel) : new ConsoleDelivery();
+  // stays on the console even when provider secrets are configured. Email may
+  // additionally route through a connected Gmail account (resolveEmailProvider).
+  let provider: DeliveryProvider;
+  if (config?.enabled !== 1) {
+    provider = new ConsoleDelivery();
+  } else if (channel === "email") {
+    provider = await resolveEmailProvider(env, tenantId, config);
+  } else {
+    provider = getDeliveryProvider(env, channel);
+  }
 
   const logRow = (status: "sent" | "failed", deliveryRef: string | null) =>
     env.DB.prepare(

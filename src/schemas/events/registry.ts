@@ -29,6 +29,7 @@ import { quoteConvertedV1 } from "./quote.converted.v1";
 import { codePushV1 } from "./code.push.v1";
 import { codePrOpenedV1 } from "./code.pr_opened.v1";
 import { codePrMergedV1 } from "./code.pr_merged.v1";
+import { emailReceivedV1 } from "./email.received.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -70,6 +71,7 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "code.push": codePushV1,
   "code.pr_opened": codePrOpenedV1,
   "code.pr_merged": codePrMergedV1,
+  "email.received": emailReceivedV1,
 };
 
 export function validatePayload(
