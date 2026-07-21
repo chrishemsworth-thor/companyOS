@@ -20,7 +20,7 @@ import { ROLES, type Role } from "../auth/roles";
  */
 
 /** Capability modules a department can surface. `agents` is the DO runtime. */
-export type ModuleKey = "finance" | "crm" | "support" | "build" | "insights" | "agents";
+export type ModuleKey = "finance" | "crm" | "support" | "build" | "insights" | "agents" | "people";
 
 /**
  * `live` — backed by a shipped module, with working console tools.
@@ -142,11 +142,14 @@ export const DEPARTMENTS: Department[] = [
   {
     id: "people",
     label: "People",
-    status: "planned",
-    summary: "Employees, roles, and leave — the next module to build.",
-    modules: [],
+    status: "live",
+    summary: "Employee directory, teams, and reporting lines.",
+    modules: ["people"],
     roles: BROAD,
-    tools: [],
+    tools: [
+      { label: "Employees", route: "/employees" },
+      { label: "Teams", route: "/teams" },
+    ],
   },
   {
     id: "legal",

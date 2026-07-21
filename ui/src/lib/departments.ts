@@ -16,6 +16,8 @@ import {
   Package,
   Lightbulb,
   UserRound,
+  UsersRound,
+  Network,
   Scale,
   Boxes,
   FileText,
@@ -146,11 +148,14 @@ export const DEPARTMENTS: Department[] = [
   {
     id: "people",
     label: "People",
-    status: "planned",
-    summary: "Employees, roles, and leave — the next module to build.",
+    status: "live",
+    summary: "Employee directory, teams, and reporting lines.",
     roles: BROAD,
     icon: UserRound,
-    tools: [],
+    tools: [
+      { label: "Employees", route: "/employees", icon: UsersRound },
+      { label: "Teams", route: "/teams", icon: Network },
+    ],
   },
   {
     id: "legal",
