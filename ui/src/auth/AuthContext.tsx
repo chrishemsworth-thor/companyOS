@@ -41,6 +41,8 @@ interface AuthContextValue {
   setBaseUrl: (url: string) => void;
   /** Reflect a successful POST /v1/settings/onboarding/complete locally. */
   markOnboarded: () => void;
+  /** Reflect the tenant rename that a company-profile save performs server-side. */
+  renameTenant: (name: string) => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -146,9 +148,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const markOnboarded = () =>
     setTenant((t) => (t ? { ...t, onboarded_at: t.onboarded_at ?? new Date().toISOString() } : t));
 
+  const renameTenant = (name: string) => setTenant((t) => (t && name ? { ...t, name } : t));
+
   return (
     <AuthContext.Provider
-      value={{ status, user, tenant, baseUrl, client, login, logout, setBaseUrl, markOnboarded }}
+      value={{
+        status,
+        user,
+        tenant,
+        baseUrl,
+        client,
+        login,
+        logout,
+        setBaseUrl,
+        markOnboarded,
+        renameTenant,
+      }}
     >
       {children}
     </AuthContext.Provider>

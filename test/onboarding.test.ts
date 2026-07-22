@@ -132,6 +132,24 @@ describe("onboarding state", () => {
   });
 });
 
+describe("company profile → tenant name sync", () => {
+  it("renames the tenant to the legal name on profile save", async () => {
+    const res = await putProfile({});
+    expect(res.status).toBe(200);
+
+    const row = await env.DB.prepare("SELECT name FROM tenants WHERE tenant_id = ?")
+      .bind(TENANT_ID)
+      .first<{ name: string }>();
+    expect(row?.name).toBe("Onboarding Sdn Bhd");
+
+    // The console reads the name off the session payload — it must follow.
+    const { cookie } = await login("admin@onboarding.test", "admin-password");
+    const me = await fetchWorker("/v1/auth/me", { headers: { Cookie: cookie, Origin: ORIGIN } });
+    const meBody = (await me.json()) as { tenant: { name: string } };
+    expect(meBody.tenant.name).toBe("Onboarding Sdn Bhd");
+  });
+});
+
 describe("company base currency", () => {
   it("defaults to MYR when the profile omits it and round-trips an explicit value", async () => {
     let res = await putProfile({});

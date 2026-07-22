@@ -40,7 +40,7 @@ export function CompanyProfileForm({
   submitLabel?: string;
   onSaved?: () => void;
 }) {
-  const { client } = useAuth();
+  const { client, renameTenant } = useAuth();
   const [form, setForm] = useState<Form>(EMPTY);
 
   const query = useQuery({
@@ -63,7 +63,12 @@ export function CompanyProfileForm({
       apiClient.put<CompanyProfileType>("/v1/settings/company-profile", body),
     invalidates: () => [["settings", "company-profile"]],
     successMessage: "Company profile saved",
-    onSuccess: () => onSaved?.(),
+    onSuccess: (saved) => {
+      // The server renames the tenant to the legal name; mirror it in the
+      // cached session so the sidebar updates without a reload.
+      renameTenant(saved.legal_name);
+      onSaved?.();
+    },
   });
 
   const set = (k: keyof Form) => (e: React.ChangeEvent<HTMLInputElement>) =>

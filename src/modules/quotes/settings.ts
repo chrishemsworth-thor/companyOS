@@ -64,7 +64,13 @@ const PROFILE_FIELDS = [
   "base_currency",
 ] as const;
 
-/** Full-replace upsert of the tenant's company profile (one row per tenant). */
+/**
+ * Full-replace upsert of the tenant's company profile (one row per tenant).
+ * Also renames the tenant to the legal name, atomically: the workspace name
+ * shown in the console (tenants.name, set at provisioning) and the seller
+ * identity on documents must not drift apart once the company fills in its
+ * real name (e.g. during onboarding).
+ */
 export async function upsertCompanyProfile(
   db: D1Database,
   tenantId: string,
@@ -76,16 +82,20 @@ export async function upsertCompanyProfile(
     if (f === "base_currency") return input.base_currency ?? DEFAULT_BASE_CURRENCY;
     return input[f] ?? null;
   });
-  await db
-    .prepare(
-      `INSERT INTO company_profile (tenant_id, ${PROFILE_FIELDS.join(", ")}, updated_at)
-       VALUES (?, ${PROFILE_FIELDS.map(() => "?").join(", ")}, ?)
-       ON CONFLICT (tenant_id) DO UPDATE SET
-         ${PROFILE_FIELDS.map((f) => `${f} = excluded.${f}`).join(", ")},
-         updated_at = excluded.updated_at`,
-    )
-    .bind(tenantId, ...binds, new Date().toISOString())
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO company_profile (tenant_id, ${PROFILE_FIELDS.join(", ")}, updated_at)
+         VALUES (?, ${PROFILE_FIELDS.map(() => "?").join(", ")}, ?)
+         ON CONFLICT (tenant_id) DO UPDATE SET
+           ${PROFILE_FIELDS.map((f) => `${f} = excluded.${f}`).join(", ")},
+           updated_at = excluded.updated_at`,
+      )
+      .bind(tenantId, ...binds, new Date().toISOString()),
+    db
+      .prepare("UPDATE tenants SET name = ? WHERE tenant_id = ?")
+      .bind(input.legal_name, tenantId),
+  ]);
   return (await getCompanyProfile(db, tenantId)) as CompanyProfile;
 }
 
