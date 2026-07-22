@@ -52,20 +52,20 @@
   color-scheme: light;
 
   /* Surfaces & text */
-  --bg: #f6f7f9;
+  --bg: #ffffff;
   --surface: #ffffff;
-  --surface-2: #f1f3f6;
+  --surface-2: #f4f5f7;
   --border: #e6e8ec;
   --border-strong: #d4d8df;
   --text: #16181d;
   --text-muted: #5b6472;
   --text-subtle: #8a92a1;
 
-  /* Accent */
-  --accent: #4f46e5;
-  --accent-hover: #4338ca;
+  /* Accent (flat monochrome: near-black on white) */
+  --accent: #16181d;
+  --accent-hover: #33373f;
   --accent-contrast: #ffffff;
-  --accent-soft: #ecebfd;
+  --accent-soft: #eef0f3;
 
   /* Status tones (shared by new badges + legacy .badge classes) */
   --badge-neutral-bg: #eef0f3;
@@ -78,13 +78,13 @@
   --badge-bad-text: #b3261e;
 
   /* Focus ring + overlay */
-  --ring: rgba(79, 70, 229, 0.45);
+  --ring: rgba(22, 24, 29, 0.35);
   --overlay: rgba(17, 20, 28, 0.45);
 
-  /* Elevation (soft, layered) */
-  --elev-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.05);
-  --elev-2: 0 2px 4px rgba(16, 24, 40, 0.05), 0 6px 16px rgba(16, 24, 40, 0.08);
-  --elev-3: 0 12px 32px rgba(16, 24, 40, 0.14), 0 4px 10px rgba(16, 24, 40, 0.08);
+  /* Elevation (flat: borders carry separation; only floating layers cast) */
+  --elev-1: none;
+  --elev-2: none;
+  --elev-3: 0 8px 24px rgba(16, 24, 40, 0.12);
 }
 
 /* Dark tokens key off the data-theme attribute, not the media query: the
@@ -103,10 +103,10 @@
   --text-muted: #9aa3b2;
   --text-subtle: #6b7484;
 
-  --accent: #8b85ff;
-  --accent-hover: #a29cff;
+  --accent: #e8eaed;
+  --accent-hover: #ffffff;
   --accent-contrast: #0f1116;
-  --accent-soft: #20213a;
+  --accent-soft: #262b35;
 
   --badge-neutral-bg: #2a2f3a;
   --badge-neutral-text: #c7c8cf;
@@ -117,11 +117,11 @@
   --badge-bad-bg: #3a1616;
   --badge-bad-text: #f08b85;
 
-  --ring: rgba(139, 133, 255, 0.5);
+  --ring: rgba(232, 234, 237, 0.4);
   --overlay: rgba(0, 0, 0, 0.6);
 
-  --elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --elev-2: 0 2px 6px rgba(0, 0, 0, 0.4), 0 8px 20px rgba(0, 0, 0, 0.35);
+  --elev-1: none;
+  --elev-2: none;
   --elev-3: 0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
