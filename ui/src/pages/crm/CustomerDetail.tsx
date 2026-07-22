@@ -10,6 +10,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
 import { DataTable } from "../../components/DataTable";
 import { CustomerFormModal } from "../../components/modals/CustomerFormModal";
+import { ContactFormModal } from "../../components/modals/ContactFormModal";
 import { ActivityLogModal } from "../../components/modals/ActivityLogModal";
 import { DealCreateModal } from "../../components/modals/DealCreateModal";
 import { InvoiceCreateModal } from "../../components/modals/InvoiceCreateModal";
@@ -17,15 +18,17 @@ import { TicketCreateModal } from "../../components/modals/TicketCreateModal";
 import { AgentEventFeed } from "../../components/AgentEventFeed";
 import { StatusBadge } from "../../components/StatusBadge";
 import { formatMoney, formatDate } from "../../lib/format";
-import type { AgentSnapshot, Customer, PaymentHistoryEntry, Activity } from "../../api/types";
+import type { AgentSnapshot, Contact, Customer, PaymentHistoryEntry, Activity } from "../../api/types";
 
-type OpenModal = "edit" | "activity" | "deal" | "invoice" | "ticket" | null;
+type OpenModal = "edit" | "contact" | "activity" | "deal" | "invoice" | "ticket" | null;
 
 export function CustomerDetail() {
   const { id } = useParams<{ id: string }>();
   const { client } = useAuth();
   const navigate = useNavigate();
   const [openModal, setOpenModal] = useState<OpenModal>(null);
+  // Set alongside openModal === "contact" to edit instead of create.
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
 
   const customerQuery = useQuery({
     queryKey: ["customer", id],
@@ -48,6 +51,11 @@ export function CustomerDetail() {
     queryFn: () => client!.get<{ agent_state: AgentSnapshot | null }>(`/v1/customers/${id}/agent`),
     enabled: !!client && !!id,
   });
+  const contactsQuery = useQuery({
+    queryKey: ["contacts", id],
+    queryFn: () => client!.get<{ contacts: Contact[] }>(`/v1/customers/${id}/contacts`),
+    enabled: !!client && !!id,
+  });
 
   if (customerQuery.isLoading) return <LoadingState />;
   if (customerQuery.error) return <ErrorState error={customerQuery.error} />;
@@ -67,6 +75,16 @@ export function CustomerDetail() {
 
       {openModal === "edit" && (
         <CustomerFormModal existing={customer} onClose={() => setOpenModal(null)} />
+      )}
+      {openModal === "contact" && (
+        <ContactFormModal
+          customerId={customer.customer_id}
+          existing={editingContact ?? undefined}
+          onClose={() => {
+            setOpenModal(null);
+            setEditingContact(null);
+          }}
+        />
       )}
       {openModal === "activity" && (
         <ActivityLogModal customerId={customer.customer_id} onClose={() => setOpenModal(null)} />
@@ -100,6 +118,59 @@ export function CustomerDetail() {
         <Field label="Email">{customer.email ?? "—"}</Field>
         <Field label="Phone">{customer.phone ?? "—"}</Field>
       </DetailGrid>
+
+      <div className="flex items-center justify-between">
+        <h2>Contacts</h2>
+        <Button
+          onClick={() => {
+            setEditingContact(null);
+            setOpenModal("contact");
+          }}
+        >
+          Add contact
+        </Button>
+      </div>
+      {contactsQuery.isLoading && <LoadingState />}
+      {contactsQuery.data && (
+        <DataTable
+          rows={contactsQuery.data.contacts}
+          rowKey={(c) => c.contact_id}
+          emptyLabel="No contacts yet."
+          columns={[
+            {
+              header: "Name",
+              render: (c) => (
+                <span>
+                  {c.name}
+                  {c.is_primary && (
+                    <span className="ml-2">
+                      <StatusBadge status="primary" />
+                    </span>
+                  )}
+                </span>
+              ),
+            },
+            { header: "Title", render: (c) => c.title ?? "—" },
+            { header: "Department", render: (c) => c.department ?? "—" },
+            { header: "Email", render: (c) => c.email ?? "—" },
+            { header: "Phone", render: (c) => c.phone ?? "—" },
+            {
+              header: "",
+              render: (c) => (
+                <Button
+                  onClick={() => {
+                    setEditingContact(c);
+                    setOpenModal("contact");
+                  }}
+                >
+                  Edit
+                </Button>
+              ),
+              align: "right",
+            },
+          ]}
+        />
+      )}
 
       <h2>Collections agent</h2>
       {agentQuery.data?.agent_state ? (

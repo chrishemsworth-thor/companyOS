@@ -94,6 +94,108 @@ describe("customers", () => {
   });
 });
 
+describe("contacts", () => {
+  interface ContactBody {
+    contact_id: string;
+    name: string;
+    title: string | null;
+    department: string | null;
+    email: string | null;
+    phone: string | null;
+    is_primary: boolean;
+  }
+
+  async function createContact(
+    customerId: string,
+    body: Record<string, unknown>,
+  ): Promise<ContactBody> {
+    const res = await gatewayFetch(`/v1/customers/${customerId}/contacts`, {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify(body),
+    });
+    expect(res.status).toBe(201);
+    return res.json();
+  }
+
+  it("creates contacts and lists them primary-first", async () => {
+    const { customer_id } = await createCustomer("Contact Org");
+    const plain = await createContact(customer_id, { name: "Ben Ordinary", title: "Engineer" });
+    const primary = await createContact(customer_id, {
+      name: "Alia Primary",
+      email: "alia@contactorg.example",
+      is_primary: true,
+    });
+    expect(plain.contact_id).toMatch(/^contact_/);
+
+    const res = await gatewayFetch(`/v1/customers/${customer_id}/contacts`, { headers: auth });
+    expect(res.status).toBe(200);
+    const { contacts } = (await res.json()) as { contacts: ContactBody[] };
+    expect(contacts.map((c) => c.contact_id)).toEqual([primary.contact_id, plain.contact_id]);
+    expect(contacts[0]!.is_primary).toBe(true);
+  });
+
+  it("PATCH updates only the provided fields", async () => {
+    const { customer_id } = await createCustomer("Patch Org");
+    const contact = await createContact(customer_id, {
+      name: "Typo Namee",
+      title: "Head of Procurement",
+      email: "typo@patchorg.example",
+    });
+
+    const res = await gatewayFetch(`/v1/customers/${customer_id}/contacts/${contact.contact_id}`, {
+      method: "PATCH",
+      headers: auth,
+      body: JSON.stringify({ name: "Typo Name", is_primary: true }),
+    });
+    expect(res.status).toBe(200);
+    const updated = (await res.json()) as ContactBody;
+    expect(updated.name).toBe("Typo Name");
+    expect(updated.is_primary).toBe(true);
+    expect(updated.title).toBe("Head of Procurement");
+    expect(updated.email).toBe("typo@patchorg.example");
+  });
+
+  it("PATCH 404s for unknown contacts and contacts under a different customer", async () => {
+    const { customer_id } = await createCustomer("Owner Org");
+    const { customer_id: other } = await createCustomer("Other Org");
+    const contact = await createContact(customer_id, { name: "Owned Contact" });
+
+    const ghost = await gatewayFetch(`/v1/customers/${customer_id}/contacts/contact_ghost`, {
+      method: "PATCH",
+      headers: auth,
+      body: JSON.stringify({ name: "Ghost" }),
+    });
+    expect(ghost.status).toBe(404);
+
+    const crossed = await gatewayFetch(`/v1/customers/${other}/contacts/${contact.contact_id}`, {
+      method: "PATCH",
+      headers: auth,
+      body: JSON.stringify({ name: "Stolen" }),
+    });
+    expect(crossed.status).toBe(404);
+  });
+
+  it("rejects an empty patch and creation under an unknown customer", async () => {
+    const { customer_id } = await createCustomer("Strict Org");
+    const contact = await createContact(customer_id, { name: "Strict Contact" });
+
+    const empty = await gatewayFetch(`/v1/customers/${customer_id}/contacts/${contact.contact_id}`, {
+      method: "PATCH",
+      headers: auth,
+      body: JSON.stringify({}),
+    });
+    expect(empty.status).toBe(400);
+
+    const orphan = await gatewayFetch("/v1/customers/cust_ghost/contacts", {
+      method: "POST",
+      headers: auth,
+      body: JSON.stringify({ name: "Orphan" }),
+    });
+    expect(orphan.status).toBe(404);
+  });
+});
+
 describe("deals", () => {
   it("seeds the default pipeline once", async () => {
     const stages = await getStages();
