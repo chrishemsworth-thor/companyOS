@@ -97,6 +97,25 @@ export interface Contact {
   created_at: string;
 }
 
+export type LeadStatus = "new" | "qualified" | "converted" | "lost";
+
+export interface Lead {
+  lead_id: string;
+  name: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  title: string | null;
+  source: string;
+  status: LeadStatus;
+  notes: string | null;
+  enriched_at: string | null;
+  converted_customer_id: string | null;
+  converted_deal_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type QuoteStatus = "draft" | "sent" | "accepted" | "rejected" | "expired" | "converted";
 
 export interface Quote {

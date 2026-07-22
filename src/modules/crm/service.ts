@@ -2,12 +2,16 @@ import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
 import { paginate } from "../../gateway/pagination";
 import { resolveBaseCurrency } from "../quotes/settings";
+import { getEnrichmentProvider } from "../../enrichment";
+import type { Env } from "../../env";
 import type {
   Activity,
   ActivityKind,
   Contact,
   Customer,
   Deal,
+  Lead,
+  LeadStatus,
   PaymentHistoryEntry,
   PipelineStage,
 } from "./types";
@@ -20,9 +24,9 @@ import type {
 
 export class CrmError extends Error {
   constructor(
-    readonly code: "not_found" | "invalid_stage",
+    readonly code: "not_found" | "invalid_stage" | "invalid_status",
     message: string,
-    readonly httpStatus: 404 | 422 = 422,
+    readonly httpStatus: 404 | 409 | 422 = 422,
   ) {
     super(message);
     this.name = "CrmError";
@@ -264,6 +268,11 @@ export async function listContacts(
   return results.map(toContact);
 }
 
+/**
+ * No contact.created event on purpose: nothing consumes one today (no agent
+ * route, no insights read-model). Add a versioned schema + registry entry the
+ * day something wants to react to new contacts.
+ */
 export async function createContact(
   db: D1Database,
   tenantId: string,
@@ -298,6 +307,45 @@ export async function createContact(
       input.is_primary ? 1 : 0,
     )
     .run();
+  return (await getContact(db, tenantId, contactId)) as Contact;
+}
+
+export async function updateContact(
+  db: D1Database,
+  tenantId: string,
+  customerId: string,
+  contactId: string,
+  patch: {
+    name?: string;
+    title?: string | null;
+    department?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    is_primary?: boolean;
+  },
+): Promise<Contact> {
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  for (const field of ["name", "title", "department", "email", "phone"] as const) {
+    if (patch[field] !== undefined) {
+      sets.push(`${field} = ?`);
+      binds.push(patch[field]);
+    }
+  }
+  if (patch.is_primary !== undefined) {
+    sets.push("is_primary = ?");
+    binds.push(patch.is_primary ? 1 : 0);
+  }
+  // Scoped by customer_id too so the nested route can't reach across customers.
+  const result = await db
+    .prepare(
+      `UPDATE contacts SET ${sets.join(", ")} WHERE tenant_id = ? AND customer_id = ? AND contact_id = ?`,
+    )
+    .bind(...binds, tenantId, customerId, contactId)
+    .run();
+  if (result.meta.changes === 0) {
+    throw new CrmError("not_found", "contact not found", 404);
+  }
   return (await getContact(db, tenantId, contactId)) as Contact;
 }
 
@@ -471,6 +519,260 @@ export async function changeDealStage(
   }
 
   return (await getDeal(env.DB, tenantId, dealId))!;
+}
+
+// ---- Leads (Sales Phase A — see docs/architecture/sales-module-design.md) ----
+
+const LEAD_COLUMNS =
+  "lead_id, name, company, email, phone, title, source, status, notes, enriched_at, converted_customer_id, converted_deal_id, created_at, updated_at";
+
+export async function getLead(db: D1Database, tenantId: string, leadId: string): Promise<Lead | null> {
+  return db
+    .prepare(`SELECT ${LEAD_COLUMNS} FROM leads WHERE tenant_id = ? AND lead_id = ?`)
+    .bind(tenantId, leadId)
+    .first<Lead>();
+}
+
+export async function listLeads(
+  db: D1Database,
+  tenantId: string,
+  filter: { status?: LeadStatus; cursor?: string; limit: number },
+): Promise<{ leads: Lead[]; next_cursor: string | null }> {
+  const clauses = ["tenant_id = ?"];
+  const binds: unknown[] = [tenantId];
+  if (filter.status) {
+    clauses.push("status = ?");
+    binds.push(filter.status);
+  }
+  if (filter.cursor) {
+    clauses.push("lead_id > ?");
+    binds.push(filter.cursor);
+  }
+  binds.push(filter.limit + 1);
+  const { results } = await db
+    .prepare(
+      `SELECT ${LEAD_COLUMNS} FROM leads WHERE ${clauses.join(" AND ")}
+       ORDER BY lead_id ASC LIMIT ?`,
+    )
+    .bind(...binds)
+    .all<Lead>();
+  const { items, next_cursor } = paginate(results, filter.limit, "lead_id");
+  return { leads: items, next_cursor };
+}
+
+export async function createLead(
+  env: { DB: D1Database; EVENTS: Queue },
+  tenantId: string,
+  input: {
+    name: string;
+    company?: string;
+    email?: string;
+    phone?: string;
+    title?: string;
+    source?: string;
+    notes?: string;
+  },
+): Promise<Lead> {
+  const leadId = `lead_${ulid()}`;
+  await env.DB.prepare(
+    `INSERT INTO leads (lead_id, tenant_id, name, company, email, phone, title, source, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  )
+    .bind(
+      leadId,
+      tenantId,
+      input.name,
+      input.company ?? null,
+      input.email ?? null,
+      input.phone ?? null,
+      input.title ?? null,
+      input.source ?? "manual",
+      input.notes ?? null,
+    )
+    .run();
+
+  const lead = (await getLead(env.DB, tenantId, leadId)) as Lead;
+  await env.EVENTS.send(
+    makeEnvelope({
+      event_type: "lead.created",
+      source_module: "sales",
+      tenant_id: tenantId,
+      payload: {
+        lead_id: leadId,
+        name: input.name,
+        ...(input.company ? { company: input.company } : {}),
+        ...(input.email ? { email: input.email } : {}),
+        source: lead.source,
+        status: lead.status,
+      },
+    }),
+  );
+  return lead;
+}
+
+export async function updateLead(
+  db: D1Database,
+  tenantId: string,
+  leadId: string,
+  patch: {
+    name?: string;
+    company?: string | null;
+    email?: string | null;
+    phone?: string | null;
+    title?: string | null;
+    source?: string;
+    notes?: string | null;
+    status?: LeadStatus;
+  },
+): Promise<Lead> {
+  const lead = await getLead(db, tenantId, leadId);
+  if (!lead) throw new CrmError("not_found", "lead not found", 404);
+  if (lead.status === "converted") {
+    throw new CrmError("invalid_status", "converted lead is immutable", 409);
+  }
+  if (patch.status === "converted") {
+    throw new CrmError("invalid_status", "status 'converted' is set by /convert, not PATCH");
+  }
+
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  for (const field of ["name", "company", "email", "phone", "title", "source", "notes", "status"] as const) {
+    if (patch[field] !== undefined) {
+      sets.push(`${field} = ?`);
+      binds.push(patch[field]);
+    }
+  }
+  sets.push("updated_at = ?");
+  binds.push(new Date().toISOString());
+  await db
+    .prepare(`UPDATE leads SET ${sets.join(", ")} WHERE tenant_id = ? AND lead_id = ?`)
+    .bind(...binds, tenantId, leadId)
+    .run();
+  return (await getLead(db, tenantId, leadId)) as Lead;
+}
+
+/**
+ * Convert a lead into a customer (+ contact when the lead named a company,
+ * + deal when the caller asked for one), then freeze the lead. Sub-creates
+ * emit their own events (customer.created, deal.created); the lead row is
+ * updated last, so a mid-sequence failure leaves the lead unconverted and
+ * the operation retryable — same at-least-once posture as the event bus.
+ */
+export async function convertLead(
+  env: { DB: D1Database; EVENTS: Queue },
+  tenantId: string,
+  leadId: string,
+  input: {
+    deal?: { title: string; value_cents: number; currency?: string; stage_id?: string };
+  } = {},
+): Promise<{ lead: Lead; customer: Customer; contact: Contact | null; deal: Deal | null }> {
+  const lead = await getLead(env.DB, tenantId, leadId);
+  if (!lead) throw new CrmError("not_found", "lead not found", 404);
+  if (lead.status !== "new" && lead.status !== "qualified") {
+    throw new CrmError("invalid_status", `cannot convert a ${lead.status} lead`, 409);
+  }
+
+  // The customer row is the ORGANIZATION (quotes "To" block convention);
+  // a lead without a company converts as a person-customer.
+  const customer = await createCustomer(env, tenantId, {
+    name: lead.company ?? lead.name,
+    email: lead.email ?? undefined,
+    phone: lead.phone ?? undefined,
+  });
+
+  let contact: Contact | null = null;
+  if (lead.company) {
+    contact = await createContact(env.DB, tenantId, {
+      customer_id: customer.customer_id,
+      name: lead.name,
+      title: lead.title ?? undefined,
+      email: lead.email ?? undefined,
+      phone: lead.phone ?? undefined,
+      is_primary: true,
+    });
+  }
+
+  const deal = input.deal ? await createDeal(env, tenantId, { customer_id: customer.customer_id, ...input.deal }) : null;
+
+  await env.DB.prepare(
+    `UPDATE leads SET status = 'converted', converted_customer_id = ?, converted_deal_id = ?, updated_at = ?
+     WHERE tenant_id = ? AND lead_id = ?`,
+  )
+    .bind(customer.customer_id, deal?.deal_id ?? null, new Date().toISOString(), tenantId, leadId)
+    .run();
+
+  await env.EVENTS.send(
+    makeEnvelope({
+      event_type: "lead.converted",
+      source_module: "sales",
+      tenant_id: tenantId,
+      payload: {
+        lead_id: leadId,
+        customer_id: customer.customer_id,
+        ...(contact ? { contact_id: contact.contact_id } : {}),
+        ...(deal ? { deal_id: deal.deal_id } : {}),
+      },
+    }),
+  );
+
+  return { lead: (await getLead(env.DB, tenantId, leadId)) as Lead, customer, contact, deal };
+}
+
+/** Fields the enrichment port may fill (never overwriting a non-empty value). */
+const ENRICHABLE_FIELDS = ["company", "email", "phone", "title", "notes"] as const;
+
+export async function enrichLead(
+  env: Env,
+  tenantId: string,
+  leadId: string,
+): Promise<{ lead: Lead; enriched_fields: string[] }> {
+  const lead = await getLead(env.DB, tenantId, leadId);
+  if (!lead) throw new CrmError("not_found", "lead not found", 404);
+  if (lead.status === "converted") {
+    throw new CrmError("invalid_status", "converted lead is immutable", 409);
+  }
+
+  const provider = getEnrichmentProvider(env);
+  const found = await provider.enrichLead({
+    name: lead.name,
+    company: lead.company,
+    email: lead.email,
+    phone: lead.phone,
+    title: lead.title,
+  });
+
+  const sets: string[] = [];
+  const binds: unknown[] = [];
+  const enrichedFields: string[] = [];
+  for (const field of ENRICHABLE_FIELDS) {
+    const value = found[field];
+    if (value && !lead[field]) {
+      sets.push(`${field} = ?`);
+      binds.push(value);
+      enrichedFields.push(field);
+    }
+  }
+  if (enrichedFields.length === 0) {
+    return { lead, enriched_fields: [] };
+  }
+
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE leads SET ${sets.join(", ")}, enriched_at = ?, updated_at = ? WHERE tenant_id = ? AND lead_id = ?`,
+  )
+    .bind(...binds, now, now, tenantId, leadId)
+    .run();
+
+  await env.EVENTS.send(
+    makeEnvelope({
+      event_type: "lead.enriched",
+      source_module: "sales",
+      tenant_id: tenantId,
+      payload: { lead_id: leadId, provider: provider.name, enriched_fields: enrichedFields },
+    }),
+  );
+
+  return { lead: (await getLead(env.DB, tenantId, leadId)) as Lead, enriched_fields: enrichedFields };
 }
 
 // ---- Activities ----

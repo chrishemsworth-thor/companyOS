@@ -5,6 +5,7 @@ import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
 import { CustomerSelect } from "../CustomerSelect";
 import { ContactSelect } from "../ContactSelect";
+import { ContactFormModal } from "./ContactFormModal";
 import { Button } from "../Button";
 import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
@@ -57,6 +58,7 @@ export function QuoteCreateModal({
   const [expiryDate, setExpiryDate] = useState("");
   const [notes, setNotes] = useState("");
   const [lines, setLines] = useState<LineDraft[]>([emptyLine()]);
+  const [addingContact, setAddingContact] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const updateLine = (i: number, patch: Partial<LineDraft>) =>
@@ -123,6 +125,19 @@ export function QuoteCreateModal({
     });
   };
 
+  // Swap dialogs while adding a contact (Modal doesn't portal, so nesting one
+  // inside this form would nest <form>s). This component stays mounted, so the
+  // draft quote state is intact when the contact dialog closes.
+  if (addingContact && customerId) {
+    return (
+      <ContactFormModal
+        customerId={customerId}
+        onClose={() => setAddingContact(false)}
+        onSaved={(contact) => setContactId(contact.contact_id)}
+      />
+    );
+  }
+
   return (
     <Modal title="New quote" onClose={onClose}>
       <form onSubmit={submit}>
@@ -137,7 +152,20 @@ export function QuoteCreateModal({
           />
         </FormRow>
         <FormRow label="Contact (optional)">
-          <ContactSelect customerId={customerId} value={contactId} onChange={setContactId} />
+          <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ flex: 1 }}>
+              <ContactSelect customerId={customerId} value={contactId} onChange={setContactId} />
+            </div>
+            <Button
+              type="button"
+              variant="ghost"
+              icon={<Plus className="size-4" />}
+              disabled={!customerId}
+              onClick={() => setAddingContact(true)}
+            >
+              New contact
+            </Button>
+          </div>
         </FormRow>
         <div className="form-row-inline">
           <FormRow label="Issue date">

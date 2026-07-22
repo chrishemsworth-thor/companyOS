@@ -12,6 +12,7 @@ import {
   listActivities,
   listContacts,
   listCustomers,
+  updateContact,
   updateCustomer,
 } from "../../modules/crm/service";
 import type { CollectionsAgent } from "../../agents/collections";
@@ -49,6 +50,10 @@ const contactBodySchema = z.object({
   phone: z.string().max(50).optional(),
   is_primary: z.boolean().optional(),
 });
+
+const contactPatchSchema = contactBodySchema
+  .partial()
+  .refine((p) => Object.keys(p).length > 0, { message: "empty patch" });
 
 export const customers = new Hono<AuthedEnv>();
 
@@ -129,6 +134,22 @@ customers.post("/:id/contacts", zValidator("json", contactBodySchema), async (c)
       ...c.req.valid("json"),
     });
     return c.json(contact, 201);
+  } catch (err) {
+    return crmErrorResponse(c, err);
+  }
+});
+
+customers.patch("/:id/contacts/:contactId", zValidator("json", contactPatchSchema), async (c) => {
+  const tenant = c.get("tenant");
+  try {
+    const contact = await updateContact(
+      c.env.DB,
+      tenant.tenant_id,
+      c.req.param("id"),
+      c.req.param("contactId"),
+      c.req.valid("json"),
+    );
+    return c.json(contact);
   } catch (err) {
     return crmErrorResponse(c, err);
   }
