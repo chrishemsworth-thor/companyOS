@@ -52,6 +52,26 @@ export interface Deal {
   updated_at: string;
 }
 
+export type LeadStatus = "new" | "qualified" | "converted" | "lost";
+
+/** A pre-customer prospect (migration 0018). Converts into customer (+ deal). */
+export interface Lead {
+  lead_id: string;
+  name: string;
+  company: string | null;
+  email: string | null;
+  phone: string | null;
+  title: string | null;
+  source: string;
+  status: LeadStatus;
+  notes: string | null;
+  enriched_at: string | null;
+  converted_customer_id: string | null;
+  converted_deal_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export type ActivityKind = "note" | "call" | "email" | "meeting" | "reminder_sent";
 
 export interface Activity {

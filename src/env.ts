@@ -78,4 +78,11 @@ export interface Env {
   LLM_PROVIDER?: string;
   /** Override the provider's default model id. */
   LLM_MODEL?: string;
+
+  /**
+   * Lead-enrichment provider selection (src/enrichment/). Absent or "noop"
+   * means the built-in no-op provider; real data providers register their
+   * names here as they land.
+   */
+  ENRICHMENT_PROVIDER?: string;
 }
