@@ -26,6 +26,8 @@ export interface AuthUser {
 export interface AuthTenant {
   tenant_id: string;
   name: string;
+  /** Null until the first-run onboarding journey is finished or dismissed. */
+  onboarded_at: string | null;
 }
 
 interface AuthContextValue {
@@ -37,6 +39,8 @@ interface AuthContextValue {
   login: (workspace: string, email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setBaseUrl: (url: string) => void;
+  /** Reflect a successful POST /v1/settings/onboarding/complete locally. */
+  markOnboarded: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -139,9 +143,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setBaseUrlState(url);
   };
 
+  const markOnboarded = () =>
+    setTenant((t) => (t ? { ...t, onboarded_at: t.onboarded_at ?? new Date().toISOString() } : t));
+
   return (
     <AuthContext.Provider
-      value={{ status, user, tenant, baseUrl, client, login, logout, setBaseUrl }}
+      value={{ status, user, tenant, baseUrl, client, login, logout, setBaseUrl, markOnboarded }}
     >
       {children}
     </AuthContext.Provider>

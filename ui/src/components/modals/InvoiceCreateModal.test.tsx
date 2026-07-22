@@ -11,6 +11,12 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockReset();
   fetchMock.mockImplementation(async (url: string, init?: RequestInit) => {
+    if (String(url).includes("/v1/settings/company-profile")) {
+      return new Response(
+        JSON.stringify({ company_profile: { legal_name: "Acme HQ", base_currency: "USD" } }),
+        { status: 200 },
+      );
+    }
     if (String(url).includes("/v1/customers")) {
       return new Response(
         JSON.stringify({
@@ -53,7 +59,15 @@ describe("InvoiceCreateModal", () => {
     renderModal({ onClose, onCreated });
 
     await waitFor(() => expect(screen.getByText("Acme (cust_1)")).toBeDefined());
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "cust_1" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Customer" }), {
+      target: { value: "cust_1" },
+    });
+    // The currency select defaults to the company's base currency.
+    await waitFor(() =>
+      expect((screen.getByRole("combobox", { name: "Currency" }) as HTMLSelectElement).value).toBe(
+        "USD",
+      ),
+    );
 
     const dateInput = document.querySelector('input[type="date"]')!;
     fireEvent.change(dateInput, { target: { value: "2026-08-01" } });
@@ -70,7 +84,7 @@ describe("InvoiceCreateModal", () => {
     ) as [string, RequestInit];
     expect(JSON.parse(postCall[1].body as string)).toEqual({
       customer_id: "cust_1",
-      currency: "MYR",
+      currency: "USD",
       due_date: "2026-08-01",
       lines: [{ description: "Consulting", quantity: 1, unit_cents: 120_050 }],
     });
@@ -81,7 +95,9 @@ describe("InvoiceCreateModal", () => {
   it("blocks submit and shows a validation error for an invalid unit price", async () => {
     renderModal({ onClose: vi.fn() });
     await waitFor(() => expect(screen.getByText("Acme (cust_1)")).toBeDefined());
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "cust_1" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Customer" }), {
+      target: { value: "cust_1" },
+    });
     fireEvent.change(document.querySelector('input[type="date"]')!, {
       target: { value: "2026-08-01" },
     });

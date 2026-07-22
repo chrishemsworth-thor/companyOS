@@ -6,7 +6,9 @@ import { FormError } from "../FormError";
 import { CustomerSelect } from "../CustomerSelect";
 import { Button } from "../Button";
 import { ModalActions } from "../ModalActions";
+import { CurrencySelect } from "../CurrencySelect";
 import { useApiMutation } from "../../hooks/useApiMutation";
+import { useBaseCurrency } from "../../hooks/useBaseCurrency";
 import { parseAmountToCents } from "../../lib/money";
 import type { Invoice } from "../../api/types";
 
@@ -28,7 +30,10 @@ export function InvoiceCreateModal({
   onCreated?: (invoice: Invoice) => void;
 }) {
   const [customerId, setCustomerId] = useState(defaultCustomerId ?? "");
-  const [currency, setCurrency] = useState("MYR");
+  // Defaults to the company base currency until the user picks one explicitly.
+  const baseCurrency = useBaseCurrency();
+  const [currencyOverride, setCurrencyOverride] = useState<string | null>(null);
+  const currency = currencyOverride ?? baseCurrency;
   const [dueDate, setDueDate] = useState("");
   const [lines, setLines] = useState<LineDraft[]>([{ ...EMPTY_LINE }]);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -86,14 +91,7 @@ export function InvoiceCreateModal({
         </FormRow>
         <div className="form-row-inline">
           <FormRow label="Currency">
-            <input
-              className="input"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              maxLength={3}
-              minLength={3}
-              required
-            />
+            <CurrencySelect value={currency} onChange={setCurrencyOverride} />
           </FormRow>
           <FormRow label="Due date">
             <input

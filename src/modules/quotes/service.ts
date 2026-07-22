@@ -2,7 +2,7 @@ import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
 import { paginate } from "../../gateway/pagination";
 import { createInvoice, type CreateInvoiceInput } from "../finance/service";
-import { getQuoteBranding } from "./settings";
+import { getQuoteBranding, resolveQuoteDefaultCurrency } from "./settings";
 import type { Quote, QuoteLine, QuoteStatus } from "./types";
 
 /**
@@ -215,7 +215,9 @@ export async function createQuote(
 
   const branding = await getQuoteBranding(env.DB, tenantId);
   const cfg = branding.template_config;
-  const currency = input.currency ?? cfg.currency;
+  // Explicit request currency > explicitly configured branding currency >
+  // company base currency (resolved inside resolveQuoteDefaultCurrency).
+  const currency = input.currency ?? (await resolveQuoteDefaultCurrency(env.DB, tenantId));
   const taxRateBps = cfg.show_tax_line ? input.tax_rate_bps ?? cfg.tax_rate_bps : 0;
 
   const totals = computeQuoteTotals(input.lines, taxRateBps);

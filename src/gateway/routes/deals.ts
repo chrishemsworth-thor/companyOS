@@ -17,7 +17,8 @@ const createBodySchema = z.object({
   customer_id: z.string().min(1),
   title: z.string().min(1).max(300),
   value_cents: z.number().int().nonnegative(),
-  currency: z.string().length(3),
+  // Optional: when omitted, the company's base currency applies (service-side).
+  currency: z.string().length(3).optional(),
   stage_id: z.string().startsWith("stg_").optional(),
 });
 

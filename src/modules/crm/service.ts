@@ -1,6 +1,7 @@
 import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
 import { paginate } from "../../gateway/pagination";
+import { resolveBaseCurrency } from "../quotes/settings";
 import type {
   Activity,
   ActivityKind,
@@ -370,12 +371,17 @@ export async function createDeal(
     customer_id: string;
     title: string;
     value_cents: number;
-    currency: string;
+    /** ISO 4217; omitted => the company's base currency. */
+    currency?: string;
     stage_id?: string;
   },
 ): Promise<Deal> {
   const customer = await getCustomer(env.DB, tenantId, input.customer_id);
   if (!customer) throw new CrmError("not_found", `customer ${input.customer_id} not found`, 404);
+
+  // Deals stay multi-currency; the company base currency is only the default
+  // when the caller omits currency (same rule as invoices and quotes).
+  const currency = input.currency ?? (await resolveBaseCurrency(env.DB, tenantId));
 
   await ensureDefaultStages(env.DB, tenantId);
   let stage: PipelineStage | null;
@@ -391,7 +397,7 @@ export async function createDeal(
     `INSERT INTO deals (deal_id, tenant_id, customer_id, title, value_cents, currency, stage_id)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
   )
-    .bind(dealId, tenantId, input.customer_id, input.title, input.value_cents, input.currency, stage.stage_id)
+    .bind(dealId, tenantId, input.customer_id, input.title, input.value_cents, currency, stage.stage_id)
     .run();
 
   await env.EVENTS.send(
@@ -404,7 +410,7 @@ export async function createDeal(
         customer_id: input.customer_id,
         title: input.title,
         value_cents: input.value_cents,
-        currency: input.currency,
+        currency,
         stage_id: stage.stage_id,
       },
     }),
