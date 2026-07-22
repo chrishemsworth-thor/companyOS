@@ -14,6 +14,8 @@ import { InvoiceDetail } from "./pages/finance/InvoiceDetail";
 import { Ledger } from "./pages/finance/Ledger";
 import { CustomerList } from "./pages/crm/CustomerList";
 import { CustomerDetail } from "./pages/crm/CustomerDetail";
+import { LeadList } from "./pages/crm/LeadList";
+import { LeadDetail } from "./pages/crm/LeadDetail";
 import { DealList } from "./pages/crm/DealList";
 import { DealDetail } from "./pages/crm/DealDetail";
 import { TicketList } from "./pages/support/TicketList";
@@ -72,6 +74,8 @@ function AppRoutes() {
         <Route path="invoices" element={<InvoiceList />} />
         <Route path="invoices/:id" element={<InvoiceDetail />} />
         <Route path="ledger" element={<Ledger />} />
+        <Route path="leads" element={<LeadList />} />
+        <Route path="leads/:id" element={<LeadDetail />} />
         <Route path="customers" element={<CustomerList />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="deals" element={<DealList />} />
