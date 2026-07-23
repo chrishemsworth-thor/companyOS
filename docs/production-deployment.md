@@ -13,7 +13,7 @@ where relevant — this file records **our** deployment.
 | Component | Where | Name |
 |---|---|---|
 | Operator console (SPA) | Cloudflare Pages → **https://console.companyos.com.my** | project `companyos-console` |
-| API (gateway + modules + agents) | Cloudflare Worker → **https://api.companyos.com.my** (custom domain) | worker `companyos` |
+| API (gateway + modules + agents) | Cloudflare Worker → **https://api.companyos.com.my** (custom domain) | worker `companyos-backend` |
 | Database | Cloudflare D1 (SQLite) | `companyos-db` |
 | Config/auth cache + sessions | Workers KV | `CONFIG_CACHE`, `SESSIONS` |
 | Collections agent | Durable Object (SQLite-backed, one per tenant+customer) | `CollectionsAgent` |
@@ -46,7 +46,7 @@ Constraints that shape this layout:
 ## 3. Secrets
 
 Set with `npx wrangler secret put <NAME>` from the repo root (they attach to
-the worker name `companyos`, shared by both configs). Secrets shadow the
+the worker name `companyos-backend`, shared by both configs). Secrets shadow the
 dev-placeholder `vars` in the wrangler configs at runtime.
 
 | Secret | Required | Purpose |
