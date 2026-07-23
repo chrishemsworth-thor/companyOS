@@ -1,0 +1,699 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CompanyOS — One connected base for your whole company, with an AI backbone</title>
+    <meta
+      name="description"
+      content="CompanyOS runs Finance, CRM, Support, Build and People on one normalized, machine-readable base — with an event bus and AI agents as the operating backbone."
+    />
+    <script>
+      // Mirror the app's pre-paint theme resolution (ui/index.html): stored
+      // preference wins, otherwise follow the OS. Same storage key as the
+      // operator console so the landing page and app never disagree.
+      (function () {
+        var stored = localStorage.getItem("companyos_theme");
+        var pref = stored === "light" || stored === "dark" ? stored : "system";
+        document.documentElement.dataset.theme =
+          pref === "system"
+            ? window.matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : pref;
+      })();
+    </script>
+    <style>
+      /* ------------------------------------------------------------------
+       * Design tokens — copied from ui/src/styles.css so the landing page
+       * matches the operator console exactly. Flat, monochrome, minimalist:
+       * borders carry separation; only floating layers cast shadows.
+       * ------------------------------------------------------------------ */
+      :root {
+        color-scheme: light;
+
+        --bg: #ffffff;
+        --surface: #ffffff;
+        --surface-2: #f4f5f7;
+        --border: #e6e8ec;
+        --border-strong: #d4d8df;
+        --text: #16181d;
+        --text-muted: #5b6472;
+        --text-subtle: #8a92a1;
+
+        --accent: #16181d;
+        --accent-hover: #33373f;
+        --accent-contrast: #ffffff;
+        --accent-soft: #eef0f3;
+
+        --badge-neutral-bg: #eef0f3;
+        --badge-neutral-text: #45464d;
+        --badge-good-bg: #e3f6ea;
+        --badge-good-text: #1c7a3f;
+        --badge-warn-bg: #fdf1da;
+        --badge-warn-text: #92620b;
+
+        --ring: rgba(22, 24, 29, 0.35);
+
+        --radius-sm: 6px;
+        --radius-md: 10px;
+        --radius-lg: 14px;
+        --radius-xl: 20px;
+
+        --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Helvetica, Arial, sans-serif;
+        --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+          monospace;
+      }
+
+      :root[data-theme="dark"] {
+        color-scheme: dark;
+
+        --bg: #0f1116;
+        --surface: #171a21;
+        --surface-2: #1e222b;
+        --border: #262b35;
+        --border-strong: #333a46;
+        --text: #e8eaed;
+        --text-muted: #9aa3b2;
+        --text-subtle: #6b7484;
+
+        --accent: #e8eaed;
+        --accent-hover: #ffffff;
+        --accent-contrast: #0f1116;
+        --accent-soft: #262b35;
+
+        --badge-neutral-bg: #2a2f3a;
+        --badge-neutral-text: #c7c8cf;
+        --badge-good-bg: #14311f;
+        --badge-good-text: #6fd68f;
+        --badge-warn-bg: #3a2c10;
+        --badge-warn-text: #e0ac4c;
+
+        --ring: rgba(232, 234, 237, 0.4);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        -webkit-text-size-adjust: 100%;
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        background: var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+        line-height: 1.5;
+      }
+
+      a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+
+      :focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+        border-radius: 4px;
+      }
+
+      ::selection {
+        background: var(--accent-soft);
+        color: var(--text);
+      }
+
+      .container {
+        max-width: 1024px;
+        margin: 0 auto;
+        padding: 0 1.5rem;
+      }
+
+      /* Buttons — same recipe as the console's Button component:
+         primary = accent fill, secondary = surface + strong border. */
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        height: 2.5rem;
+        padding: 0 1rem;
+        border-radius: var(--radius-md);
+        font-family: inherit;
+        font-size: 0.875rem;
+        font-weight: 600;
+        white-space: nowrap;
+        cursor: pointer;
+        user-select: none;
+        transition: background-color 150ms ease, border-color 150ms ease,
+          color 150ms ease;
+      }
+
+      .btn-primary {
+        background: var(--accent);
+        color: var(--accent-contrast);
+        border: 1px solid var(--accent);
+      }
+      .btn-primary:hover {
+        background: var(--accent-hover);
+        border-color: var(--accent-hover);
+      }
+
+      .btn-secondary {
+        background: var(--surface);
+        color: var(--text);
+        border: 1px solid var(--border-strong);
+      }
+      .btn-secondary:hover {
+        background: var(--surface-2);
+      }
+
+      /* Status badges — same tones as the console's StatusBadge */
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.15rem 0.55rem;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        white-space: nowrap;
+      }
+      .badge-live {
+        background: var(--badge-good-bg);
+        color: var(--badge-good-text);
+      }
+      .badge-soon {
+        background: var(--badge-warn-bg);
+        color: var(--badge-warn-text);
+      }
+
+      /* Header */
+      .site-header {
+        position: sticky;
+        top: 0;
+        background: color-mix(in srgb, var(--bg) 88%, transparent);
+        backdrop-filter: blur(8px);
+        border-bottom: 1px solid var(--border);
+        z-index: 10;
+      }
+
+      .site-header .container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 3.75rem;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+        font-size: 1rem;
+      }
+
+      .logomark {
+        display: grid;
+        place-items: center;
+        width: 1.9rem;
+        height: 1.9rem;
+        border-radius: var(--radius-sm);
+        background: var(--accent);
+        color: var(--accent-contrast);
+        font-size: 0.95rem;
+        font-weight: 700;
+      }
+
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+      }
+
+      /* Hero */
+      .hero {
+        padding: 6rem 0 4.5rem;
+        text-align: center;
+      }
+
+      .eyebrow {
+        display: inline-block;
+        padding: 0.3rem 0.75rem;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        background: var(--surface-2);
+        color: var(--text-muted);
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin-bottom: 1.5rem;
+      }
+
+      .hero h1 {
+        margin: 0 auto 1.25rem;
+        max-width: 44rem;
+        font-size: clamp(2.1rem, 5.5vw, 3.25rem);
+        font-weight: 650;
+        letter-spacing: -0.03em;
+        line-height: 1.12;
+      }
+
+      .hero p {
+        margin: 0 auto 2.25rem;
+        max-width: 36rem;
+        color: var(--text-muted);
+        font-size: 1.05rem;
+      }
+
+      .hero-actions {
+        display: flex;
+        justify-content: center;
+        gap: 0.75rem;
+        flex-wrap: wrap;
+      }
+
+      /* Section scaffolding */
+      section {
+        padding: 3.5rem 0;
+      }
+
+      .section-head {
+        max-width: 38rem;
+        margin: 0 auto 2.5rem;
+        text-align: center;
+      }
+
+      .section-head h2 {
+        margin: 0 0 0.6rem;
+        font-size: 1.6rem;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+
+      .section-head p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+      }
+
+      /* Pillars — the two things that set CompanyOS apart */
+      .pillars {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 1rem;
+      }
+
+      .pillar {
+        background: var(--surface);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius-xl);
+        padding: 2rem;
+      }
+
+      .pillar h3 {
+        margin: 0 0 0.6rem;
+        font-size: 1.15rem;
+        font-weight: 650;
+        letter-spacing: -0.015em;
+      }
+
+      .pillar p {
+        margin: 0 0 1.1rem;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+      }
+
+      .pillar ul {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+
+      .pillar li {
+        display: flex;
+        gap: 0.6rem;
+        align-items: baseline;
+        font-size: 0.875rem;
+        color: var(--text);
+      }
+
+      .pillar li::before {
+        content: "—";
+        color: var(--text-subtle);
+        flex-shrink: 0;
+      }
+
+      .pillar-icon {
+        display: grid;
+        place-items: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: var(--radius-md);
+        background: var(--accent-soft);
+        margin-bottom: 1.1rem;
+        font-size: 1.1rem;
+      }
+
+      /* Feature grid — ready + coming soon */
+      .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 1rem;
+      }
+
+      .feature-card {
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        padding: 1.4rem;
+      }
+
+      .feature-card-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        margin-bottom: 0.5rem;
+      }
+
+      .feature-card h3 {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 620;
+        letter-spacing: -0.01em;
+      }
+
+      .feature-card p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+      }
+
+      .feature-card .module-tag {
+        display: inline-block;
+        margin-top: 0.9rem;
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        color: var(--text-subtle);
+        background: var(--surface-2);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 0.15rem 0.45rem;
+      }
+
+      /* Contact */
+      .contact {
+        border-top: 1px solid var(--border);
+        padding: 5rem 0;
+        text-align: center;
+      }
+
+      .contact h2 {
+        margin: 0 0 0.75rem;
+        font-size: 1.6rem;
+        font-weight: 650;
+        letter-spacing: -0.02em;
+      }
+
+      .contact p {
+        margin: 0 auto 2rem;
+        max-width: 30rem;
+        color: var(--text-muted);
+        font-size: 0.95rem;
+      }
+
+      /* Footer */
+      .site-footer {
+        border-top: 1px solid var(--border);
+        padding: 1.75rem 0;
+      }
+
+      .site-footer .container {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        flex-wrap: wrap;
+        color: var(--text-subtle);
+        font-size: 0.8rem;
+      }
+
+      .site-footer a {
+        color: var(--text-muted);
+      }
+      .site-footer a:hover {
+        color: var(--text);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.001ms !important;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .hero {
+          padding: 4.5rem 0 3rem;
+        }
+        .header-actions .btn-secondary {
+          display: none;
+        }
+        .pillar {
+          padding: 1.5rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- ================================================================
+         EDIT THESE TWO LINKS BEFORE DEPLOYING:
+           1. Every href="https://app.example.com/login" → your deployed
+              CompanyOS operator console URL.
+           2. mailto:josh@aruspay.com.my → your preferred contact address.
+         ================================================================ -->
+
+    <header class="site-header">
+      <div class="container">
+        <a class="brand" href="#top" aria-label="CompanyOS home">
+          <span class="logomark" aria-hidden="true">C</span>
+          CompanyOS
+        </a>
+        <nav class="header-actions" aria-label="Primary">
+          <a class="btn btn-secondary" href="#contact">Contact us</a>
+          <a class="btn btn-primary" href="https://app.example.com/login">Log in</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="top">
+      <section class="hero">
+        <div class="container">
+          <span class="eyebrow">AI-agent-first · Built on Cloudflare</span>
+          <h1>One connected base for your whole company. AI as the backbone.</h1>
+          <p>
+            Finance, CRM, Support, Build and People live in a single normalized
+            database — every department and team works the same records, and an
+            AI agent layer runs the busywork underneath.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="https://app.example.com/login">Log in to console</a>
+            <a class="btn btn-secondary" href="#contact">Contact us</a>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="pillars-heading">
+        <div class="container">
+          <div class="section-head">
+            <h2 id="pillars-heading">Why one base, not five apps</h2>
+            <p>
+              Most companies stitch together an accounting app, a CRM, a
+              helpdesk and a project tracker. CompanyOS is built the other way
+              around.
+            </p>
+          </div>
+          <div class="pillars">
+            <div class="pillar">
+              <span class="pillar-icon" aria-hidden="true">⬡</span>
+              <h3>One connected base, across every department</h3>
+              <p>
+                A single record of truth shared by every team — departments are
+                a lens over the same data, never a silo with its own copy.
+              </p>
+              <ul>
+                <li>Sales and Support read the <em>same</em> customer — no sync, no drift</li>
+                <li>An invoice, its deal, and its tickets link natively in one database</li>
+                <li>Teams, reporting lines and departments map onto live module data</li>
+                <li>Management sees a cross-module overview, not four dashboards</li>
+              </ul>
+            </div>
+            <div class="pillar">
+              <span class="pillar-icon" aria-hidden="true">◎</span>
+              <h3>An AI layer as the operating backbone</h3>
+              <p>
+                Every business process is exposed through one normalized,
+                machine-readable API — so AI agents are the default operators,
+                and humans supervise from the console.
+              </p>
+              <ul>
+                <li>Autonomous agents follow up, chase and escalate on their own schedule</li>
+                <li>Every change flows through one event bus agents can react to</li>
+                <li>Collections agent watches overdue invoices and acts per customer</li>
+                <li>Full agent activity feed — every action visible and auditable</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="ready-heading">
+        <div class="container">
+          <div class="section-head">
+            <h2 id="ready-heading">Ready today</h2>
+            <p>Native modules, live now — one Worker, one database, one API.</p>
+          </div>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>Finance</h3>
+                <span class="badge badge-live">Live</span>
+              </div>
+              <p>Double-entry ledger, invoices, payments and quotes — balanced and append-only.</p>
+              <span class="module-tag">/v1/invoices</span>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>CRM</h3>
+                <span class="badge badge-live">Live</span>
+              </div>
+              <p>Customers, pipeline, deals and activities — shared with every other module.</p>
+              <span class="module-tag">/v1/deals</span>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>Support</h3>
+                <span class="badge badge-live">Live</span>
+              </div>
+              <p>Tickets with an explicit state machine, tied to the same customer record.</p>
+              <span class="module-tag">/v1/tickets</span>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>Build</h3>
+                <span class="badge badge-live">Live</span>
+              </div>
+              <p>Projects and issues, with webhook ingestion from JIRA, GitHub and Bitbucket.</p>
+              <span class="module-tag">/v1/issues</span>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>People</h3>
+                <span class="badge badge-live">Live</span>
+              </div>
+              <p>Employee directory, teams and reporting lines mapped to departments.</p>
+              <span class="module-tag">/v1/employees</span>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>Collections agent</h3>
+                <span class="badge badge-live">Live</span>
+              </div>
+              <p>An autonomous agent per customer that tracks overdue invoices and sends reminders.</p>
+              <span class="module-tag">durable object</span>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>Email via Google Workspace</h3>
+                <span class="badge badge-live">Live</span>
+              </div>
+              <p>Send from shared inboxes or as individual operators, straight from CompanyOS.</p>
+              <span class="module-tag">gmail</span>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>Multi-company identity</h3>
+                <span class="badge badge-live">Live</span>
+              </div>
+              <p>One login across workspaces — per-tenant users, roles and secure sessions.</p>
+              <span class="module-tag">workspaces</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section aria-labelledby="soon-heading">
+        <div class="container">
+          <div class="section-head">
+            <h2 id="soon-heading">Coming soon</h2>
+            <p>The AI backbone gets smarter — same base, more autonomy.</p>
+          </div>
+          <div class="feature-grid">
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>LLM-driven agents</h3>
+                <span class="badge badge-soon">Coming soon</span>
+              </div>
+              <p>Claude-powered risk assessment and per-customer message composition — context from deals, payments and history, not a fixed template.</p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>WhatsApp delivery</h3>
+                <span class="badge badge-soon">Coming soon</span>
+              </div>
+              <p>Reminders and follow-ups reach customers on WhatsApp as well as email.</p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>Contact enrichment</h3>
+                <span class="badge badge-soon">Coming soon</span>
+              </div>
+              <p>Apollo-powered lead import and enrichment flowing directly into the shared CRM.</p>
+            </div>
+            <div class="feature-card">
+              <div class="feature-card-head">
+                <h3>Cross-module insights</h3>
+                <span class="badge badge-soon">Coming soon</span>
+              </div>
+              <p>Because everything lives in one base, agents can answer questions that span finance, sales and support.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="contact" id="contact">
+        <div class="container">
+          <h2>Talk to us</h2>
+          <p>
+            Want a workspace for your company, or curious how agent-first
+            operations would work for your team? Drop us a line.
+          </p>
+          <a class="btn btn-primary" href="mailto:josh@aruspay.com.my">Contact us</a>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <span>© 2026 CompanyOS. All rights reserved.</span>
+        <a href="https://app.example.com/login">Operator login</a>
+      </div>
+    </footer>
+  </body>
+</html>
