@@ -28,7 +28,9 @@
     "GOOGLE_CLIENT_ID": "dev-google-client-id.apps.googleusercontent.com",
     "GOOGLE_CLIENT_SECRET": "dev-insecure-google-client-secret-change-me",
     "GOOGLE_TOKEN_ENCRYPTION_KEY": "Djm23rEsvOTDcIZMknQbqVoeemLHXElQa28DBkXD7ts=",
-    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
+    // Browser origins allowed to send credentialed requests: the production
+    // operator console first, localhost for a local console pointed at prod.
+    "ALLOWED_ORIGINS": "https://app.companyos.com.my,http://localhost:5173,http://127.0.0.1:5173"
   },
 
   // Cron triggers (Cron Triggers are available on the Workers Free plan):
