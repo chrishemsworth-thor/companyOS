@@ -44,7 +44,7 @@
       "binding": "DB",
       "database_name": "companyos-db",
       // Placeholder — replace with the real ID from `wrangler d1 create companyos-db`.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "417d1441-bcca-4f1d-a93e-25e05a45b024",
       "migrations_dir": "migrations"
     }
   ],
@@ -53,12 +53,12 @@
     {
       "binding": "CONFIG_CACHE",
       // Placeholder — replace with the real ID from `wrangler kv namespace create CONFIG_CACHE`.
-      "id": "00000000000000000000000000000000"
+      "id": "b8cbe62462e345af8eb26bb7f31905e2"
     },
     {
       "binding": "SESSIONS",
       // Placeholder — replace with the real ID from `wrangler kv namespace create SESSIONS`.
-      "id": "00000000000000000000000000000001"
+      "id": "3d426d0d4c314f79addd123ab52aba48"
     }
   ],
 

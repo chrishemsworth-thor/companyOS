@@ -1,82 +1,101 @@
 {
-  // CompanyOS — native modules on Cloudflare: gateway + event bus + agent runtime.
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "companyos",
-  "main": "src/index.ts",
-  "compatibility_date": "2025-04-01",
-  // nodejs_als enables node:async_hooks AsyncLocalStorage (request-scoped actor
-  // context for per-user event attribution) without the full nodejs_compat surface.
-  "compatibility_flags": ["nodejs_als"],
-  "observability": { "enabled": true },
-
-  // Dev-only defaults. SESSION_SECRET and PLATFORM_ADMIN_SECRET MUST be
-  // overridden in production via `wrangler secret put <NAME>` (a secret shadows
-  // these vars at runtime).
-  "vars": {
-    "SESSION_SECRET": "dev-insecure-session-secret-change-me",
-    "PLATFORM_ADMIN_SECRET": "dev-insecure-platform-admin-secret-change-me",
-    "WEBHOOK_MASTER_SECRET": "dev-insecure-webhook-master-secret-change-me",
-    // Google email integration — dev-only placeholders. In production set these
-    // via `wrangler secret put GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|
-    // GOOGLE_TOKEN_ENCRYPTION_KEY`. The encryption key must be base64 of 32
-    // random bytes (`head -c 32 /dev/urandom | base64`).
-    "GOOGLE_CLIENT_ID": "dev-google-client-id.apps.googleusercontent.com",
-    "GOOGLE_CLIENT_SECRET": "dev-insecure-google-client-secret-change-me",
-    "GOOGLE_TOKEN_ENCRYPTION_KEY": "Djm23rEsvOTDcIZMknQbqVoeemLHXElQa28DBkXD7ts=",
-    "ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
-  },
-
-  // Cron triggers:
-  //  - "0 1 * * *"     daily overdue/quote sweeps (marks past-due invoices,
-  //                    expires lapsed quotes, re-emits invoice.overdue).
-  //  - "*/5 * * * *"   Google inbound email sync (must match INBOX_SYNC_CRON
-  //                    in src/index.ts). Free plan supports Cron Triggers.
-  "triggers": { "crons": ["0 1 * * *", "*/5 * * * *"] },
-
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "companyos-db",
-      // Placeholder — replace with the real ID from `wrangler d1 create companyos-db`.
-      "database_id": "00000000-0000-0000-0000-000000000000",
-      "migrations_dir": "migrations"
-    }
-  ],
-
-  "kv_namespaces": [
-    {
-      "binding": "CONFIG_CACHE",
-      // Placeholder — replace with the real ID from `wrangler kv namespace create CONFIG_CACHE`.
-      "id": "00000000000000000000000000000000"
-    },
-    {
-      "binding": "SESSIONS",
-      // Placeholder — replace with the real ID from `wrangler kv namespace create SESSIONS`.
-      "id": "00000000000000000000000000000001"
-    }
-  ],
-
-  "queues": {
-    "producers": [
-      { "binding": "EVENTS", "queue": "companyos-events" }
-    ],
-    "consumers": [
-      {
-        "queue": "companyos-events",
-        "max_batch_size": 10,
-        "max_batch_timeout": 5,
-        "max_retries": 3,
-        "dead_letter_queue": "companyos-events-dlq"
-      }
-    ]
-  },
-
-  "durable_objects": {
-    "bindings": [
-      { "name": "COLLECTIONS_AGENT", "class_name": "CollectionsAgent" }
-    ]
-  },
-  "migrations": [
-    { "tag": "v1", "new_sqlite_classes": ["CollectionsAgent"] }
-  ]
+	// CompanyOS — native modules on Cloudflare: gateway + event bus + agent runtime.
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "companyos",
+	"main": "src/index.ts",
+	"compatibility_date": "2025-04-01",
+	// nodejs_als enables node:async_hooks AsyncLocalStorage (request-scoped actor
+	// context for per-user event attribution) without the full nodejs_compat surface.
+	"compatibility_flags": [
+		"nodejs_als"
+	],
+	"observability": {
+		"enabled": true
+	},
+	// Dev-only defaults. SESSION_SECRET and PLATFORM_ADMIN_SECRET MUST be
+	// overridden in production via `wrangler secret put <NAME>` (a secret shadows
+	// these vars at runtime).
+	"vars": {
+		"SESSION_SECRET": "dev-insecure-session-secret-change-me",
+		"PLATFORM_ADMIN_SECRET": "dev-insecure-platform-admin-secret-change-me",
+		"WEBHOOK_MASTER_SECRET": "dev-insecure-webhook-master-secret-change-me",
+		// Google email integration — dev-only placeholders. In production set these
+		// via `wrangler secret put GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|
+		// GOOGLE_TOKEN_ENCRYPTION_KEY`. The encryption key must be base64 of 32
+		// random bytes (`head -c 32 /dev/urandom | base64`).
+		"GOOGLE_CLIENT_ID": "dev-google-client-id.apps.googleusercontent.com",
+		"GOOGLE_CLIENT_SECRET": "dev-insecure-google-client-secret-change-me",
+		"GOOGLE_TOKEN_ENCRYPTION_KEY": "Djm23rEsvOTDcIZMknQbqVoeemLHXElQa28DBkXD7ts=",
+		"ALLOWED_ORIGINS": "http://localhost:5173,http://127.0.0.1:5173"
+	},
+	// Cron triggers:
+	//  - "0 1 * * *"     daily overdue/quote sweeps (marks past-due invoices,
+	//                    expires lapsed quotes, re-emits invoice.overdue).
+	//  - "*/5 * * * *"   Google inbound email sync (must match INBOX_SYNC_CRON
+	//                    in src/index.ts). Free plan supports Cron Triggers.
+	"triggers": {
+		"crons": [
+			"0 1 * * *",
+			"*/5 * * * *"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "companyos-db",
+			// Placeholder — replace with the real ID from `wrangler d1 create companyos-db`.
+			"database_id": "417d1441-bcca-4f1d-a93e-25e05a45b024",
+			"migrations_dir": "migrations"
+		},
+		{
+			"binding": "companyos_db",
+			"database_name": "companyos-db",
+			"database_id": "417d1441-bcca-4f1d-a93e-25e05a45b024"
+		}
+	],
+	"kv_namespaces": [
+		{
+			"binding": "CONFIG_CACHE",
+			// Placeholder — replace with the real ID from `wrangler kv namespace create CONFIG_CACHE`.
+			"id": "b8cbe62462e345af8eb26bb7f31905e2"
+		},
+		{
+			"binding": "SESSIONS",
+			// Placeholder — replace with the real ID from `wrangler kv namespace create SESSIONS`.
+			"id": "3d426d0d4c314f79addd123ab52aba48"
+		}
+	],
+	"queues": {
+		"producers": [
+			{
+				"binding": "EVENTS",
+				"queue": "companyos-events"
+			}
+		],
+		"consumers": [
+			{
+				"queue": "companyos-events",
+				"max_batch_size": 10,
+				"max_batch_timeout": 5,
+				"max_retries": 3,
+				"dead_letter_queue": "companyos-events-dlq"
+			}
+		]
+	},
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "COLLECTIONS_AGENT",
+				"class_name": "CollectionsAgent"
+			}
+		]
+	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_sqlite_classes": [
+				"CollectionsAgent"
+			]
+		}
+	]
 }
