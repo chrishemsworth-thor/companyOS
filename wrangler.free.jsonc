@@ -14,6 +14,13 @@
   "compatibility_flags": ["nodejs_als"],
   "observability": { "enabled": true },
 
+  // Production custom domain. Declared here so `wrangler deploy` preserves it —
+  // without this, deploys warn that the dashboard-attached domain differs from
+  // local config and would detach it on upload.
+  "routes": [
+    { "pattern": "api.companyos.com.my", "custom_domain": true }
+  ],
+
   // Dev-only defaults. SESSION_SECRET and PLATFORM_ADMIN_SECRET MUST be
   // overridden in production via `wrangler secret put <NAME>` (a secret shadows
   // these vars at runtime).

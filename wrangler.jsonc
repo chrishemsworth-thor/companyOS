@@ -9,6 +9,12 @@
   "compatibility_flags": ["nodejs_als"],
   "observability": { "enabled": true },
 
+  // Production custom domain (ignored by `wrangler dev`; kept in sync with
+  // wrangler.free.jsonc so a paid-plan deploy preserves the domain too).
+  "routes": [
+    { "pattern": "api.companyos.com.my", "custom_domain": true }
+  ],
+
   // Dev-only defaults. SESSION_SECRET and PLATFORM_ADMIN_SECRET MUST be
   // overridden in production via `wrangler secret put <NAME>` (a secret shadows
   // these vars at runtime).
