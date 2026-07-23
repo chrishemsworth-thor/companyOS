@@ -10,7 +10,17 @@ import {
 import { ApiClient, ApiError } from "../api/client";
 
 const STORAGE_BASE_URL = "companyos_base_url";
-export const DEFAULT_BASE_URL = "http://localhost:8787";
+
+/**
+ * Production builds pin the API origin at build time (VITE_API_BASE_URL) so
+ * operators never see or edit it; the login page then hides the field and any
+ * stale localStorage override is ignored. Dev builds leave it unset, keeping
+ * the editable field with the local-Worker default.
+ */
+const CONFIGURED_BASE_URL =
+  (import.meta.env.VITE_API_BASE_URL ?? "").trim().replace(/\/+$/, "") || null;
+export const BASE_URL_LOCKED = CONFIGURED_BASE_URL !== null;
+export const DEFAULT_BASE_URL = CONFIGURED_BASE_URL ?? "http://localhost:8787";
 
 export type AuthStatus = "loading" | "authenticated" | "anonymous";
 
@@ -57,8 +67,8 @@ async function postJson(baseUrl: string, path: string, body: unknown): Promise<R
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [baseUrl, setBaseUrlState] = useState<string>(
-    () => localStorage.getItem(STORAGE_BASE_URL) ?? DEFAULT_BASE_URL,
+  const [baseUrl, setBaseUrlState] = useState<string>(() =>
+    BASE_URL_LOCKED ? DEFAULT_BASE_URL : (localStorage.getItem(STORAGE_BASE_URL) ?? DEFAULT_BASE_URL),
   );
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -141,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const setBaseUrl = (url: string) => {
+    if (BASE_URL_LOCKED) return;
     localStorage.setItem(STORAGE_BASE_URL, url);
     setBaseUrlState(url);
   };

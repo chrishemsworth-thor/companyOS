@@ -124,8 +124,13 @@ Google accounts connected it's a no-op).
 
 ### 4.2 Operator console (UI)
 
+Bake the API origin into the build (`VITE_API_BASE_URL`) — the login page
+then hides the "API base URL" field entirely, so operators only ever see
+workspace/email/password:
+
 ```sh
-cd ui && npm install && npm run build
+cd ui && npm install
+VITE_API_BASE_URL=https://api.yourdomain.com npm run build
 npx wrangler pages deploy dist --project-name companyos-console
 ```
 
