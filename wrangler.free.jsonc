@@ -8,7 +8,7 @@
   // Deploy with:  npm run deploy:free
   // Keep the shared fields in sync with wrangler.jsonc when either changes.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "companyos",
+  "name": "companyos-backend",
   "main": "src/index.ts",
   "compatibility_date": "2025-04-01",
   "compatibility_flags": ["nodejs_als"],

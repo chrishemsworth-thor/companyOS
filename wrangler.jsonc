@@ -1,7 +1,7 @@
 {
   // CompanyOS — native modules on Cloudflare: gateway + event bus + agent runtime.
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "companyos",
+  "name": "companyos-backend",
   "main": "src/index.ts",
   "compatibility_date": "2025-04-01",
   // nodejs_als enables node:async_hooks AsyncLocalStorage (request-scoped actor
