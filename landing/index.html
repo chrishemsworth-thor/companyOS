@@ -570,17 +570,17 @@
       }
 
       .pillar li {
-        display: flex;
-        gap: 0.6rem;
-        align-items: baseline;
+        position: relative;
+        padding-left: 1.05rem;
         font-size: 0.875rem;
         color: var(--text);
       }
 
       .pillar li::before {
         content: "·";
+        position: absolute;
+        left: 0.15rem;
         color: var(--text-subtle);
-        flex-shrink: 0;
       }
 
       .pillar-icon {
