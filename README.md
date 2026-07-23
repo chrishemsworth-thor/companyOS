@@ -137,6 +137,10 @@ inventing data yourself.
 
 ## Deploying
 
+> **Our production deployment** (domains, secrets, runbooks, troubleshooting)
+> is documented in
+> [docs/production-deployment.md](docs/production-deployment.md).
+
 > **No Workers Paid plan?** Cloudflare Queues is the only paid-only piece of
 > the stack. The Worker runs without it — events dispatch inline instead of
 > through a queue. Deploy with `wrangler.free.jsonc` / `npm run deploy:free`;
