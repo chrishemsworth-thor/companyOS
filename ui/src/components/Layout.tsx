@@ -65,7 +65,7 @@ function Brand() {
 }
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
-  const { logout, baseUrl, user, tenant } = useAuth();
+  const { logout, user, tenant } = useAuth();
   // Sidebar is the department lens, filtered to what the current role may see.
   const visible = departmentsForRole(user?.role);
   const live = visible.filter((d) => d.status === "live");
@@ -150,19 +150,18 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
             <div className="truncate text-sm font-medium text-fg" title={user.email}>
               {user.email}
             </div>
-            <div className="truncate text-xs text-subtle" title={baseUrl}>
-              <span className="capitalize">{user.role}</span> · {baseUrl}
-            </div>
           </div>
         )}
-        <ThemeToggle />
-        <button
-          onClick={logout}
-          className="flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
-        >
-          <LogOut className="size-4" />
-          Sign out
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={logout}
+            className="flex flex-1 cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium text-muted transition-colors hover:bg-surface-2 hover:text-fg"
+          >
+            <LogOut className="size-4" />
+            Sign out
+          </button>
+          <ThemeToggle />
+        </div>
       </div>
     </div>
   );
