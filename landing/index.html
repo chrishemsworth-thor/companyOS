@@ -3,32 +3,22 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CompanyOS — One connected base for your whole company, with an AI backbone</title>
+    <title>CompanyOS | One connected base for your whole company, with an AI backbone</title>
     <meta
       name="description"
-      content="CompanyOS runs Finance, CRM, Support, Build and People on one normalized, machine-readable base — with an event bus and AI agents as the operating backbone."
+      content="CompanyOS runs Finance, CRM, Support, Build and People on one normalized, machine-readable base, with an event bus and AI agents as the operating backbone."
     />
     <link rel="canonical" href="https://companyos.com.my/" />
+    <meta name="theme-color" content="#ffffff" />
     <script>
-      // Mirror the app's pre-paint theme resolution (ui/index.html): stored
-      // preference wins, otherwise follow the OS. Same storage key as the
-      // operator console so the landing page and app never disagree.
-      (function () {
-        var stored = localStorage.getItem("companyos_theme");
-        var pref = stored === "light" || stored === "dark" ? stored : "system";
-        document.documentElement.dataset.theme =
-          pref === "system"
-            ? window.matchMedia("(prefers-color-scheme: dark)").matches
-              ? "dark"
-              : "light"
-            : pref;
-      })();
+      // Scroll-reveal elements start hidden only when JS is around to show them.
+      document.documentElement.classList.add("js");
     </script>
     <style>
       /* ------------------------------------------------------------------
-       * Design tokens — copied from ui/src/styles.css so the landing page
-       * matches the operator console exactly. Flat, monochrome, minimalist:
-       * borders carry separation; only floating layers cast shadows.
+       * Design tokens, copied from ui/src/styles.css (light palette) so the
+       * landing page matches the operator console exactly. Flat, monochrome,
+       * minimalist: borders carry separation; shadows only on hover lift.
        * ------------------------------------------------------------------ */
       :root {
         color-scheme: light;
@@ -47,8 +37,6 @@
         --accent-contrast: #ffffff;
         --accent-soft: #eef0f3;
 
-        --badge-neutral-bg: #eef0f3;
-        --badge-neutral-text: #45464d;
         --badge-good-bg: #e3f6ea;
         --badge-good-text: #1c7a3f;
         --badge-warn-bg: #fdf1da;
@@ -61,37 +49,14 @@
         --radius-lg: 14px;
         --radius-xl: 20px;
 
+        --lift: 0 12px 28px rgba(16, 24, 40, 0.09);
+
         --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
           Helvetica, Arial, sans-serif;
         --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
           monospace;
-      }
 
-      :root[data-theme="dark"] {
-        color-scheme: dark;
-
-        --bg: #0f1116;
-        --surface: #171a21;
-        --surface-2: #1e222b;
-        --border: #262b35;
-        --border-strong: #333a46;
-        --text: #e8eaed;
-        --text-muted: #9aa3b2;
-        --text-subtle: #6b7484;
-
-        --accent: #e8eaed;
-        --accent-hover: #ffffff;
-        --accent-contrast: #0f1116;
-        --accent-soft: #262b35;
-
-        --badge-neutral-bg: #2a2f3a;
-        --badge-neutral-text: #c7c8cf;
-        --badge-good-bg: #14311f;
-        --badge-good-text: #6fd68f;
-        --badge-warn-bg: #3a2c10;
-        --badge-warn-text: #e0ac4c;
-
-        --ring: rgba(232, 234, 237, 0.4);
+        --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
       }
 
       * {
@@ -111,6 +76,7 @@
         -webkit-font-smoothing: antialiased;
         text-rendering: optimizeLegibility;
         line-height: 1.5;
+        overflow-x: hidden;
       }
 
       a {
@@ -135,15 +101,14 @@
         padding: 0 1.5rem;
       }
 
-      /* Buttons — same recipe as the console's Button component:
-         primary = accent fill, secondary = surface + strong border. */
+      /* ---------------- Buttons, same recipe as the console -------------- */
       .btn {
         display: inline-flex;
         align-items: center;
         justify-content: center;
         gap: 0.5rem;
         height: 2.5rem;
-        padding: 0 1rem;
+        padding: 0 1.1rem;
         border-radius: var(--radius-md);
         font-family: inherit;
         font-size: 0.875rem;
@@ -152,7 +117,14 @@
         cursor: pointer;
         user-select: none;
         transition: background-color 150ms ease, border-color 150ms ease,
-          color 150ms ease;
+          color 150ms ease, transform 150ms var(--ease-out),
+          box-shadow 150ms ease;
+      }
+      .btn:hover {
+        transform: translateY(-1px);
+      }
+      .btn:active {
+        transform: translateY(0);
       }
 
       .btn-primary {
@@ -163,6 +135,7 @@
       .btn-primary:hover {
         background: var(--accent-hover);
         border-color: var(--accent-hover);
+        box-shadow: var(--lift);
       }
 
       .btn-secondary {
@@ -174,10 +147,11 @@
         background: var(--surface-2);
       }
 
-      /* Status badges — same tones as the console's StatusBadge */
+      /* ---------------- Status badges, console StatusBadge tones --------- */
       .badge {
         display: inline-flex;
         align-items: center;
+        gap: 0.35rem;
         padding: 0.15rem 0.55rem;
         border-radius: 999px;
         font-size: 0.68rem;
@@ -190,17 +164,36 @@
         background: var(--badge-good-bg);
         color: var(--badge-good-text);
       }
+      .badge-live::before {
+        content: "";
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        background: currentColor;
+        animation: blink 2.4s ease-in-out infinite;
+      }
       .badge-soon {
         background: var(--badge-warn-bg);
         color: var(--badge-warn-text);
       }
 
-      /* Header */
+      @keyframes blink {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.35;
+        }
+      }
+
+      /* ---------------- Header ------------------------------------------- */
       .site-header {
         position: sticky;
         top: 0;
-        background: color-mix(in srgb, var(--bg) 88%, transparent);
-        backdrop-filter: blur(8px);
+        background: color-mix(in srgb, var(--bg) 86%, transparent);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         border-bottom: 1px solid var(--border);
         z-index: 10;
       }
@@ -231,6 +224,10 @@
         color: var(--accent-contrast);
         font-size: 0.95rem;
         font-weight: 700;
+        transition: transform 300ms var(--ease-out);
+      }
+      .brand:hover .logomark {
+        transform: rotate(-6deg) scale(1.05);
       }
 
       .header-actions {
@@ -239,10 +236,36 @@
         gap: 0.6rem;
       }
 
-      /* Hero */
+      /* ---------------- Hero --------------------------------------------- */
       .hero {
-        padding: 6rem 0 4.5rem;
+        position: relative;
+        padding: 5.5rem 0 3rem;
         text-align: center;
+      }
+
+      /* Faint blueprint grid that fades toward the edges */
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image: linear-gradient(var(--border) 1px, transparent 1px),
+          linear-gradient(90deg, var(--border) 1px, transparent 1px);
+        background-size: 44px 44px;
+        -webkit-mask-image: radial-gradient(
+          ellipse 70% 65% at 50% 35%,
+          rgba(0, 0, 0, 0.55),
+          transparent 75%
+        );
+        mask-image: radial-gradient(
+          ellipse 70% 65% at 50% 35%,
+          rgba(0, 0, 0, 0.55),
+          transparent 75%
+        );
+        pointer-events: none;
+      }
+
+      .hero .container {
+        position: relative;
       }
 
       .eyebrow {
@@ -261,11 +284,11 @@
 
       .hero h1 {
         margin: 0 auto 1.25rem;
-        max-width: 44rem;
-        font-size: clamp(2.1rem, 5.5vw, 3.25rem);
+        max-width: 46rem;
+        font-size: clamp(2.1rem, 5.5vw, 3.4rem);
         font-weight: 650;
         letter-spacing: -0.03em;
-        line-height: 1.12;
+        line-height: 1.1;
       }
 
       .hero p {
@@ -282,9 +305,176 @@
         flex-wrap: wrap;
       }
 
-      /* Section scaffolding */
+      /* Staggered entrance for hero children */
+      .fade-up {
+        opacity: 0;
+        transform: translateY(18px);
+        animation: fade-up 700ms var(--ease-out) forwards;
+      }
+      .fade-up:nth-child(1) {
+        animation-delay: 60ms;
+      }
+      .fade-up:nth-child(2) {
+        animation-delay: 160ms;
+      }
+      .fade-up:nth-child(3) {
+        animation-delay: 260ms;
+      }
+      .fade-up:nth-child(4) {
+        animation-delay: 360ms;
+      }
+      .fade-up:nth-child(5) {
+        animation-delay: 480ms;
+      }
+
+      @keyframes fade-up {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* ---------------- Hero diagram ------------------------------------- */
+      .hero-visual {
+        margin: 3.5rem auto 0;
+        max-width: 760px;
+      }
+
+      .hero-visual svg {
+        width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      .diagram-pill {
+        fill: var(--surface);
+        stroke: var(--border-strong);
+      }
+      .diagram-pill-label {
+        fill: var(--text-muted);
+        font-family: var(--font-sans);
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .diagram-hub {
+        fill: var(--accent);
+      }
+      .diagram-hub-label {
+        fill: var(--accent-contrast);
+        font-family: var(--font-sans);
+        font-size: 14px;
+        font-weight: 650;
+        letter-spacing: -0.01em;
+      }
+      .diagram-ai {
+        fill: var(--accent-soft);
+        stroke: var(--border-strong);
+      }
+      .diagram-ai-label {
+        fill: var(--text);
+        font-family: var(--font-mono);
+        font-size: 12.5px;
+        font-weight: 600;
+      }
+      .diagram-wire {
+        fill: none;
+        stroke: var(--border-strong);
+        stroke-width: 1.5;
+        stroke-dasharray: 4 6;
+        stroke-linecap: round;
+        animation: wire-flow 1.6s linear infinite;
+      }
+      .diagram-wire-up {
+        animation-direction: reverse;
+      }
+      .diagram-dot {
+        fill: var(--accent);
+      }
+      .diagram-pulse {
+        fill: none;
+        stroke: var(--accent);
+        opacity: 0;
+        animation: pulse-ring 3.2s ease-out infinite;
+        transform-origin: center;
+        transform-box: fill-box;
+      }
+
+      @keyframes wire-flow {
+        to {
+          stroke-dashoffset: -20;
+        }
+      }
+
+      @keyframes pulse-ring {
+        0% {
+          opacity: 0.5;
+          transform: scale(1);
+        }
+        70%,
+        100% {
+          opacity: 0;
+          transform: scale(1.35);
+        }
+      }
+
+      /* ---------------- Endpoint marquee --------------------------------- */
+      .marquee {
+        border-top: 1px solid var(--border);
+        border-bottom: 1px solid var(--border);
+        background: var(--surface-2);
+        overflow: hidden;
+        padding: 0.8rem 0;
+        -webkit-mask-image: linear-gradient(
+          90deg,
+          transparent,
+          black 12%,
+          black 88%,
+          transparent
+        );
+        mask-image: linear-gradient(
+          90deg,
+          transparent,
+          black 12%,
+          black 88%,
+          transparent
+        );
+      }
+
+      .marquee-track {
+        display: flex;
+        gap: 0.75rem;
+        width: max-content;
+        animation: marquee 36s linear infinite;
+      }
+      .marquee:hover .marquee-track {
+        animation-play-state: paused;
+      }
+
+      .marquee .tag {
+        flex-shrink: 0;
+      }
+
+      @keyframes marquee {
+        to {
+          transform: translateX(-50%);
+        }
+      }
+
+      .tag {
+        display: inline-block;
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        color: var(--text-subtle);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 0.2rem 0.55rem;
+        white-space: nowrap;
+      }
+
+      /* ---------------- Section scaffolding ------------------------------ */
       section {
-        padding: 3.5rem 0;
+        padding: 4rem 0;
       }
 
       .section-head {
@@ -295,7 +485,7 @@
 
       .section-head h2 {
         margin: 0 0 0.6rem;
-        font-size: 1.6rem;
+        font-size: 1.7rem;
         font-weight: 650;
         letter-spacing: -0.02em;
       }
@@ -306,18 +496,48 @@
         font-size: 0.95rem;
       }
 
-      /* Pillars — the two things that set CompanyOS apart */
+      /* Scroll reveal: hidden only when JS is present to reveal it */
+      html.js .reveal {
+        opacity: 0;
+        transform: translateY(22px);
+        transition: opacity 650ms var(--ease-out), transform 650ms var(--ease-out);
+        transition-delay: var(--d, 0ms);
+      }
+      html.js .reveal.in {
+        opacity: 1;
+        transform: none;
+      }
+
+      /* ---------------- Pillars ------------------------------------------ */
       .pillars {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
         gap: 1rem;
       }
 
       .pillar {
+        position: relative;
+        overflow: hidden;
         background: var(--surface);
         border: 1px solid var(--border-strong);
         border-radius: var(--radius-xl);
         padding: 2rem;
+        transition: transform 300ms var(--ease-out), box-shadow 300ms ease;
+      }
+      .pillar:hover {
+        transform: translateY(-4px);
+        box-shadow: var(--lift);
+      }
+      .pillar::after {
+        content: "";
+        position: absolute;
+        top: -60px;
+        right: -60px;
+        width: 180px;
+        height: 180px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--accent-soft), transparent 70%);
+        pointer-events: none;
       }
 
       .pillar h3 {
@@ -327,7 +547,7 @@
         letter-spacing: -0.015em;
       }
 
-      .pillar p {
+      .pillar > p {
         margin: 0 0 1.1rem;
         color: var(--text-muted);
         font-size: 0.9rem;
@@ -351,7 +571,7 @@
       }
 
       .pillar li::before {
-        content: "—";
+        content: "·";
         color: var(--text-subtle);
         flex-shrink: 0;
       }
@@ -359,15 +579,19 @@
       .pillar-icon {
         display: grid;
         place-items: center;
-        width: 2.5rem;
-        height: 2.5rem;
+        width: 2.6rem;
+        height: 2.6rem;
         border-radius: var(--radius-md);
-        background: var(--accent-soft);
+        background: var(--accent);
+        color: var(--accent-contrast);
         margin-bottom: 1.1rem;
-        font-size: 1.1rem;
+      }
+      .pillar-icon svg {
+        width: 1.25rem;
+        height: 1.25rem;
       }
 
-      /* Feature grid — ready + coming soon */
+      /* ---------------- Feature grids ------------------------------------ */
       .feature-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -379,6 +603,13 @@
         border: 1px solid var(--border);
         border-radius: var(--radius-lg);
         padding: 1.4rem;
+        transition: transform 300ms var(--ease-out), box-shadow 300ms ease,
+          border-color 300ms ease;
+      }
+      .feature-card:hover {
+        transform: translateY(-4px);
+        border-color: var(--border-strong);
+        box-shadow: var(--lift);
       }
 
       .feature-card-head {
@@ -402,28 +633,35 @@
         font-size: 0.85rem;
       }
 
-      .feature-card .module-tag {
-        display: inline-block;
+      .feature-card .tag {
         margin-top: 0.9rem;
-        font-family: var(--font-mono);
-        font-size: 0.7rem;
-        color: var(--text-subtle);
-        background: var(--surface-2);
-        border: 1px solid var(--border);
-        border-radius: var(--radius-sm);
-        padding: 0.15rem 0.45rem;
       }
 
-      /* Contact */
+      /* ---------------- Contact ------------------------------------------ */
       .contact {
         border-top: 1px solid var(--border);
         padding: 5rem 0;
         text-align: center;
+        position: relative;
+      }
+      .contact::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(
+          ellipse 55% 70% at 50% 100%,
+          var(--accent-soft),
+          transparent 70%
+        );
+        pointer-events: none;
+      }
+      .contact .container {
+        position: relative;
       }
 
       .contact h2 {
         margin: 0 0 0.75rem;
-        font-size: 1.6rem;
+        font-size: 1.7rem;
         font-weight: 650;
         letter-spacing: -0.02em;
       }
@@ -435,7 +673,7 @@
         font-size: 0.95rem;
       }
 
-      /* Footer */
+      /* ---------------- Footer ------------------------------------------- */
       .site-footer {
         border-top: 1px solid var(--border);
         padding: 1.75rem 0;
@@ -458,6 +696,7 @@
         color: var(--text);
       }
 
+      /* ---------------- Motion preferences & small screens --------------- */
       @media (prefers-reduced-motion: reduce) {
         html {
           scroll-behavior: auto;
@@ -465,13 +704,26 @@
         *,
         *::before,
         *::after {
+          animation-duration: 0.001ms !important;
+          animation-iteration-count: 1 !important;
           transition-duration: 0.001ms !important;
+        }
+        .fade-up,
+        html.js .reveal {
+          opacity: 1;
+          transform: none;
+        }
+        .marquee-track {
+          animation: none;
+        }
+        .diagram-mover {
+          display: none;
         }
       }
 
       @media (max-width: 480px) {
         .hero {
-          padding: 4.5rem 0 3rem;
+          padding: 4rem 0 2.5rem;
         }
         .header-actions .btn-secondary {
           display: none;
@@ -485,7 +737,7 @@
   <body>
     <!-- Deployed at https://companyos.com.my/ · Log in buttons point at the
          operator console (https://console.companyos.com.my/login); contact
-         goes to josh@aruspay.com.my. -->
+         goes to hello@companyos.com.my. -->
 
     <header class="site-header">
       <div class="container">
@@ -503,58 +755,181 @@
     <main id="top">
       <section class="hero">
         <div class="container">
-          <span class="eyebrow">AI-agent-first · Built on Cloudflare</span>
-          <h1>One connected base for your whole company. AI as the backbone.</h1>
-          <p>
+          <span class="eyebrow fade-up">AI-agent-first · Built on Cloudflare</span>
+          <h1 class="fade-up">One connected base for your whole company. AI as the backbone.</h1>
+          <p class="fade-up">
             Finance, CRM, Support, Build and People live in a single normalized
-            database — every department and team works the same records, and an
-            AI agent layer runs the busywork underneath.
+            database, so every department and team works the same records while
+            an AI agent layer runs the busywork underneath.
           </p>
-          <div class="hero-actions">
+          <div class="hero-actions fade-up">
             <a class="btn btn-primary" href="https://console.companyos.com.my/login">Log in to console</a>
             <a class="btn btn-secondary" href="#contact">Contact us</a>
+          </div>
+
+          <div class="hero-visual fade-up" aria-hidden="true">
+            <svg viewBox="0 0 720 330" role="img" aria-label="Departments feeding one connected base, operated by an AI agent layer">
+              <!-- wires: department pills → hub -->
+              <path class="diagram-wire" d="M 90 52 C 90 100, 288 96, 288 138" />
+              <path class="diagram-wire" d="M 225 52 C 225 96, 324 92, 324 138" />
+              <path class="diagram-wire" d="M 360 52 L 360 138" />
+              <path class="diagram-wire" d="M 495 52 C 495 96, 396 92, 396 138" />
+              <path class="diagram-wire" d="M 630 52 C 630 100, 432 96, 432 138" />
+
+              <!-- wires: hub ↔ AI layer (data down, actions up) -->
+              <path class="diagram-wire" d="M 344 194 L 344 252" />
+              <path class="diagram-wire diagram-wire-up" d="M 376 194 L 376 252" />
+
+              <!-- department pills -->
+              <g>
+                <rect class="diagram-pill" x="35" y="22" width="110" height="30" rx="15" />
+                <text class="diagram-pill-label" x="90" y="41" text-anchor="middle">Finance</text>
+                <rect class="diagram-pill" x="170" y="22" width="110" height="30" rx="15" />
+                <text class="diagram-pill-label" x="225" y="41" text-anchor="middle">CRM</text>
+                <rect class="diagram-pill" x="305" y="22" width="110" height="30" rx="15" />
+                <text class="diagram-pill-label" x="360" y="41" text-anchor="middle">Support</text>
+                <rect class="diagram-pill" x="440" y="22" width="110" height="30" rx="15" />
+                <text class="diagram-pill-label" x="495" y="41" text-anchor="middle">Build</text>
+                <rect class="diagram-pill" x="575" y="22" width="110" height="30" rx="15" />
+                <text class="diagram-pill-label" x="630" y="41" text-anchor="middle">People</text>
+              </g>
+
+              <!-- hub -->
+              <rect class="diagram-pulse" x="248" y="138" width="224" height="56" rx="13" stroke-width="1.5" />
+              <rect class="diagram-hub" x="248" y="138" width="224" height="56" rx="13" />
+              <text class="diagram-hub-label" x="360" y="171" text-anchor="middle">One connected base</text>
+
+              <!-- AI layer -->
+              <rect class="diagram-ai" x="262" y="252" width="196" height="44" rx="22" />
+              <text class="diagram-ai-label" x="360" y="279" text-anchor="middle">◎ AI agent layer</text>
+
+              <!-- data packets travelling the wires -->
+              <g class="diagram-mover">
+                <circle class="diagram-dot" r="3.5">
+                  <animateMotion dur="3.2s" begin="0s" repeatCount="indefinite" path="M 90 52 C 90 100, 288 96, 288 138" />
+                </circle>
+                <circle class="diagram-dot" r="3.5">
+                  <animateMotion dur="3.2s" begin="0.6s" repeatCount="indefinite" path="M 225 52 C 225 96, 324 92, 324 138" />
+                </circle>
+                <circle class="diagram-dot" r="3.5">
+                  <animateMotion dur="3.2s" begin="1.2s" repeatCount="indefinite" path="M 360 52 L 360 138" />
+                </circle>
+                <circle class="diagram-dot" r="3.5">
+                  <animateMotion dur="3.2s" begin="1.8s" repeatCount="indefinite" path="M 495 52 C 495 96, 396 92, 396 138" />
+                </circle>
+                <circle class="diagram-dot" r="3.5">
+                  <animateMotion dur="3.2s" begin="2.4s" repeatCount="indefinite" path="M 630 52 C 630 100, 432 96, 432 138" />
+                </circle>
+                <circle class="diagram-dot" r="3.5">
+                  <animateMotion dur="2.4s" begin="0.4s" repeatCount="indefinite" path="M 344 194 L 344 252" />
+                </circle>
+                <circle class="diagram-dot" r="3.5">
+                  <animateMotion dur="2.4s" begin="1.6s" repeatCount="indefinite" path="M 376 252 L 376 194" />
+                </circle>
+              </g>
+            </svg>
           </div>
         </div>
       </section>
 
+      <div class="marquee" aria-hidden="true">
+        <div class="marquee-track">
+          <!-- list duplicated once for a seamless loop -->
+          <span class="tag">/v1/invoices</span>
+          <span class="tag">/v1/payments</span>
+          <span class="tag">/v1/ledger</span>
+          <span class="tag">/v1/customers</span>
+          <span class="tag">/v1/deals</span>
+          <span class="tag">/v1/activities</span>
+          <span class="tag">/v1/tickets</span>
+          <span class="tag">/v1/projects</span>
+          <span class="tag">/v1/issues</span>
+          <span class="tag">/v1/employees</span>
+          <span class="tag">/v1/quotes</span>
+          <span class="tag">/v1/events</span>
+          <span class="tag">/v1/invoices</span>
+          <span class="tag">/v1/payments</span>
+          <span class="tag">/v1/ledger</span>
+          <span class="tag">/v1/customers</span>
+          <span class="tag">/v1/deals</span>
+          <span class="tag">/v1/activities</span>
+          <span class="tag">/v1/tickets</span>
+          <span class="tag">/v1/projects</span>
+          <span class="tag">/v1/issues</span>
+          <span class="tag">/v1/employees</span>
+          <span class="tag">/v1/quotes</span>
+          <span class="tag">/v1/events</span>
+        </div>
+      </div>
+
       <section aria-labelledby="pillars-heading">
         <div class="container">
-          <div class="section-head">
+          <div class="section-head reveal">
             <h2 id="pillars-heading">Why one base, not five apps</h2>
             <p>
               Most companies stitch together an accounting app, a CRM, a
               helpdesk and a project tracker. CompanyOS is built the other way
-              around.
+              around: one base, one AI layer, one console for the whole team.
             </p>
           </div>
           <div class="pillars">
-            <div class="pillar">
-              <span class="pillar-icon" aria-hidden="true">⬡</span>
+            <div class="pillar reveal">
+              <span class="pillar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 2 L21 7 L21 17 L12 22 L3 17 L3 7 Z" />
+                  <path d="M12 22 L12 12 M3 7 L12 12 L21 7" />
+                </svg>
+              </span>
               <h3>One connected base, across every department</h3>
               <p>
-                A single record of truth shared by every team — departments are
+                A single record of truth shared by every team. Departments are
                 a lens over the same data, never a silo with its own copy.
               </p>
               <ul>
-                <li>Sales and Support read the <em>same</em> customer — no sync, no drift</li>
+                <li>Sales and Support read the <em>same</em> customer, with no sync and no drift</li>
                 <li>An invoice, its deal, and its tickets link natively in one database</li>
                 <li>Teams, reporting lines and departments map onto live module data</li>
                 <li>Management sees a cross-module overview, not four dashboards</li>
               </ul>
             </div>
-            <div class="pillar">
-              <span class="pillar-icon" aria-hidden="true">◎</span>
+            <div class="pillar reveal" style="--d: 120ms">
+              <span class="pillar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="12" cy="12" r="3" />
+                  <circle cx="12" cy="12" r="9" stroke-dasharray="3 4" />
+                  <path d="M12 3 L12 5 M12 19 L12 21 M3 12 L5 12 M19 12 L21 12" />
+                </svg>
+              </span>
               <h3>An AI layer as the operating backbone</h3>
               <p>
                 Every business process is exposed through one normalized,
-                machine-readable API — so AI agents are the default operators,
+                machine-readable API, so AI agents are the default operators
                 and humans supervise from the console.
               </p>
               <ul>
                 <li>Autonomous agents follow up, chase and escalate on their own schedule</li>
                 <li>Every change flows through one event bus agents can react to</li>
                 <li>Collections agent watches overdue invoices and acts per customer</li>
-                <li>Full agent activity feed — every action visible and auditable</li>
+                <li>A full agent activity feed keeps every action visible and auditable</li>
+              </ul>
+            </div>
+            <div class="pillar reveal" style="--d: 240ms">
+              <span class="pillar-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="4" width="18" height="13" rx="2" />
+                  <path d="M8 21 L16 21 M12 17 L12 21 M7 9 L10 12 L7 15 M12.5 15 L17 15" />
+                </svg>
+              </span>
+              <h3>One console, the whole team's command centre</h3>
+              <p>
+                The operator console is the one place your entire team stands
+                up in: every module, every department, one login.
+              </p>
+              <ul>
+                <li>Finance, sales, support, build and people all work in the same console</li>
+                <li>Department views give each team its own lens without switching apps</li>
+                <li>Roles and per-tenant users control what each operator can see and do</li>
+                <li>A live dashboard and agent feed put oversight in one place</li>
               </ul>
             </div>
           </div>
@@ -563,74 +938,74 @@
 
       <section aria-labelledby="ready-heading">
         <div class="container">
-          <div class="section-head">
+          <div class="section-head reveal">
             <h2 id="ready-heading">Ready today</h2>
-            <p>Native modules, live now — one Worker, one database, one API.</p>
+            <p>Native modules, live now: one Worker, one database, one API.</p>
           </div>
           <div class="feature-grid">
-            <div class="feature-card">
+            <div class="feature-card reveal">
               <div class="feature-card-head">
                 <h3>Finance</h3>
                 <span class="badge badge-live">Live</span>
               </div>
-              <p>Double-entry ledger, invoices, payments and quotes — balanced and append-only.</p>
-              <span class="module-tag">/v1/invoices</span>
+              <p>Double-entry ledger, invoices, payments and quotes, kept balanced and append-only.</p>
+              <span class="tag">/v1/invoices</span>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 80ms">
               <div class="feature-card-head">
                 <h3>CRM</h3>
                 <span class="badge badge-live">Live</span>
               </div>
-              <p>Customers, pipeline, deals and activities — shared with every other module.</p>
-              <span class="module-tag">/v1/deals</span>
+              <p>Customers, pipeline, deals and activities, shared with every other module.</p>
+              <span class="tag">/v1/deals</span>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 160ms">
               <div class="feature-card-head">
                 <h3>Support</h3>
                 <span class="badge badge-live">Live</span>
               </div>
               <p>Tickets with an explicit state machine, tied to the same customer record.</p>
-              <span class="module-tag">/v1/tickets</span>
+              <span class="tag">/v1/tickets</span>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 240ms">
               <div class="feature-card-head">
                 <h3>Build</h3>
                 <span class="badge badge-live">Live</span>
               </div>
               <p>Projects and issues, with webhook ingestion from JIRA, GitHub and Bitbucket.</p>
-              <span class="module-tag">/v1/issues</span>
+              <span class="tag">/v1/issues</span>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal">
               <div class="feature-card-head">
                 <h3>People</h3>
                 <span class="badge badge-live">Live</span>
               </div>
               <p>Employee directory, teams and reporting lines mapped to departments.</p>
-              <span class="module-tag">/v1/employees</span>
+              <span class="tag">/v1/employees</span>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 80ms">
               <div class="feature-card-head">
                 <h3>Collections agent</h3>
                 <span class="badge badge-live">Live</span>
               </div>
               <p>An autonomous agent per customer that tracks overdue invoices and sends reminders.</p>
-              <span class="module-tag">durable object</span>
+              <span class="tag">durable object</span>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 160ms">
               <div class="feature-card-head">
                 <h3>Email via Google Workspace</h3>
                 <span class="badge badge-live">Live</span>
               </div>
               <p>Send from shared inboxes or as individual operators, straight from CompanyOS.</p>
-              <span class="module-tag">gmail</span>
+              <span class="tag">gmail</span>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 240ms">
               <div class="feature-card-head">
                 <h3>Multi-company identity</h3>
                 <span class="badge badge-live">Live</span>
               </div>
-              <p>One login across workspaces — per-tenant users, roles and secure sessions.</p>
-              <span class="module-tag">workspaces</span>
+              <p>One login across workspaces, with per-tenant users, roles and secure sessions.</p>
+              <span class="tag">workspaces</span>
             </div>
           </div>
         </div>
@@ -638,33 +1013,33 @@
 
       <section aria-labelledby="soon-heading">
         <div class="container">
-          <div class="section-head">
+          <div class="section-head reveal">
             <h2 id="soon-heading">Coming soon</h2>
-            <p>The AI backbone gets smarter — same base, more autonomy.</p>
+            <p>The AI backbone gets smarter: same base, more autonomy.</p>
           </div>
           <div class="feature-grid">
-            <div class="feature-card">
+            <div class="feature-card reveal">
               <div class="feature-card-head">
                 <h3>LLM-driven agents</h3>
                 <span class="badge badge-soon">Coming soon</span>
               </div>
-              <p>Claude-powered risk assessment and per-customer message composition — context from deals, payments and history, not a fixed template.</p>
+              <p>Claude-powered risk assessment and per-customer message composition, using context from deals, payments and history instead of a fixed template.</p>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 80ms">
               <div class="feature-card-head">
                 <h3>WhatsApp delivery</h3>
                 <span class="badge badge-soon">Coming soon</span>
               </div>
               <p>Reminders and follow-ups reach customers on WhatsApp as well as email.</p>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 160ms">
               <div class="feature-card-head">
                 <h3>Contact enrichment</h3>
                 <span class="badge badge-soon">Coming soon</span>
               </div>
               <p>Apollo-powered lead import and enrichment flowing directly into the shared CRM.</p>
             </div>
-            <div class="feature-card">
+            <div class="feature-card reveal" style="--d: 240ms">
               <div class="feature-card-head">
                 <h3>Cross-module insights</h3>
                 <span class="badge badge-soon">Coming soon</span>
@@ -677,12 +1052,14 @@
 
       <section class="contact" id="contact">
         <div class="container">
-          <h2>Talk to us</h2>
-          <p>
-            Want a workspace for your company, or curious how agent-first
-            operations would work for your team? Drop us a line.
-          </p>
-          <a class="btn btn-primary" href="mailto:josh@aruspay.com.my">Contact us</a>
+          <div class="reveal">
+            <h2>Talk to us</h2>
+            <p>
+              Want a workspace for your company, or curious how agent-first
+              operations would work for your team? Drop us a line.
+            </p>
+            <a class="btn btn-primary" href="mailto:hello@companyos.com.my">Contact us</a>
+          </div>
         </div>
       </section>
     </main>
@@ -693,5 +1070,33 @@
         <a href="https://console.companyos.com.my/login">Operator login</a>
       </div>
     </footer>
+
+    <script>
+      // Scroll reveal: fade sections/cards up as they enter the viewport.
+      (function () {
+        var reduced = window.matchMedia("(prefers-reduced-motion: reduce)");
+        var items = document.querySelectorAll(".reveal");
+        if (reduced.matches || !("IntersectionObserver" in window)) {
+          items.forEach(function (el) {
+            el.classList.add("in");
+          });
+          return;
+        }
+        var io = new IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              if (entry.isIntersecting) {
+                entry.target.classList.add("in");
+                io.unobserve(entry.target);
+              }
+            });
+          },
+          { threshold: 0.15, rootMargin: "0px 0px -40px 0px" },
+        );
+        items.forEach(function (el) {
+          io.observe(el);
+        });
+      })();
+    </script>
   </body>
 </html>
