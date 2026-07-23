@@ -15,9 +15,13 @@
     { "pattern": "api.companyos.com.my", "custom_domain": true }
   ],
 
-  // Dev-only defaults. SESSION_SECRET and PLATFORM_ADMIN_SECRET MUST be
-  // overridden in production via `wrangler secret put <NAME>` (a secret shadows
-  // these vars at runtime).
+  // Dev/test-only placeholder secrets, consumed by `wrangler dev` and the
+  // vitest workers pool (vitest.config.ts points at this file). They are
+  // deliberately absent from wrangler.free.jsonc: deploying a var with a
+  // secret's name blocks `wrangler secret put` (code 10053) and would revert
+  // the secret to plain text on the next deploy. If this config is ever used
+  // to deploy (paid plan, §9 of docs/production-deployment.md), strip these
+  // vars first.
   "vars": {
     "SESSION_SECRET": "dev-insecure-session-secret-change-me",
     "PLATFORM_ADMIN_SECRET": "dev-insecure-platform-admin-secret-change-me",

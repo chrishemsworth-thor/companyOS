@@ -21,20 +21,15 @@
     { "pattern": "api.companyos.com.my", "custom_domain": true }
   ],
 
-  // Dev-only defaults. SESSION_SECRET and PLATFORM_ADMIN_SECRET MUST be
-  // overridden in production via `wrangler secret put <NAME>` (a secret shadows
-  // these vars at runtime).
+  // Plain-text config only. Secret-named vars (SESSION_SECRET,
+  // PLATFORM_ADMIN_SECRET, WEBHOOK_MASTER_SECRET, GOOGLE_*) must NOT appear
+  // here: secrets and vars share one binding namespace, so deploying a var
+  // with a secret's name blocks `wrangler secret put <NAME>` ("Binding name
+  // already in use", code 10053) and would revert the secret to plain text on
+  // the next deploy. Set them with `npx wrangler secret put <NAME>` after
+  // deploying (docs/production-deployment.md §3). Dev placeholders live in
+  // wrangler.jsonc, which is never deployed to production.
   "vars": {
-    "SESSION_SECRET": "dev-insecure-session-secret-change-me",
-    "PLATFORM_ADMIN_SECRET": "dev-insecure-platform-admin-secret-change-me",
-    "WEBHOOK_MASTER_SECRET": "dev-insecure-webhook-master-secret-change-me",
-    // Google email integration — dev-only placeholders. In production set these
-    // via `wrangler secret put GOOGLE_CLIENT_ID|GOOGLE_CLIENT_SECRET|
-    // GOOGLE_TOKEN_ENCRYPTION_KEY`. The encryption key must be base64 of 32
-    // random bytes (`head -c 32 /dev/urandom | base64`).
-    "GOOGLE_CLIENT_ID": "dev-google-client-id.apps.googleusercontent.com",
-    "GOOGLE_CLIENT_SECRET": "dev-insecure-google-client-secret-change-me",
-    "GOOGLE_TOKEN_ENCRYPTION_KEY": "Djm23rEsvOTDcIZMknQbqVoeemLHXElQa28DBkXD7ts=",
     // Browser origins allowed to send credentialed requests: the production
     // operator console first, localhost for a local console pointed at prod.
     "ALLOWED_ORIGINS": "https://console.companyos.com.my,http://localhost:5173,http://127.0.0.1:5173"

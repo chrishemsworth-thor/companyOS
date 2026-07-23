@@ -36,18 +36,28 @@ Constraints that shape this layout:
   deploy:free`). Carries the real D1/KV IDs, cron triggers, and
   `ALLOWED_ORIGINS`. No `queues` block — that absence is what enables
   queue-less mode.
-- **`wrangler.jsonc`** — identical plus the `queues` block; used by local
-  dev (`npm run dev`) and the test suite, and becomes the deploy config if
-  we ever move to the paid plan. **Keep the two in sync** when changing
-  vars, bindings, or crons.
+- **`wrangler.jsonc`** — identical plus the `queues` block and dev-placeholder
+  secret vars; used by local dev (`npm run dev`) and the test suite, and
+  becomes the deploy config if we ever move to the paid plan (strip the
+  placeholder secret vars first — see §3). **Keep the two in sync** when
+  changing vars, bindings, or crons, except for those two deliberate
+  differences.
 - **`ui/`** — the console; the API origin is baked in at build time via
   `VITE_API_BASE_URL` (login page hides the base-URL field entirely).
 
 ## 3. Secrets
 
 Set with `npx wrangler secret put <NAME>` from the repo root (they attach to
-the worker name `companyos-backend`, shared by both configs). Secrets shadow the
-dev-placeholder `vars` in the wrangler configs at runtime.
+the worker name `companyos-backend`). Secrets and plain-text `vars` share one
+binding namespace, so `wrangler.free.jsonc` deliberately defines **no** vars
+with these names — a deployed var with the same name makes `secret put` fail
+with *"Binding name 'X' already in use"* (code 10053), and a later deploy
+would revert the secret to the plain-text placeholder. The dev placeholders
+live only in `wrangler.jsonc`, which serves local dev and tests.
+
+Order matters on a fresh setup: `npm run deploy:free` first, then set the
+secrets immediately — until `SESSION_SECRET` is set, logins fail, and the
+admin/webhook routes fail closed with 503.
 
 | Secret | Required | Purpose |
 |---|---|---|
@@ -169,6 +179,7 @@ This buys retries + a dead-letter queue for event processing
 | Login `401 invalid_credentials` for a real user | Wrong workspace slug (unknown workspace intentionally reports as bad credentials to prevent tenant enumeration). |
 | "Could not reach …" naming a URL with a path | Stale/typo'd base URL — production builds pin it (§5), so rebuild with the right `VITE_API_BASE_URL`. |
 | `/admin/tenants` returns 503 | `PLATFORM_ADMIN_SECRET` unset on the Worker (the route fails closed). |
+| `wrangler secret put` fails: *"Binding name 'X' already in use"* (code 10053) | The worker has a deployed plain-text var with that name (e.g. from an old config that carried placeholder secrets in `vars`). Remove it from the deploy config, `npm run deploy:free`, then re-run `secret put` right away. |
 | Google connect flow errors at Google | Placeholder `GOOGLE_*` secrets, or the callback URL isn't registered on the OAuth client → §3. |
 | Reminder emails/WhatsApp not sending | No provider secret and/or no enabled per-tenant `delivery_config` row — without them delivery logs to console only. |
 
