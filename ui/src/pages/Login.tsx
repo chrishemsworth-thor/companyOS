@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
 import { BASE_URL_LOCKED, useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
@@ -116,6 +116,12 @@ export function Login() {
           <Button type="submit" variant="primary" loading={busy} className="mt-1 w-full">
             {busy ? "Signing in…" : "Sign in"}
           </Button>
+
+          <p className="m-0 text-center text-sm">
+            <Link to="/forgot-password" className="text-accent">
+              Forgot password?
+            </Link>
+          </p>
 
           <p className="m-0 text-center text-xs leading-relaxed text-subtle">
             Your session is kept in a secure, HttpOnly cookie — the tenant API key never touches the

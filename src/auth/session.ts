@@ -129,6 +129,28 @@ export async function revokeSession(env: Env, cookieValue: string): Promise<void
     .run();
 }
 
+/**
+ * Revoke every live session a user holds — used after a password reset, which
+ * treats the old credential as potentially compromised. KV keys can't be
+ * enumerated, so the D1 sessions table (the listable source of truth) drives
+ * the KV deletions.
+ */
+export async function revokeAllUserSessions(env: Env, userId: string): Promise<void> {
+  const { results } = await env.DB.prepare(
+    "SELECT session_hash FROM sessions WHERE user_id = ? AND revoked_at IS NULL",
+  )
+    .bind(userId)
+    .all<{ session_hash: string }>();
+  for (const row of results) {
+    await env.SESSIONS.delete(`session:${row.session_hash}`);
+  }
+  await env.DB.prepare(
+    "UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL",
+  )
+    .bind(new Date().toISOString(), userId)
+    .run();
+}
+
 /** Read the session cookie out of a request's Cookie header. */
 export function readSessionCookie(req: Request): string | null {
   const header = req.headers.get("Cookie");

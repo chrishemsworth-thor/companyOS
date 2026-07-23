@@ -79,9 +79,15 @@ Open **http://localhost:5173** and sign in with the seeded operator
 
 - **Login / session** — you sign in with email + password; the tenant API key
   never touches the browser. "Sign out" clears the session.
-- **Users** (admin-only nav item) — create an operator, set a role to
-  `readonly`, sign in as them in a private window, and confirm writes are blocked
-  and the Users page returns 403.
+- **Users** (admin-only nav item) — create an operator (no password field:
+  the server issues a single-use invite link; with no email transport
+  configured locally the modal shows the copyable URL and the Worker logs an
+  `[email:console]` line). Open the invite link in a private window, set a
+  password, and you land signed in. Then set a role to `readonly` and confirm
+  writes are blocked and the Users page returns 403.
+- **Forgot / reset password** — "Forgot password?" on the login page; the
+  reset link appears in the Worker log (console email provider). The reset
+  revokes every session for that user.
 - **Dashboard** — the KPI tiles and the AR-aging table are served by
   `/v1/insights/summary` and `/v1/insights/ar-aging` (server-side aggregates).
 - **Ledger** — the *Journal entries* table; open an entry → **Reverse entry**

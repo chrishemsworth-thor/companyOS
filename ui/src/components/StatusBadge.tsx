@@ -17,6 +17,7 @@ const TONE_BY_STATUS: Record<string, Tone> = {
   qualified: "warn",
   converted: "good",
   active: "good",
+  invited: "warn",
   archived: "neutral",
   todo: "neutral",
   in_progress: "warn",

@@ -7,18 +7,33 @@ import { DataTable } from "../components/DataTable";
 import { StatusBadge } from "../components/StatusBadge";
 import { PageHeader } from "../components/PageHeader";
 import { Button } from "../components/Button";
+import { Modal } from "../components/Modal";
+import { ModalActions } from "../components/ModalActions";
+import { InvitePanel, type InviteInfo } from "../components/InvitePanel";
 import { UserFormModal, type AdminUser } from "../components/modals/UserFormModal";
+import { useApiMutation } from "../hooks/useApiMutation";
 import { formatDate } from "../lib/format";
 
 export function Users() {
   const { client, user } = useAuth();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
+  const [resent, setResent] = useState<{ email: string; invite: InviteInfo } | null>(null);
 
   const query = useQuery({
     queryKey: ["users"],
     queryFn: () => client!.get<{ users: AdminUser[] }>("/v1/users"),
     enabled: !!client && user?.role === "admin",
+  });
+
+  const resend = useApiMutation({
+    mutationFn: (apiClient, target: AdminUser) =>
+      apiClient
+        .post<{ invite: InviteInfo }>(`/v1/users/${target.user_id}/resend-invite`)
+        .then((res) => ({ email: target.email, invite: res.invite })),
+    invalidates: () => [["users"]],
+    onSuccess: (data) => setResent(data),
+    errorTitle: "Could not resend invite",
   });
 
   if (user?.role !== "admin") {
@@ -39,6 +54,16 @@ export function Users() {
       </PageHeader>
       {creating && <UserFormModal onClose={() => setCreating(false)} />}
       {editing && <UserFormModal existing={editing} onClose={() => setEditing(null)} />}
+      {resent && (
+        <Modal title={`Invite ${resent.email}`} onClose={() => setResent(null)}>
+          <InvitePanel email={resent.email} invite={resent.invite} />
+          <ModalActions>
+            <Button type="button" variant="primary" onClick={() => setResent(null)}>
+              Done
+            </Button>
+          </ModalActions>
+        </Modal>
+      )}
       {query.isLoading && <LoadingState />}
       {query.error && <ErrorState error={query.error} />}
       {query.data && (
@@ -55,9 +80,21 @@ export function Users() {
               header: "",
               align: "right",
               render: (r) => (
-                <Button size="sm" variant="ghost" onClick={() => setEditing(r)}>
-                  Edit
-                </Button>
+                <span className="inline-flex gap-1">
+                  {r.status === "invited" && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={resend.isPending && resend.variables?.user_id === r.user_id}
+                      onClick={() => resend.mutate(r)}
+                    >
+                      Resend invite
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(r)}>
+                    Edit
+                  </Button>
+                </span>
               ),
             },
           ]}

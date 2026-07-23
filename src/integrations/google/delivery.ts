@@ -1,5 +1,10 @@
 import type { Env } from "../../env";
-import type { DeliveryProvider, ReminderRequest } from "../../delivery/types";
+import type {
+  DeliveryProvider,
+  EmailCapableProvider,
+  EmailMessage,
+  ReminderRequest,
+} from "../../delivery/types";
 import { getAccessToken } from "./tokens";
 import { sendGmailMessage } from "./gmail-client";
 import type { GoogleAccount } from "./types";
@@ -14,7 +19,7 @@ import type { GoogleAccount } from "./types";
  * authenticated account (or its aliases), so the tenant's configured
  * from_address is intentionally ignored here.
  */
-export class GmailReminderAdapter implements DeliveryProvider {
+export class GmailDeliveryAdapter implements DeliveryProvider, EmailCapableProvider {
   readonly name = "google" as const;
 
   constructor(
@@ -23,13 +28,26 @@ export class GmailReminderAdapter implements DeliveryProvider {
   ) {}
 
   async send(req: ReminderRequest): Promise<{ delivery_ref: string }> {
+    return this.sendEmail({
+      to: req.to,
+      from: this.account.google_email,
+      subject: `Payment reminder — invoice ${req.invoice_id}`,
+      text: req.message,
+    });
+  }
+
+  async sendEmail(msg: EmailMessage): Promise<{ delivery_ref: string }> {
     const accessToken = await getAccessToken(this.env, this.account);
     const { id } = await sendGmailMessage(accessToken, {
       from: this.account.google_email,
-      to: [req.to],
-      subject: `Payment reminder — invoice ${req.invoice_id}`,
-      bodyText: req.message,
+      to: [msg.to],
+      subject: msg.subject,
+      bodyText: msg.text,
+      bodyHtml: msg.html,
     });
     return { delivery_ref: id };
   }
 }
+
+/** @deprecated Renamed to GmailDeliveryAdapter; kept for existing importers. */
+export const GmailReminderAdapter = GmailDeliveryAdapter;

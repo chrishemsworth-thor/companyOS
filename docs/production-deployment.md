@@ -55,7 +55,7 @@ dev-placeholder `vars` in the wrangler configs at runtime.
 | `PLATFORM_ADMIN_SECRET` | **yes** | Bearer token guarding `/admin/tenants` company provisioning. Placeholder value = anyone can mint companies. |
 | `WEBHOOK_MASTER_SECRET` | if using JIRA/GitHub/Bitbucket webhook ingestion | Derives per-source webhook signing secrets. |
 | `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`) | optional | LLM-driven collections decisions; without it the agent uses the deterministic fallback. |
-| `RESEND_API_KEY` | optional | Real email delivery for reminders. |
+| `RESEND_API_KEY` | optional | Real email delivery (invoice reminders, user invites, password resets). Without it, sends log to the console. |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | optional | WhatsApp delivery. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_TOKEN_ENCRYPTION_KEY` | optional | Gmail send-as + inbox sync ([modules/google.md](modules/google.md)). Encryption key: `head -c 32 /dev/urandom \| base64`. Register `https://api.companyos.com.my/oauth/google/callback` on the OAuth client. |
 
@@ -63,6 +63,26 @@ Generate random secrets with `openssl rand -base64 32`. Rotating
 `SESSION_SECRET` signs everyone out (they just log back in); rotating
 `PLATFORM_ADMIN_SECRET` only changes the bearer token for future
 provisioning calls. Tenant API keys are unaffected by either.
+
+### Transactional email (invites / password resets)
+
+System email (user invites, password resets) sends whenever a transport is
+configured — it does **not** require the per-tenant `delivery_config` opt-in,
+which only gates customer-facing mail (reminders). For production:
+
+- `RESEND_API_KEY` — the platform Resend key (domain `companyos.com.my`
+  must be verified in Resend).
+- `SYSTEM_FROM_ADDRESS` var — the sender identity for system mail; set
+  `CompanyOS <hello@companyos.com.my>` (must be on the verified domain;
+  make sure the mailbox can receive replies).
+- `CONSOLE_BASE_URL` var — the public console origin used to build the
+  links inside invite/reset emails, e.g. `https://console.companyos.com.my`
+  (falls back to the first `ALLOWED_ORIGINS` entry when unset).
+
+The `/v1/auth/password/*` and `/v1/auth/invite/*` endpoints carry KV-based
+best-effort rate limits (KV is eventually consistent). Back them with a
+Cloudflare WAF rate-limiting rule on `/v1/auth/*` as the hard production
+backstop.
 
 ## 4. Deploying the API (Worker)
 
