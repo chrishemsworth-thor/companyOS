@@ -32,7 +32,14 @@ npm run seed:sample -- --api-key <printed_api_key>   # optional: populate sample
 
 Sign in with the operator email + password that `seed:local` prints (the
 base URL field defaults to `http://localhost:8787`, override it if your
-Worker runs elsewhere). `seed:sample` gives you something to look at immediately —
+Worker runs elsewhere).
+
+For production builds, pin the API origin at build time so the login page
+drops the base-URL field and operators never see it:
+
+```sh
+VITE_API_BASE_URL=https://api.yourdomain.com npm run build
+``` `seed:sample` gives you something to look at immediately —
 customers, invoices in different states (including one flipped to
 `overdue`), deals, tickets, and a project with issues — instead of
 starting from an empty dashboard.

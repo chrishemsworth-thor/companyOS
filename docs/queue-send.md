@@ -1,6 +1,6 @@
 # Event Sending — Queues vs Queue-less (Free-Plan) Mode
 
-*Last updated: 2026-07-21 · Status: **implemented***
+*Last updated: 2026-07-22 · Status: **implemented***
 
 How CompanyOS events get from "emitted" to "processed", and how to deploy the
 whole platform on the **Workers Free plan** — Cloudflare Queues is the one
@@ -97,6 +97,13 @@ npx wrangler secret put RESEND_API_KEY
 npx wrangler secret put TWILIO_ACCOUNT_SID
 npx wrangler secret put TWILIO_AUTH_TOKEN
 
+# Optional: Google email (send-as + Gmail inbox sync) — docs/modules/google.md.
+# Needs a Google Cloud OAuth web client with
+# https://<worker-domain>/oauth/google/callback as an authorized redirect URI.
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
+npx wrangler secret put GOOGLE_TOKEN_ENCRYPTION_KEY   # head -c 32 /dev/urandom | base64
+
 # Deploy the Worker (API)
 npm run deploy:free
 ```
@@ -104,10 +111,26 @@ npm run deploy:free
 > Secrets attach to the Worker by name (`companyos`), which both configs
 > share — no need to re-put them if you later switch configs.
 
+> The Google vars ship as dev placeholders in the wrangler configs; without
+> real secrets the connect flow simply fails at Google's consent screen, and
+> everything else runs normally. If the Worker sits behind a custom domain
+> whose origin differs from what it sees, also set
+> `GOOGLE_OAUTH_REDIRECT_URI`.
+
+Both cron triggers — the daily overdue/quote sweep and the 5-minute Gmail
+inbox sync — are plain Cron Triggers, available on the free plan (288
+invocations/day for the sync is far below free-tier request limits; with no
+Google accounts connected it's a no-op).
+
 ### 4.2 Operator console (UI)
 
+Bake the API origin into the build (`VITE_API_BASE_URL`) — the login page
+then hides the "API base URL" field entirely, so operators only ever see
+workspace/email/password:
+
 ```sh
-cd ui && npm install && npm run build
+cd ui && npm install
+VITE_API_BASE_URL=https://api.yourdomain.com npm run build
 npx wrangler pages deploy dist --project-name companyos-console
 ```
 
@@ -132,6 +155,11 @@ The response includes the company's API key **exactly once** (only its hash is
 stored) — save it. Operators log into the console with **workspace slug +
 email + password**. Full details:
 [architecture/multi-company-identity.md](architecture/multi-company-identity.md).
+
+On the admin's first console login, the **onboarding wizard** takes over:
+company profile (legal name, base currency — the default for new invoices,
+deals, and quotes) is required; teams and employees can be added there or
+skipped and managed later. Repeat provisioning + onboarding once per company.
 
 ## 5. Upgrading to real Queues later
 

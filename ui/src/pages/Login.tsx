@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
-import { useAuth } from "../auth/AuthContext";
+import { BASE_URL_LOCKED, useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { Button } from "../components/Button";
 
@@ -20,7 +20,7 @@ export function Login() {
     setError(null);
     setBusy(true);
     try {
-      if (url.trim() !== baseUrl) setBaseUrl(url.trim());
+      if (!BASE_URL_LOCKED && url.trim() !== baseUrl) setBaseUrl(url.trim());
       await login(workspace.trim(), email.trim(), password);
       navigate("/");
     } catch (err) {
@@ -89,15 +89,19 @@ export function Login() {
               required
             />
           </label>
-          <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
-            API base URL
-            <input
-              className="input"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-              required
-            />
-          </label>
+          {/* Dev-only escape hatch: production builds pin the API origin via
+              VITE_API_BASE_URL, so operators never deal with it. */}
+          {!BASE_URL_LOCKED && (
+            <label className="flex flex-col gap-1.5 text-sm font-medium text-fg">
+              API base URL
+              <input
+                className="input"
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                required
+              />
+            </label>
+          )}
 
           {error && (
             <div
