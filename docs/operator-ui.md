@@ -35,9 +35,20 @@ payment allocation** (one payment split across several outstanding invoices);
 and the cross-module **insights** read-models (`/v1/insights/*`) behind the
 dashboard.
 
+Built since (user lifecycle): admins create users **without a password** —
+the server issues a single-use, 7-day **invite link** (emailed via
+`sendEmail` when a transport is configured, and always returned to the admin
+as a copyable URL), the new user sets their own password on
+`/accept-invite` and lands signed in; **forgot/reset password**
+(`/forgot-password`, `/reset-password`, 1-hour single-use token,
+anti-enumeration, revokes all sessions on reset) and a
+**change-password** endpoint for logged-in users
+(`POST /v1/auth/password/change`). See `src/auth/tokens.ts`,
+`src/gateway/routes/auth.ts`, and migration 0019.
+
 Still not built: pagination/search on the other list views (invoices,
 customers, deals, tickets, issues — the API supports cursors; only the
-ledger list is wired so far), Kanban boards, passkeys / password reset, and
+ledger list is wired so far), Kanban boards, passkeys, and
 per-route business-role gating (phase-2 gates only admin surfaces).
 
 ## 1. What exists to build on

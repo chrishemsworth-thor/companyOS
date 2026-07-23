@@ -30,7 +30,14 @@
     "GOOGLE_TOKEN_ENCRYPTION_KEY": "Djm23rEsvOTDcIZMknQbqVoeemLHXElQa28DBkXD7ts=",
     // Browser origins allowed to send credentialed requests: the production
     // operator console first, localhost for a local console pointed at prod.
-    "ALLOWED_ORIGINS": "https://console.companyos.com.my,http://localhost:5173,http://127.0.0.1:5173"
+    "ALLOWED_ORIGINS": "https://console.companyos.com.my,http://localhost:5173,http://127.0.0.1:5173",
+    // Sender identity for system email (user invites, password resets). The
+    // production value must be on the Resend-verified domain:
+    //   "CompanyOS <hello@companyos.com.my>"
+    "SYSTEM_FROM_ADDRESS": "CompanyOS <hello@companyos.com.my>",
+    // Public origin of the operator console for links in outbound email.
+    // Defaults to the first ALLOWED_ORIGINS entry when unset.
+    "CONSOLE_BASE_URL": "http://localhost:5173"
   },
 
   // Cron triggers (Cron Triggers are available on the Workers Free plan):

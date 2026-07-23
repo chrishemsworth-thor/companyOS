@@ -51,6 +51,20 @@ export interface Env {
   TWILIO_ACCOUNT_SID?: string;
   TWILIO_AUTH_TOKEN?: string;
 
+  /**
+   * Sender identity for system email (user invites, password resets) when a
+   * tenant has no delivery_config from_address of its own. Must be on a
+   * Resend-verified domain in production, e.g.
+   * "CompanyOS <hello@companyos.com.my>". Falls back to a dev placeholder.
+   */
+  SYSTEM_FROM_ADDRESS?: string;
+  /**
+   * Public origin of the operator console, used to build links in outbound
+   * email (invite accept / password reset). When unset, the first
+   * ALLOWED_ORIGINS entry is used (see src/delivery/templates/links.ts).
+   */
+  CONSOLE_BASE_URL?: string;
+
   // Google (Gmail/Workspace) email integration. All three are required to
   // connect or use an account; when any is absent the /v1/google-accounts and
   // /oauth/google routes fail closed (503). Production sets these via `wrangler

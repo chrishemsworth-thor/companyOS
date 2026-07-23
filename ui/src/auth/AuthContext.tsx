@@ -40,6 +40,13 @@ export interface AuthTenant {
   onboarded_at: string | null;
 }
 
+/** The response shape of /v1/auth/login and /v1/auth/invite/accept. */
+export interface AuthCompletion {
+  user: AuthUser;
+  tenant?: AuthTenant | null;
+  csrf_token: string;
+}
+
 interface AuthContextValue {
   status: AuthStatus;
   user: AuthUser | null;
@@ -47,6 +54,8 @@ interface AuthContextValue {
   baseUrl: string;
   client: ApiClient | null;
   login: (workspace: string, email: string, password: string) => Promise<void>;
+  /** Adopt a server-issued session (login or invite-accept response body). */
+  completeAuth: (body: AuthCompletion) => void;
   logout: () => Promise<void>;
   setBaseUrl: (url: string) => void;
   /** Reflect a successful POST /v1/settings/onboarding/complete locally. */
@@ -122,6 +131,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [baseUrl]);
 
+  const completeAuth = (body: AuthCompletion) => {
+    csrfRef.current = body.csrf_token;
+    setUser(body.user);
+    setTenant(body.tenant ?? null);
+    setStatus("authenticated");
+  };
+
   const login = async (workspace: string, email: string, password: string) => {
     const res = await postJson(baseUrl, "/v1/auth/login", { workspace, email, password });
     const body = await res.json().catch(() => ({}) as Record<string, unknown>);
@@ -132,11 +148,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         typeof body.code === "string" ? body.code : undefined,
       );
     }
-    const ok = body as { user: AuthUser; tenant?: AuthTenant; csrf_token: string };
-    csrfRef.current = ok.csrf_token;
-    setUser(ok.user);
-    setTenant(ok.tenant ?? null);
-    setStatus("authenticated");
+    completeAuth(body as unknown as AuthCompletion);
   };
 
   const logout = async () => {
@@ -170,6 +182,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         baseUrl,
         client,
         login,
+        completeAuth,
         logout,
         setBaseUrl,
         markOnboarded,

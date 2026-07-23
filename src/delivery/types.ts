@@ -24,3 +24,32 @@ export interface DeliveryProvider {
   /** Deliver an agent-composed nudge. Returns a delivery reference. */
   send(req: ReminderRequest): Promise<{ delivery_ref: string }>;
 }
+
+/**
+ * Why an email is being sent. Recorded on every deliveries audit row and used
+ * by the dispatcher to pick the gating class: customer-facing purposes stay
+ * behind the per-tenant delivery_config opt-in, system purposes (operational
+ * mail to the tenant's own staff) only need a configured transport.
+ */
+export type EmailPurpose =
+  | "reminder"
+  | "user_invite"
+  | "password_reset"
+  | "invoice"
+  | "receipt"
+  | "quote"
+  | "internal_alert";
+
+/** A fully-composed transactional email, ready for any email-capable provider. */
+export interface EmailMessage {
+  to: string;
+  from: string;
+  subject: string;
+  text: string;
+  html?: string;
+}
+
+/** Providers that can carry arbitrary transactional email (console, resend, google). */
+export interface EmailCapableProvider extends DeliveryProvider {
+  sendEmail(msg: EmailMessage): Promise<{ delivery_ref: string }>;
+}

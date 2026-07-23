@@ -5,6 +5,7 @@ import { FormError } from "../FormError";
 import { Button } from "../Button";
 import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
+import { InvitePanel, type InviteInfo } from "../InvitePanel";
 
 export const USER_ROLES = ["admin", "operator", "finance", "support", "readonly"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
@@ -14,12 +15,23 @@ export interface AdminUser {
   email: string;
   display_name: string | null;
   role: UserRole;
-  status: "active" | "disabled";
+  /** `invited` = created without a password, waiting on the invite link. */
+  status: "active" | "disabled" | "invited";
   created_at: string;
   last_login_at: string | null;
 }
 
-/** Create a user, or edit role/status/name when `existing` is passed. */
+interface CreateUserResponse {
+  user: AdminUser;
+  invite: InviteInfo;
+}
+
+/**
+ * Create a user, or edit role/status/name when `existing` is passed. Creation
+ * is passwordless: the server issues a single-use invite (emailed when the
+ * tenant has an email transport) and the modal shows the outcome, including
+ * the copyable invite link.
+ */
 export function UserFormModal({
   existing,
   onClose,
@@ -28,18 +40,23 @@ export function UserFormModal({
   onClose: () => void;
 }) {
   const [email, setEmail] = useState(existing?.email ?? "");
-  const [password, setPassword] = useState("");
   const [displayName, setDisplayName] = useState(existing?.display_name ?? "");
   const [role, setRole] = useState<UserRole>(existing?.role ?? "operator");
-  const [status, setStatus] = useState<"active" | "disabled">(existing?.status ?? "active");
+  const [status, setStatus] = useState<"active" | "disabled">(
+    existing?.status === "disabled" ? "disabled" : "active",
+  );
+  const [created, setCreated] = useState<CreateUserResponse | null>(null);
 
   const mutation = useApiMutation({
-    mutationFn: (client, body: Record<string, unknown>) =>
+    mutationFn: (client, body: Record<string, unknown>): Promise<AdminUser | CreateUserResponse> =>
       existing
         ? client.patch<AdminUser>(`/v1/users/${existing.user_id}`, body)
-        : client.post<AdminUser>("/v1/users", body),
+        : client.post<CreateUserResponse>("/v1/users", body),
     invalidates: () => [["users"]],
-    onSuccess: () => onClose(),
+    onSuccess: (data) => {
+      if ("invite" in data) setCreated(data);
+      else onClose();
+    },
   });
 
   const submit = (e: React.FormEvent) => {
@@ -49,38 +66,38 @@ export function UserFormModal({
     } else {
       mutation.mutate({
         email: email.trim(),
-        password,
         display_name: displayName.trim() || undefined,
         role,
       });
     }
   };
 
+  if (created) {
+    return (
+      <Modal title={`Invite ${created.user.email}`} onClose={onClose}>
+        <InvitePanel email={created.user.email} invite={created.invite} />
+        <ModalActions>
+          <Button type="button" variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        </ModalActions>
+      </Modal>
+    );
+  }
+
   return (
     <Modal title={existing ? `Edit ${existing.email}` : "New user"} onClose={onClose}>
       <form onSubmit={submit}>
         {!existing && (
-          <>
-            <FormRow label="Email">
-              <input
-                className="input"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
-            </FormRow>
-            <FormRow label="Temporary password (min 8 chars)">
-              <input
-                className="input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                minLength={8}
-                required
-              />
-            </FormRow>
-          </>
+          <FormRow label="Email">
+            <input
+              className="input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
+          </FormRow>
         )}
         <FormRow label="Display name (optional)">
           <input
@@ -110,13 +127,18 @@ export function UserFormModal({
             </select>
           </FormRow>
         )}
+        {!existing && (
+          <p className="mt-1 text-xs text-muted">
+            They'll receive a single-use invite link to set their own password.
+          </p>
+        )}
         <FormError error={mutation.error} />
         <ModalActions>
           <Button type="button" onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" variant="primary" loading={mutation.isPending}>
-            {mutation.isPending ? "Saving…" : existing ? "Save changes" : "Create user"}
+            {mutation.isPending ? "Saving…" : existing ? "Save changes" : "Create & invite"}
           </Button>
         </ModalActions>
       </form>

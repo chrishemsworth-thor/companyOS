@@ -5,6 +5,9 @@ import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { ToastProvider } from "./components/Toast";
 import { Layout } from "./components/Layout";
 import { Login } from "./pages/Login";
+import { AcceptInvite } from "./pages/AcceptInvite";
+import { ForgotPassword } from "./pages/ForgotPassword";
+import { ResetPassword } from "./pages/ResetPassword";
 import { Dashboard } from "./pages/Dashboard";
 import { Departments } from "./pages/Departments";
 import { AgentActivity } from "./pages/AgentActivity";
@@ -59,6 +62,9 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/accept-invite" element={<AcceptInvite />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route
         path="/"
         element={
