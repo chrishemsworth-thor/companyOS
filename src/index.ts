@@ -35,6 +35,22 @@ export { CollectionsAgent } from "./agents/collections";
 
 const app = new Hono<AuthedEnv>();
 
+// Baseline security response headers on every route. The API is JSON-only for
+// programmatic/agent callers, but the OAuth callback and any future HTML
+// surface benefit from clickjacking/MIME-sniffing protection; HSTS is only
+// meaningful (and only emitted) over https, so wrangler dev on http is
+// unaffected. Route-specific headers (e.g. the OAuth callback's CSP) are set
+// on top of these by their handlers.
+app.use("*", async (c, next) => {
+  await next();
+  c.header("X-Content-Type-Options", "nosniff");
+  c.header("X-Frame-Options", "DENY");
+  c.header("Referrer-Policy", "no-referrer");
+  if (new URL(c.req.url).protocol === "https:") {
+    c.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+});
+
 app.get("/health", (c) => c.json({ ok: true, service: "companyos-gateway" }));
 
 // The operator UI now authenticates with a session cookie (credentials:
