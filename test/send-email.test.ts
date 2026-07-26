@@ -138,6 +138,27 @@ describe("gating classes", () => {
     expect(row).toMatchObject({ purpose: "password_reset", provider: "resend", status: "sent" });
   });
 
+  it("system purpose ignores the tenant's from_address and uses the platform sender", async () => {
+    // Regression: a tenant that configured dunning from its own (unverified
+    // in our Resend account) domain must not break invites/resets.
+    env.RESEND_API_KEY = "re_test_key";
+    await setConfig({ enabled: 1, from: "billing@tenant-domain.example" });
+    const mock = stubFetch(new Response(JSON.stringify({ id: "re_msg_4" }), { status: 200 }));
+
+    await sendEmail(env, TENANT_ID, {
+      to: "staff3@example.com",
+      subject: "You're invited",
+      text: "Join us.",
+      purpose: "user_invite",
+    });
+
+    const sent = JSON.parse(
+      (mock.mock.calls[0] as unknown as [string, RequestInit])[1].body as string,
+    ) as Record<string, unknown>;
+    expect(sent.from).toBe(env.SYSTEM_FROM_ADDRESS);
+    expect(sent.from).not.toBe("billing@tenant-domain.example");
+  });
+
   it("system purpose + disabled config → still sends (enabled only gates customer mail)", async () => {
     env.RESEND_API_KEY = "re_test_key";
     await setConfig({ enabled: 0, from: "ops@sme.example" });

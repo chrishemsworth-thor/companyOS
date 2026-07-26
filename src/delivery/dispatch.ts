@@ -278,8 +278,13 @@ export async function sendEmail(
     provider = await resolveEmailProvider(env, tenantId, config);
   }
 
+  // System mail goes out under the PLATFORM sender identity, not the tenant's:
+  // it is sent through the platform's own provider account, which has only the
+  // platform domain verified. Preferring a tenant's from_address here would
+  // make Resend reject every invite for tenants that configured dunning from
+  // their own domain. Customer-facing mail keeps the tenant identity.
   const from = isSystem
-    ? (config?.from_address ?? env.SYSTEM_FROM_ADDRESS ?? "companyos@localhost")
+    ? (env.SYSTEM_FROM_ADDRESS ?? config?.from_address ?? "companyos@localhost")
     : (config?.from_address ?? "companyos@localhost");
 
   const refs = input.refs ?? {};
