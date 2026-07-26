@@ -1,3 +1,5 @@
+import { DEPARTMENTS } from "../../departments/registry";
+
 /**
  * Insights — server-side read-models for the operator dashboard.
  *
@@ -168,6 +170,125 @@ export async function pipelineByStage(db: D1Database, tenantId: string): Promise
     .bind(tenantId)
     .all<PipelineRow>();
   return results;
+}
+
+export type ProfitabilityGroupBy = "project" | "customer" | "department";
+
+export interface ProfitabilityRow {
+  /** Dimension value, or null for the Unallocated bucket. */
+  key: string | null;
+  /** Human label: project/customer name, department label, or "Unallocated". */
+  label: string;
+  revenue_cents: number;
+  cost_cents: number;
+  margin_cents: number;
+  /** margin ÷ revenue as a percentage, rounded to 1dp. Null when revenue is 0. */
+  margin_pct: number | null;
+}
+
+/** Dimension column and the name lookup for each grouping axis. */
+const PROFITABILITY_AXES: Record<
+  ProfitabilityGroupBy,
+  { column: string; join?: { table: string; key: string; name: string } }
+> = {
+  project: {
+    column: "jl.project_id",
+    join: { table: "projects", key: "project_id", name: "name" },
+  },
+  customer: {
+    column: "jl.customer_id",
+    join: { table: "customers", key: "customer_id", name: "name" },
+  },
+  // Departments live in the in-code registry, not a table, so the label is
+  // resolved in TypeScript after the aggregate.
+  department: { column: "jl.department_code" },
+};
+
+interface ProfitabilityAggregate {
+  key: string | null;
+  label: string | null;
+  revenue_cents: number;
+  cost_cents: number;
+}
+
+/**
+ * Profitability by dimension: revenue, direct cost, margin and margin %.
+ *
+ * Read-only SQL over the dimensioned ledger (PRD-001a) — there is no write path
+ * and no new table, which is the whole point of putting dimensions on the line.
+ *
+ * Sign convention: revenue accounts are credited (negative signed cents) so
+ * recognised revenue is the negated sum; expense accounts are debited
+ * (positive) so cost is the plain sum. Reversals carry their original
+ * dimensions, so a reversed entry nets to zero inside its own bucket rather
+ * than stranding one leg in Unallocated.
+ *
+ * "Direct cost" here means dimensioned expense postings only. Labour cost from
+ * an employee rate × logged time is deliberately excluded — CompanyOS has no
+ * time tracking, and PRD-001 says that would be its own PRD.
+ *
+ * Untagged lines are grouped under an explicit Unallocated bucket rather than
+ * dropped, so the rollup's revenue always reconciles to total revenue.
+ */
+export async function profitability(
+  db: D1Database,
+  tenantId: string,
+  groupBy: ProfitabilityGroupBy,
+): Promise<ProfitabilityRow[]> {
+  const axis = PROFITABILITY_AXES[groupBy];
+  const labelSelect = axis.join ? `dim.${axis.join.name} AS label` : "NULL AS label";
+  const labelJoin = axis.join
+    ? `LEFT JOIN ${axis.join.table} dim
+         ON dim.tenant_id = jl.tenant_id AND dim.${axis.join.key} = ${axis.column}`
+    : "";
+
+  const { results } = await db
+    .prepare(
+      `SELECT ${axis.column} AS key,
+              ${labelSelect},
+              -COALESCE(SUM(CASE WHEN a.type = 'revenue' THEN jl.amount_cents END), 0) AS revenue_cents,
+               COALESCE(SUM(CASE WHEN a.type = 'expense' THEN jl.amount_cents END), 0) AS cost_cents
+       FROM journal_lines jl
+       JOIN accounts a ON a.tenant_id = jl.tenant_id AND a.account_id = jl.account_id
+       ${labelJoin}
+       WHERE jl.tenant_id = ? AND a.type IN ('revenue', 'expense')
+       GROUP BY ${axis.column}`,
+    )
+    .bind(tenantId)
+    .all<ProfitabilityAggregate>();
+
+  const rows = results.map((r) => {
+    const margin = r.revenue_cents - r.cost_cents;
+    return {
+      key: r.key,
+      label: profitabilityLabel(groupBy, r),
+      revenue_cents: r.revenue_cents,
+      cost_cents: r.cost_cents,
+      margin_cents: margin,
+      margin_pct:
+        r.revenue_cents === 0 ? null : Math.round((margin / r.revenue_cents) * 1000) / 10,
+    };
+  });
+  // Sorted here rather than in SQL: margin is derived after the aggregate, and
+  // Unallocated is pinned last so it reads as a residual, not a competitor.
+  return rows.sort((a, b) => {
+    if ((a.key === null) !== (b.key === null)) return a.key === null ? 1 : -1;
+    return b.margin_cents - a.margin_cents;
+  });
+}
+
+function profitabilityLabel(
+  groupBy: ProfitabilityGroupBy,
+  row: ProfitabilityAggregate,
+): string {
+  if (row.key === null) return "Unallocated";
+  if (groupBy === "department") {
+    return DEPARTMENTS.find((d) => d.id === row.key)?.label ?? row.key;
+  }
+  // A dimension can outlive the row it names (a customer is archived, a project
+  // is deleted). Fall back to the raw id rather than dropping the bucket — the
+  // money still happened.
+  return row.label ?? row.key;
 }
 
 export interface TicketInsights {

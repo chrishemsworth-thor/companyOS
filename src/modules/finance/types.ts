@@ -58,7 +58,24 @@ export interface Account {
 
 export type EntrySourceType = "invoice" | "payment" | "manual" | "reversal";
 
-export interface JournalLine {
+/**
+ * Analytical dimensions on a journal line (PRD-001a). All optional: an entry
+ * with none posts fine and lands in the profitability rollup's "Unallocated"
+ * bucket. Immutable once posted — the ledger's append-only triggers cover
+ * dimensions exactly as they cover amounts, so a mis-tag is corrected by
+ * reversing and re-posting.
+ */
+export interface LineDimensions {
+  customer_id?: string | null;
+  project_id?: string | null;
+  /** A department id from src/departments/registry.ts, validated in the service. */
+  department_code?: string | null;
+  employee_id?: string | null;
+  /** Reserved free text for a tenant's existing cost-centre vocabulary. */
+  cost_centre?: string | null;
+}
+
+export interface JournalLine extends LineDimensions {
   line_no: number;
   account_id: string;
   /** Signed: > 0 debit, < 0 credit. */

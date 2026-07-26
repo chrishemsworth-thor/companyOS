@@ -10,14 +10,14 @@ reminders.
 per journal entry, `CHECK`ed), depreciation, budgeting, full ERP workflows.
 Anything else is expressible as a `manual` journal entry.
 
-## Data model (`migrations/0001_init.sql`, `migrations/0002_finance_ledger.sql`)
+## Data model (`migrations/0001_init.sql`, `migrations/0002_finance_ledger.sql`, `migrations/0020_ledger_dimensions.sql`)
 
 | Table | Purpose | Key columns |
 |---|---|---|
 | `accounts` | Chart of accounts, per tenant | `account_id` (`acct_`), `code` (unique per tenant), `type` (`asset\|liability\|equity\|revenue\|expense`), `is_system` |
 | `journal_entries` | Ledger headers, **append-only** | `entry_id` (`je_`, ULID → time-sortable), `entry_date`, `currency`, `source_type` (`invoice\|payment\|manual\|reversal`), `source_id`, `reverses_entry_id` |
-| `journal_lines` | One debit/credit per row, **append-only** | `line_no`, `account_id`, `amount_cents` (signed: > 0 debit, < 0 credit, never 0) |
-| `invoices` | Mutable lifecycle header | `invoice_id` (`inv_`), `status`, `total_cents`, `amount_due_cents`, `due_date`, `issued_at`/`sent_at`/`paid_at` |
+| `journal_lines` | One debit/credit per row, **append-only** | `line_no`, `account_id`, `amount_cents` (signed: > 0 debit, < 0 credit, never 0), dimensions `customer_id`/`project_id`/`department_code`/`employee_id`/`cost_centre` (all nullable) |
+| `invoices` | Mutable lifecycle header | `invoice_id` (`inv_`), `status`, `total_cents`, `amount_due_cents`, `due_date`, `issued_at`/`sent_at`/`paid_at`, `project_id` (nullable) |
 | `invoice_lines` | Line items | `description`, `quantity`, `unit_cents` |
 | `payments` | Received payments | `payment_id` (`pay_`), `amount_cents`, `method`, `received_at`, `entry_id` (ledger backlink) |
 | `payment_applications` | Many-to-many settle: one payment ↔ several invoices | `applied_cents` |
@@ -40,12 +40,46 @@ Seeded per tenant on first use, idempotently (`ensureSystemAccounts`):
    `journal_entries`/`journal_lines`. Corrections are reversal entries
    (`source_type='reversal'`, `reverses_entry_id` backlink) that negate the
    original lines.
-3. **Posting rules** (minimal by design):
+3. **Immutable dimensions** — the append-only triggers cover the dimension
+   columns too, so a mis-tagged line is corrected by reversing and re-posting,
+   never by an UPDATE. Reversals copy the original's dimensions, so a reversed
+   entry nets to zero inside its own rollup bucket instead of stranding one leg
+   in "Unallocated".
+4. **Posting rules** (minimal by design):
    - invoice issued → Dr `1100` AR / Cr `4000` Revenue for `total_cents`
    - payment received → Dr `1000` Cash / Cr `1100` AR for `amount_cents`
-4. **Overpayment guard** — an application can never exceed the invoice's
+5. **Overpayment guard** — an application can never exceed the invoice's
    `amount_due_cents`; the applications of a payment must sum exactly to its
    `amount_cents`.
+
+## Analytical dimensions (PRD-001a)
+
+Journal lines carry five nullable dimensions, which is what turns a P&L into
+project profitability, per-client margin, and department cost analysis without a
+new feature per question. All are optional and untagged lines stay valid.
+
+| Dimension | Set automatically when | Validated against |
+|---|---|---|
+| `customer_id` | invoice posting (both AR and Revenue legs), payment posting (both legs) | — |
+| `project_id` | invoice posting, when the invoice names a `project_id` | — |
+| `department_code` | expense-claim posting (PRD-006) | `src/departments/registry.ts` — unknown code → 422 `unknown_department` |
+| `employee_id` | expense-claim posting (PRD-006) | — |
+| `cost_centre` | never — reserved free text for a tenant's own vocabulary | — |
+
+Only `department_code` has a closed vocabulary, and it names an entry in the
+in-code department registry rather than a table, so it is validated in the
+ledger service — where every caller gets the same guarantee — rather than at a
+route or by a SQL constraint.
+
+`GET /v1/insights/profitability?group_by=project|customer|department` rolls
+them up: revenue (negated sum over `revenue` accounts), direct cost (sum over
+`expense` accounts), margin and margin %. Lines with no value for the grouping
+dimension appear as an explicit **Unallocated** bucket, sorted last — never
+silently dropped, so the rollup's revenue always reconciles to total revenue.
+
+"Direct cost" means dimensioned expense postings only. Labour cost from an
+employee rate × logged time is deliberately excluded: there is no time-tracking
+module, and PRD-001 puts that in its own PRD.
 
 ## Invoice lifecycle
 
@@ -76,7 +110,7 @@ All routes require `Authorization: Bearer <tenant_api_key>`. Errors carry
 
 | Method & path | Body | Returns |
 |---|---|---|
-| `POST /v1/invoices` | `{customer_id, currency, due_date, lines: [{description, quantity, unit_cents}]}` | 201 invoice (status `draft`, ledger posted) |
+| `POST /v1/invoices` | `{customer_id, currency, due_date, project_id?, lines: [{description, quantity, unit_cents}]}` | 201 invoice (status `draft`, ledger posted) |
 | `GET /v1/invoices?status=&limit=&cursor=` | — | `{invoices: [...], next_cursor}` |
 | `GET /v1/invoices/:id` | — | invoice + `lines` |
 | `POST /v1/invoices/:id/send` | — | invoice (`sent`); 409 unless `draft` |
@@ -108,7 +142,7 @@ pages are ordered `id ASC` and the cursor is the last id seen. The response
 includes `next_cursor`; `null` means there is no further page.
 | `GET /v1/ledger/accounts` | — | seeds + lists the chart |
 | `GET /v1/ledger/accounts/:id/balance` | — | `{balance_cents}` (signed sum) |
-| `POST /v1/ledger/entries` | `{entry_date, currency, memo?, lines: [{account_id, amount_cents}]}` | 201 `{entry_id}`; unbalanced → 422 |
+| `POST /v1/ledger/entries` | `{entry_date, currency, memo?, lines: [{account_id, amount_cents, customer_id?, project_id?, department_code?, employee_id?, cost_centre?}]}` | 201 `{entry_id}`; unbalanced or unknown `department_code` → 422 |
 | `GET /v1/ledger/entries/:id` | — | header + ordered lines |
 | `POST /v1/ledger/entries/:id/reverse` | — | 201 `{entry_id}` of the reversal |
 
@@ -151,6 +185,13 @@ Durable Object (per tenant+customer); the rest are audit-logged in
   UPDATE/DELETE, reversal restores prior balance, global
   `GROUP BY entry HAVING SUM(amount_cents) != 0 → empty` after a mixed op
   sequence.
+- `test/ledger-dimensions.test.ts` — one test per PRD-001a acceptance
+  criterion: invoice postings stamp `customer_id` on both legs, dimensions
+  persist per line on a manual entry, the append-only trigger rejects a
+  dimension UPDATE, a no-dimension entry still posts, an off-taxonomy
+  `department_code` is 422 with nothing written, reversals carry dimensions
+  through, and the profitability rollup groups by all three axes with an
+  explicit Unallocated bucket and tenant isolation.
 - `test/finance-service.test.ts` — invoice/payment lifecycle: AR/Revenue and
   Cash/AR postings, partial payments, overpayment/mismatch rejection,
   multi-invoice settlement.

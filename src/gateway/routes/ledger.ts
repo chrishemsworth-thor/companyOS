@@ -14,6 +14,20 @@ import {
   reverseEntry,
 } from "../../modules/finance/ledger";
 
+/**
+ * Analytical dimensions (PRD-001a). All optional — an entry with none is valid
+ * and shows as "Unallocated" in the profitability rollup. `department_code` is
+ * checked against the department registry in the ledger service, which answers
+ * with a 422 like any other ledger violation.
+ */
+const dimensionsSchema = {
+  customer_id: z.string().min(1).optional(),
+  project_id: z.string().min(1).optional(),
+  department_code: z.string().min(1).optional(),
+  employee_id: z.string().min(1).optional(),
+  cost_centre: z.string().max(100).optional(),
+};
+
 const entryBodySchema = z.object({
   entry_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "entry_date must be YYYY-MM-DD"),
   memo: z.string().max(500).optional(),
@@ -24,6 +38,7 @@ const entryBodySchema = z.object({
         account_id: z.string().startsWith("acct_"),
         // Signed cents: > 0 debit, < 0 credit.
         amount_cents: z.number().int(),
+        ...dimensionsSchema,
       }),
     )
     .min(2),

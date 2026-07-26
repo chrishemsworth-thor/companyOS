@@ -43,6 +43,8 @@ export interface CreateInvoiceInput {
   /** ISO 4217; omitted => the company's base currency. */
   currency?: string;
   due_date: string; // ISO date
+  /** Optional project this invoice bills for; stamped onto its ledger lines. */
+  project_id?: string;
   lines: { description: string; quantity: number; unit_cents: number }[];
 }
 
@@ -145,6 +147,10 @@ export async function createInvoice(
 
   const invoiceId = `inv_${ulid()}`;
   const issuedAt = new Date().toISOString();
+  // Both legs carry the dimensions, not just the revenue leg: the AR side is
+  // what per-customer receivable analysis groups on, and PRD-001's acceptance
+  // criterion names both lines explicitly.
+  const dimensions = { customer_id: input.customer_id, project_id: input.project_id ?? null };
   const { statements: entryStatements } = buildEntryStatements(env.DB, tenantId, {
     entry_date: issuedAt.slice(0, 10),
     memo: `invoice ${invoiceId} issued`,
@@ -152,16 +158,16 @@ export async function createInvoice(
     source_type: "invoice",
     source_id: invoiceId,
     lines: [
-      { account_id: ar.account_id, amount_cents: totalCents },
-      { account_id: revenue.account_id, amount_cents: -totalCents },
+      { account_id: ar.account_id, amount_cents: totalCents, ...dimensions },
+      { account_id: revenue.account_id, amount_cents: -totalCents, ...dimensions },
     ],
   });
 
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO invoices
-         (invoice_id, tenant_id, customer_id, status, amount_due_cents, total_cents, currency, due_date, issued_at)
-       VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?)`,
+         (invoice_id, tenant_id, customer_id, status, amount_due_cents, total_cents, currency, due_date, issued_at, project_id)
+       VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`,
     ).bind(
       invoiceId,
       tenantId,
@@ -171,6 +177,7 @@ export async function createInvoice(
       currency,
       input.due_date,
       issuedAt,
+      input.project_id ?? null,
     ),
     ...input.lines.map((line, i) =>
       env.DB.prepare(
@@ -294,9 +301,12 @@ export async function recordPayment(
     currency: input.currency,
     source_type: "payment",
     source_id: paymentId,
+    // Cash and AR are balance-sheet accounts, so these lines never affect a
+    // margin — but tagging them keeps per-customer ledger queries complete, and
+    // the customer is derivable at zero cost.
     lines: [
-      { account_id: cash.account_id, amount_cents: input.amount_cents },
-      { account_id: ar.account_id, amount_cents: -input.amount_cents },
+      { account_id: cash.account_id, amount_cents: input.amount_cents, customer_id: input.customer_id },
+      { account_id: ar.account_id, amount_cents: -input.amount_cents, customer_id: input.customer_id },
     ],
   });
 
