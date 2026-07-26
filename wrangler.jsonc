@@ -41,8 +41,9 @@
     //   "CompanyOS <hello@companyos.com.my>"
     "SYSTEM_FROM_ADDRESS": "CompanyOS <hello@companyos.com.my>",
     // Public origin of the operator console for links in outbound email.
-    // Defaults to the first ALLOWED_ORIGINS entry when unset; the dev value
-    // points local invite/reset links at the Vite dev server.
+    // Local dev + test value: points invite/reset links at the Vite dev
+    // server. Intentionally NOT in sync with wrangler.free.jsonc, which is
+    // the deploy config and names the production console.
     "CONSOLE_BASE_URL": "http://localhost:5173"
   },
 

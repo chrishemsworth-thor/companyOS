@@ -84,10 +84,27 @@ which only gates customer-facing mail (reminders). For production:
   must be verified in Resend).
 - `SYSTEM_FROM_ADDRESS` var — the sender identity for system mail; set
   `CompanyOS <hello@companyos.com.my>` (must be on the verified domain;
-  make sure the mailbox can receive replies).
+  make sure the mailbox can receive replies). System mail **always** uses
+  this, never a tenant's `delivery_config.from_address` — tenant domains
+  aren't verified in our Resend account, so using one would bounce.
 - `CONSOLE_BASE_URL` var — the public console origin used to build the
-  links inside invite/reset emails, e.g. `https://console.companyos.com.my`
-  (falls back to the first `ALLOWED_ORIGINS` entry when unset).
+  links inside invite/reset emails. `wrangler.free.jsonc` (the deploy
+  config) sets `https://console.companyos.com.my`; `wrangler.jsonc` keeps
+  `http://localhost:5173` for local dev and the test suite, so these two
+  intentionally differ.
+
+Transport routing when a tenant's email `delivery_config` names a
+`google_account_id`:
+
+- **Password resets always use the platform transport** (Resend → console),
+  never the tenant's mailbox — account recovery must not depend on a
+  tenant's OAuth grant still being valid.
+- **Invites and customer mail** do route through that connected Gmail
+  mailbox, which always sends as the authenticated Google account (so
+  `SYSTEM_FROM_ADDRESS` does not apply on that path).
+
+So when diagnosing "nothing arrived via Resend", check `delivery_config`
+first: an invite may have gone out via Gmail perfectly well.
 
 The `/v1/auth/password/*` and `/v1/auth/invite/*` endpoints carry KV-based
 best-effort rate limits (KV is eventually consistent). Back them with a

@@ -238,6 +238,17 @@ const SYSTEM_PURPOSES: ReadonlySet<EmailPurpose> = new Set([
   "internal_alert",
 ]);
 
+/**
+ * Purposes that must always use the PLATFORM transport, never a tenant's
+ * connected mailbox. A password reset is platform security mail: it cannot
+ * depend on a tenant's Gmail OAuth grant still being valid (a revoked token
+ * would lock everyone out of account recovery), and it must demonstrably come
+ * from the platform rather than a company mailbox the tenant's own staff can
+ * send as. Invites may still ride a tenant's Gmail, where arriving from the
+ * company's own domain is a feature.
+ */
+const PLATFORM_ONLY_PURPOSES: ReadonlySet<EmailPurpose> = new Set(["password_reset"]);
+
 export interface SendEmailInput {
   to: string;
   subject: string;
@@ -268,7 +279,10 @@ export async function sendEmail(
   const isSystem = SYSTEM_PURPOSES.has(input.purpose);
 
   let provider: DeliveryProvider;
-  if (isSystem) {
+  if (PLATFORM_ONLY_PURPOSES.has(input.purpose)) {
+    // Platform transport only (Resend → console): never a tenant's mailbox.
+    provider = getDeliveryProvider(env, "email");
+  } else if (isSystem) {
     provider = config
       ? await resolveEmailProvider(env, tenantId, config)
       : getDeliveryProvider(env, "email");
@@ -278,8 +292,13 @@ export async function sendEmail(
     provider = await resolveEmailProvider(env, tenantId, config);
   }
 
+  // System mail goes out under the PLATFORM sender identity, not the tenant's:
+  // it is sent through the platform's own provider account, which has only the
+  // platform domain verified. Preferring a tenant's from_address here would
+  // make Resend reject every invite for tenants that configured dunning from
+  // their own domain. Customer-facing mail keeps the tenant identity.
   const from = isSystem
-    ? (config?.from_address ?? env.SYSTEM_FROM_ADDRESS ?? "companyos@localhost")
+    ? (env.SYSTEM_FROM_ADDRESS ?? config?.from_address ?? "companyos@localhost")
     : (config?.from_address ?? "companyos@localhost");
 
   const refs = input.refs ?? {};
