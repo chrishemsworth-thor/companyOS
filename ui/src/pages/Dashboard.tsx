@@ -1,9 +1,10 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Receipt, TrendingUp, LifeBuoy, CircleDot, type LucideIcon } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { LoadingState, ErrorState } from "../components/AsyncState";
 import { DataTable } from "../components/DataTable";
-import { formatMoney } from "../lib/format";
+import { formatCents, formatMoney } from "../lib/format";
 
 interface CurrencyBucket {
   currency: string;
@@ -19,6 +20,26 @@ interface Summary {
 interface ArAging {
   buckets: { bucket: string; count: number; cents: number }[];
 }
+
+type ProfitabilityGroupBy = "project" | "customer" | "department";
+interface ProfitabilityRow {
+  key: string | null;
+  label: string;
+  revenue_cents: number;
+  cost_cents: number;
+  margin_cents: number;
+  margin_pct: number | null;
+}
+interface Profitability {
+  group_by: ProfitabilityGroupBy;
+  rows: ProfitabilityRow[];
+}
+
+const GROUP_BY_LABELS: Record<ProfitabilityGroupBy, string> = {
+  project: "Project",
+  customer: "Customer",
+  department: "Department",
+};
 
 const AGING_LABELS: Record<string, string> = {
   current: "Not yet due",
@@ -37,6 +58,7 @@ const TONE_CHIP: Record<Tone, string> = {
 
 export function Dashboard() {
   const { client } = useAuth();
+  const [groupBy, setGroupBy] = useState<ProfitabilityGroupBy>("project");
 
   const summary = useQuery({
     queryKey: ["insights", "summary"],
@@ -46,6 +68,11 @@ export function Dashboard() {
   const aging = useQuery({
     queryKey: ["insights", "ar-aging"],
     queryFn: () => client!.get<ArAging>("/v1/insights/ar-aging"),
+    enabled: !!client,
+  });
+  const profit = useQuery({
+    queryKey: ["insights", "profitability", groupBy],
+    queryFn: () => client!.get<Profitability>(`/v1/insights/profitability?group_by=${groupBy}`),
     enabled: !!client,
   });
 
@@ -108,6 +135,63 @@ export function Dashboard() {
             {
               header: "Outstanding (cents)",
               render: (b) => (b.cents / 100).toLocaleString(),
+              align: "right",
+            },
+          ]}
+        />
+      )}
+
+      <h2>Profitability</h2>
+      <p className="mb-3 text-sm text-subtle">
+        Revenue and direct cost from the dimensioned ledger. Cost counts tagged expense
+        postings only — labour is not included.
+      </p>
+      <div className="mb-3 flex gap-2">
+        {(Object.keys(GROUP_BY_LABELS) as ProfitabilityGroupBy[]).map((g) => (
+          <button
+            key={g}
+            type="button"
+            onClick={() => setGroupBy(g)}
+            aria-pressed={groupBy === g}
+            className={`rounded-lg border px-3 py-1.5 text-sm font-medium ${
+              groupBy === g
+                ? "border-accent bg-accent-soft text-accent"
+                : "border-border bg-surface text-muted hover:text-fg"
+            }`}
+          >
+            {GROUP_BY_LABELS[g]}
+          </button>
+        ))}
+      </div>
+      {profit.isLoading && <LoadingState />}
+      {profit.error && <ErrorState error={profit.error} />}
+      {profit.data && (
+        <DataTable
+          rows={profit.data.rows}
+          // key is null for the Unallocated bucket, which is always a single row.
+          rowKey={(r) => r.key ?? "__unallocated"}
+          columns={[
+            {
+              header: GROUP_BY_LABELS[profit.data.group_by],
+              render: (r) => (
+                <span className={r.key === null ? "text-subtle italic" : undefined}>{r.label}</span>
+              ),
+            },
+            { header: "Revenue", render: (r) => formatCents(r.revenue_cents), align: "right" },
+            { header: "Direct cost", render: (r) => formatCents(r.cost_cents), align: "right" },
+            {
+              header: "Margin",
+              render: (r) => (
+                <span className={r.margin_cents < 0 ? "text-bad" : undefined}>
+                  {formatCents(r.margin_cents)}
+                </span>
+              ),
+              align: "right",
+            },
+            {
+              header: "Margin %",
+              // Null when there is no revenue to divide by — cost-only buckets.
+              render: (r) => (r.margin_pct === null ? "—" : `${r.margin_pct}%`),
               align: "right",
             },
           ]}

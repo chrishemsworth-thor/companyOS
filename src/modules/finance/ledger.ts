@@ -1,10 +1,12 @@
 import { ulid } from "../../lib/ulid";
 import { paginate } from "../../gateway/pagination";
+import { DEPARTMENT_IDS } from "../../departments/registry";
 import type {
   Account,
   EntrySourceType,
   JournalEntry,
   JournalLine,
+  LineDimensions,
 } from "./types";
 
 /**
@@ -32,7 +34,7 @@ export type SystemAccountCode = (typeof SYSTEM_ACCOUNTS)[number]["code"];
 
 export class LedgerError extends Error {
   constructor(
-    readonly code: "unbalanced" | "too_few_lines" | "unknown_account",
+    readonly code: "unbalanced" | "too_few_lines" | "unknown_account" | "unknown_department",
     message: string,
   ) {
     super(message);
@@ -47,7 +49,37 @@ export interface EntryInput {
   source_type: EntrySourceType;
   source_id?: string;
   reverses_entry_id?: string;
-  lines: { account_id: string; amount_cents: number }[];
+  lines: ({ account_id: string; amount_cents: number } & LineDimensions)[];
+}
+
+/** The dimension column order shared by every read and write of a line. */
+const DIMENSION_COLUMNS = [
+  "customer_id",
+  "project_id",
+  "department_code",
+  "employee_id",
+  "cost_centre",
+] as const;
+
+/**
+ * `department_code` is the only dimension with a closed vocabulary — it names a
+ * department in the in-code registry, not a row in a table, so nothing at the
+ * SQL level can reject a typo. Validated here rather than at the route so every
+ * caller (manual entries, invoice posting, PRD-006 claim posting) gets the same
+ * guarantee.
+ */
+function assertDimensionsValid(lines: readonly LineDimensions[]): void {
+  for (const line of lines) {
+    const code = line.department_code;
+    if (code !== undefined && code !== null && !DEPARTMENT_IDS.includes(code)) {
+      throw new LedgerError("unknown_department", `unknown department_code: ${code}`);
+    }
+  }
+}
+
+/** Dimension binds in DIMENSION_COLUMNS order; absent and null are the same thing. */
+function dimensionBinds(line: LineDimensions): (string | null)[] {
+  return DIMENSION_COLUMNS.map((col) => line[col] ?? null);
 }
 
 /** Idempotent: INSERT OR IGNORE keyed on UNIQUE (tenant_id, code). */
@@ -140,6 +172,7 @@ export function buildEntryStatements(
   if (sum !== 0) {
     throw new LedgerError("unbalanced", `lines sum to ${sum}, must be exactly 0`);
   }
+  assertDimensionsValid(input.lines);
 
   const entryId = `je_${ulid()}`;
   const statements = [
@@ -162,10 +195,11 @@ export function buildEntryStatements(
     ...input.lines.map((line, i) =>
       db
         .prepare(
-          `INSERT INTO journal_lines (entry_id, tenant_id, line_no, account_id, amount_cents)
-           VALUES (?, ?, ?, ?, ?)`,
+          `INSERT INTO journal_lines
+             (entry_id, tenant_id, line_no, account_id, amount_cents, ${DIMENSION_COLUMNS.join(", ")})
+           VALUES (?, ?, ?, ?, ?, ${DIMENSION_COLUMNS.map(() => "?").join(", ")})`,
         )
-        .bind(entryId, tenantId, i + 1, line.account_id, line.amount_cents),
+        .bind(entryId, tenantId, i + 1, line.account_id, line.amount_cents, ...dimensionBinds(line)),
     ),
   ];
   return { entry_id: entryId, statements };
@@ -268,7 +302,8 @@ export async function getEntry(
   if (!header) return null;
   const { results } = await db
     .prepare(
-      `SELECT line_no, account_id, amount_cents FROM journal_lines
+      `SELECT line_no, account_id, amount_cents, ${DIMENSION_COLUMNS.join(", ")}
+       FROM journal_lines
        WHERE tenant_id = ? AND entry_id = ? ORDER BY line_no`,
     )
     .bind(tenantId, entryId)
@@ -277,7 +312,11 @@ export async function getEntry(
 }
 
 /**
- * Post a reversal of an existing entry: same lines, negated amounts.
+ * Post a reversal of an existing entry: same lines, negated amounts, **same
+ * dimensions**. Carrying the dimensions is load-bearing: a reversal that lost
+ * them would leave the original's tagged revenue in a project's rollup while the
+ * offsetting credit landed in "Unallocated", so the project would keep margin it
+ * no longer has.
  * The corrected state is re-posted separately by the caller if needed.
  */
 export async function reverseEntry(
@@ -297,6 +336,11 @@ export async function reverseEntry(
     lines: original.lines.map((l) => ({
       account_id: l.account_id,
       amount_cents: -l.amount_cents,
+      customer_id: l.customer_id,
+      project_id: l.project_id,
+      department_code: l.department_code,
+      employee_id: l.employee_id,
+      cost_centre: l.cost_centre,
     })),
   });
 }

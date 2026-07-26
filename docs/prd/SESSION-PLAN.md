@@ -62,6 +62,8 @@ Recorded so no session re-opens them.
 | **Single approver in v1** | PRD-006 | PRD-000 non-goals multi-step chains; PRD-006 P0 says *"single approver in v1"* with multi-step as P1. PRD-000's scope stands unchanged — but keep `approvals` rows independent so `sequence_index`/`parent_id` are additive. |
 | **Claims before leave** | PRD-006 | PRD-006's own open question answers itself: claims first (sharper demo, proves the architecture), leave immediately after, *"neither is sellable alone."* |
 | **Free-plan event consumer can write rows** | S0 verification | See "Resolved open questions" below. Notifications are not blocked. |
+| **Profitability's "direct cost" is dimensioned expense postings only** | S1, stated assumption | Labour cost via employee rate × logged time is excluded — CompanyOS has no time tracking and PRD-001 puts that in its own PRD. Revenue-side and expense-side rollups only. |
+| **Invoices carry an optional `project_id`** | S1 | PRD-001 says "project-linked entries inherit `project_id`" but nothing linked an invoice to a project, so project *revenue* had no derivation source and the flagship agency rollup would have had a cost side only. Added as a nullable column, stamped onto both posting legs. |
 
 ---
 
@@ -70,7 +72,7 @@ Recorded so no session re-opens them.
 | # | Session | PRD | Pri | Branch | Depends on | Status |
 |---|---|---|---|---|---|---|
 | S0 | Plan & document landing | — | — | `claude/readme-p0-review-78jc3u` | — | **done** |
-| S1 | Ledger dimensions + profitability | 001a | P0 | `claude/prd-001a-ledger-dimensions` | S0 | not started |
+| S1 | Ledger dimensions + profitability | 001a | P0 | `claude/readme-p0-review-78jc3u`² | S0 | **done** |
 | S2 | File storage primitive | 000a | P0 | `claude/prd-000a-file-storage` | S0 | not started |
 | S3 | Approvals primitive | 000b | P0 | `claude/prd-000b-approvals` | S2 | not started |
 | S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/prd-000c-007-notifications-inbox` | S3 | not started |
@@ -87,6 +89,10 @@ Recorded so no session re-opens them.
 ¹ PRD-001 marks all of these P0, but the index defers tax, credit notes and
 multi-currency until *"a design partner hits them"*. Treat S12/S13 as
 demand-driven rather than scheduled — with one exception, see conflict C2.
+
+² S1 landed on the S0 branch rather than its own, because the session was
+running under a standing instruction not to push elsewhere. Migration
+`0020_ledger_dimensions.sql` is taken; the next session takes `0021`.
 
 ### How this differs from the index's build order
 
@@ -348,6 +354,8 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 | Gmail client | `src/integrations/google/gmail-client.ts` — `getMessage()` is metadata-only with four headers; `sendMessage()` accepts `threadId`. See the resolved PRD-005 question. |
 | LLM ports | `src/llm/anthropic.ts` (`DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8"`), `src/llm/openai.ts`. Agent lives in `src/agents/collections.ts` + `decision.ts`. |
 | Tests | `@cloudflare/vitest-pool-workers`, real Workers runtime, flat files in `test/`. `vitest.config.ts` points at `wrangler.jsonc`, so **a new binding must be in `wrangler.jsonc` or tests cannot see it.** |
+| Test storage isolation | **Isolated storage is on**: D1 writes made inside an `it` are rolled back before the next test, so one test cannot rely on rows another created. Seed shared fixtures in `beforeAll`, which does persist for the file. Cost S1 three confusing failures against correct code — the endpoint worked in isolation while the suite reported missing rows. |
+| Console dependencies | `ui/` has its **own** `package.json` and `node_modules`, separate from the root. `npm ci` at the root does not install them, and without them a console typecheck reports every import as missing — which looks like a broken change and is not. |
 | Console | Vite + React under `ui/src`; pages per module, shared `ui/src/components`, modals in `ui/src/components/modals`. |
 
 ---
