@@ -77,6 +77,16 @@
     }
   ],
 
+  // Binary object storage for the PRD-000 file primitive (src/modules/files).
+  // Object keys are ALWAYS `{tenant_id}/{uuid}`; the `files` D1 row is the
+  // authority on ownership and the read path checks it before streaming, so a
+  // guessed key is never sufficient on its own. The test suite reads this
+  // config (vitest.config.ts), so the binding must live here as well as in
+  // wrangler.free.jsonc — R2 has a free tier, so the free-plan deploy is fine.
+  "r2_buckets": [
+    { "binding": "FILES", "bucket_name": "companyos-files" }
+  ],
+
   "queues": {
     "producers": [
       { "binding": "EVENTS", "queue": "companyos-events" }

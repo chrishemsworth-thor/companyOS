@@ -16,6 +16,7 @@ where relevant — this file records **our** deployment.
 | API (gateway + modules + agents) | Cloudflare Worker → **https://api.companyos.com.my** (custom domain) | worker `companyos-backend` |
 | Database | Cloudflare D1 (SQLite) | `companyos-db` |
 | Config/auth cache + sessions | Workers KV | `CONFIG_CACHE`, `SESSIONS` |
+| Uploaded files (logos, receipts, signatures) | Cloudflare R2 | bucket `companyos-files`, binding `FILES` |
 | Collections agent | Durable Object (SQLite-backed, one per tenant+customer) | `CollectionsAgent` |
 | Event bus | **None (free plan)** — events dispatch inline via the direct bus | see [queue-send.md](queue-send.md) |
 | Schedules | Cron Triggers | daily sweep `0 1 * * *` (UTC), Gmail sync `*/5 * * * *` |
@@ -44,6 +45,20 @@ Constraints that shape this layout:
   differences.
 - **`ui/`** — the console; the API origin is baked in at build time via
   `VITE_API_BASE_URL` (login page hides the base-URL field entirely).
+
+### Creating the R2 bucket
+
+The `FILES` binding in both wrangler configs points at a bucket that has to
+exist before the first deploy that includes it:
+
+```sh
+npx wrangler r2 bucket create companyos-files
+```
+
+R2 has a free tier, so this works on the free plan. The bucket needs **no
+public access setting**: public reads of a `quote_logo` are served by the
+Worker's own `GET /files/:id` route, which checks the purpose policy first.
+Leave the bucket private — a bucket-level public URL would bypass that check.
 
 ## 3. Secrets
 

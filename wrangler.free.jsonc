@@ -75,6 +75,13 @@
     }
   ],
 
+  // Binary object storage for the PRD-000 file primitive (src/modules/files).
+  // R2 has a free tier, so this binding is available on the free plan. Create
+  // the bucket once with `npx wrangler r2 bucket create companyos-files`.
+  "r2_buckets": [
+    { "binding": "FILES", "bucket_name": "companyos-files" }
+  ],
+
   // No `queues` block: the absence of the EVENTS binding is what switches the
   // Worker to inline event dispatch (see ensureEventBus in src/queue/direct.ts).
 

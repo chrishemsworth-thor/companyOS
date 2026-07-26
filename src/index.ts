@@ -21,6 +21,7 @@ import { events } from "./gateway/routes/events";
 import { quotes } from "./gateway/routes/quotes";
 import { settings } from "./gateway/routes/settings";
 import { people } from "./gateway/routes/people";
+import { files, publicFiles } from "./gateway/routes/files";
 import { webhookSources } from "./gateway/routes/webhook-sources";
 import { googleAccounts } from "./gateway/routes/google-accounts";
 import { googleOAuth } from "./gateway/routes/google-oauth";
@@ -89,6 +90,13 @@ app.route("/webhooks", webhooks);
 // src/gateway/routes/google-oauth.ts).
 app.route("/oauth/google", googleOAuth);
 
+// Public file reads. Carries no credential, so — like /webhooks and
+// /oauth/google — it lives outside /v1 rather than punching a hole in the
+// authenticate() guard. It serves only purposes whose policy marks them
+// publicly readable (`quote_logo` alone in v1, for the public quote page);
+// everything else 404s here. See src/modules/files/policy.ts.
+app.route("/files", publicFiles);
+
 // Session login surface — public (no session required), mounted before the
 // authenticate() guard so login/logout/me are reachable.
 app.route("/v1/auth", auth);
@@ -113,6 +121,7 @@ app.route("/v1/events", events);
 app.route("/v1/quotes", quotes);
 app.route("/v1/settings", settings);
 app.route("/v1/people", people);
+app.route("/v1/files", files);
 app.route("/v1/webhook-sources", webhookSources);
 app.route("/v1/google-accounts", googleAccounts);
 
