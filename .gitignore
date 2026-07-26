@@ -70,6 +70,11 @@ web_modules/
 .env.*
 !.env.example
 
+# Wrangler local secrets (e.g. a real RESEND_API_KEY for local email sends).
+# `wrangler dev` AND the vitest worker pool both load this file.
+.dev.vars
+.dev.vars.*
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
