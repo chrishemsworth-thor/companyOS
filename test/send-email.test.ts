@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { sendEmail, DeliveryError } from "../src/delivery/dispatch";
+import { encryptRefreshToken } from "../src/integrations/google/crypto";
 
 /**
  * The generalized transactional-email path (sendEmail). Two gating classes:
@@ -31,13 +32,54 @@ function stubFetch(response: Response) {
   return mock;
 }
 
-async function setConfig(input: { enabled: number; from?: string }) {
+async function setConfig(input: { enabled: number; from?: string; googleAccountId?: string }) {
   await env.DB.prepare(
-    "INSERT INTO delivery_config (tenant_id, channel, from_address, enabled) VALUES (?, 'email', ?, ?)",
+    "INSERT INTO delivery_config (tenant_id, channel, from_address, enabled, google_account_id) VALUES (?, 'email', ?, ?, ?)",
   )
-    .bind(TENANT_ID, input.from ?? "billing@sme.example", input.enabled)
+    .bind(
+      TENANT_ID,
+      input.from ?? "billing@sme.example",
+      input.enabled,
+      input.googleAccountId ?? null,
+    )
     .run();
 }
+
+/** Seed an active Gmail account with send scope (mirrors google-delivery.test.ts). */
+async function insertGoogleAccount(accountId: string) {
+  const sealed = await encryptRefreshToken(env.GOOGLE_TOKEN_ENCRYPTION_KEY!, "1//refresh");
+  await env.DB.prepare(
+    `INSERT INTO google_accounts (account_id, tenant_id, kind, google_email, scopes, refresh_token_ciphertext, refresh_token_iv, status)
+     VALUES (?, ?, 'shared', ?, ?, ?, ?, 'active')`,
+  )
+    .bind(
+      accountId,
+      TENANT_ID,
+      "ops@tenant-domain.example",
+      "https://www.googleapis.com/auth/gmail.send",
+      sealed.ciphertext,
+      sealed.iv,
+    )
+    .run();
+}
+
+/** Stub fetch by URL substring, so Google and Resend can be told apart. */
+function routeFetch(handlers: Record<string, () => Response>) {
+  const calls: string[] = [];
+  const mock = vi.fn(async (input: RequestInfo | URL) => {
+    const url = typeof input === "string" ? input : input.toString();
+    calls.push(url);
+    for (const [needle, make] of Object.entries(handlers)) {
+      if (url.includes(needle)) return make();
+    }
+    throw new Error(`unexpected fetch to ${url}`);
+  });
+  vi.stubGlobal("fetch", mock);
+  return { calls };
+}
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
 
 async function lastDelivery(to: string) {
   return env.DB.prepare(
@@ -171,6 +213,49 @@ describe("gating classes", () => {
       purpose: "user_invite",
     });
     expect(result.provider).toBe("resend");
+  });
+});
+
+describe("tenant Gmail routing", () => {
+  it("password_reset NEVER routes through a tenant's Gmail — platform transport only", async () => {
+    // A tenant with Gmail connected for its customer mail must not carry
+    // account-recovery email: a revoked OAuth grant would break resets.
+    env.RESEND_API_KEY = "re_test_key";
+    await insertGoogleAccount("gac_send_email");
+    await setConfig({ enabled: 1, googleAccountId: "gac_send_email" });
+    const { calls } = routeFetch({
+      "api.resend.com/emails": () => json({ id: "re_msg_reset" }),
+      // Any Gmail/OAuth call would throw "unexpected fetch".
+    });
+
+    const result = await sendEmail(env, TENANT_ID, {
+      to: "staff@example.com",
+      subject: "Reset your password",
+      text: "Link inside.",
+      purpose: "password_reset",
+    });
+
+    expect(result.provider).toBe("resend");
+    expect(calls.some((u) => u.includes("googleapis.com"))).toBe(false);
+  });
+
+  it("user_invite still rides a connected Gmail (company-domain sender is a feature)", async () => {
+    await insertGoogleAccount("gac_send_email2");
+    await setConfig({ enabled: 1, googleAccountId: "gac_send_email2" });
+    const { calls } = routeFetch({
+      "oauth2.googleapis.com/token": () => json({ access_token: "ya29.x", expires_in: 3599, scope: "x" }),
+      "gmail/v1/users/me/messages/send": () => json({ id: "gmail_invite", threadId: "thr_1" }),
+    });
+
+    const result = await sendEmail(env, TENANT_ID, {
+      to: "newhire@example.com",
+      subject: "You're invited",
+      text: "Join us.",
+      purpose: "user_invite",
+    });
+
+    expect(result).toMatchObject({ provider: "google", delivery_ref: "gmail_invite" });
+    expect(calls.some((u) => u.includes("messages/send"))).toBe(true);
   });
 });
 
