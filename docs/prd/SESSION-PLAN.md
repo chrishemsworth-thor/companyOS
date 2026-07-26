@@ -39,9 +39,10 @@ Open a session and paste:
 3. **One session, one branch, one shippable increment.** Do not start the next
    session's scope because there is context left over.
 4. `npm run typecheck && npm test` must pass before the push that closes a
-   session. **Baseline at S0:** clean typecheck, 36 test files / 305 tests
-   passing on `main` at `d1e5202`. A session finding fewer than 305 passing
-   tests has broken something.
+   session. **Baseline after S1:** clean typecheck, 37 test files / 321 tests
+   passing on `main` at `b74a2f5`. A session finding fewer passing tests than
+   that has broken something. Re-check the current count on `main` before
+   assuming your own change caused a drop — `main` moves between sessions.
 5. **Take the next free migration number at session start.** Do not reserve
    numbers in this file — session order will move. Highest on `main` is
    `0019_transactional_email.sql`, so the next session takes `0020`. Note `0015`
@@ -90,9 +91,9 @@ Recorded so no session re-opens them.
 multi-currency until *"a design partner hits them"*. Treat S12/S13 as
 demand-driven rather than scheduled — with one exception, see conflict C2.
 
-² S1 landed on the S0 branch rather than its own, because the session was
-running under a standing instruction not to push elsewhere. Migration
-`0020_ledger_dimensions.sql` is taken; the next session takes `0021`.
+² S0 and S1 both landed on this branch, merged to `main` as PR #42. Migration
+`0020_ledger_dimensions.sql` is taken; **S2 takes `0021`.** Later sessions each
+get their own branch as listed.
 
 ### How this differs from the index's build order
 
