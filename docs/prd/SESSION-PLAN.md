@@ -21,7 +21,12 @@ all eight together, and a self-contained brief per session.
 
 ## How to run a session
 
-Open a session and paste:
+Ready-to-paste openers for every remaining session live in
+[`SESSION-PROMPTS.md`](SESSION-PROMPTS.md) — each one names the brief, the PRD
+sections, and the conflicts and decisions that session needs up front. Use those
+in preference to writing your own.
+
+The generic shape, if you need it:
 
 > Read `docs/prd/SESSION-PLAN.md` and the brief for **S<n>**, plus the PRD it
 > references. Before writing code, produce an implementation plan covering D1
@@ -44,11 +49,11 @@ Open a session and paste:
    passing tests than that has broken something. Re-check the current count on
    `main` before assuming your own change caused a drop — `main` moves between
    sessions.
-5. **Take the next free migration number at session start.** Do not reserve
-   numbers in this file — session order will move. Highest on `main` is
-   `0019_transactional_email.sql`, so the next session takes `0020`. Note `0015`
-   is already duplicated (`0015_google_accounts.sql`, `0015_people.sql`); do not
-   add a third collision.
+5. **Take the next free migration number at session start** by checking `main`,
+   not this file — session order moves and a hardcoded number here goes stale.
+   As of S2, `0021_files.sql` is the highest, so S3 takes `0022`. Note `0015` is
+   already duplicated (`0015_google_accounts.sql`, `0015_people.sql`); do not add
+   a third collision.
 6. Update the **Status** column below in the closing commit. It is the only
    cross-session progress record.
 
