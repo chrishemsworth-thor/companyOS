@@ -99,6 +99,194 @@ beforeAll(async () => {
   });
 });
 
+interface InviteBody {
+  employee: Employee;
+  user?: { user_id: string; email: string; role: string; status: string };
+  invite?: { emailed: boolean; provider: string | null; expires_at: string; invite_url: string };
+  error?: string;
+  code?: string;
+}
+
+async function inviteEmployee(
+  employeeId: string,
+  body: Record<string, unknown> = {},
+  headers: Record<string, string> = bearer,
+): Promise<{ status: number; body: InviteBody }> {
+  const res = await fetchWorker(`/v1/people/employees/${employeeId}/invite`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, body: (await res.json()) as InviteBody };
+}
+
+describe("invite an employee to the platform", () => {
+  it("creates the linked login, sends the invite, and records the delivery", async () => {
+    const emp = (
+      await createEmployee({
+        name: "Nadia Ops",
+        email: "nadia@people.test",
+        department_id: "operations",
+      })
+    ).body;
+    expect(emp.user_id).toBeNull();
+
+    const { status, body } = await inviteEmployee(emp.employee_id, { role: "finance" });
+    expect(status).toBe(201);
+
+    // Employee is now linked to a pending login carrying the chosen role.
+    expect(body.employee.user_id).toBe(body.user!.user_id);
+    expect(body.user).toMatchObject({
+      email: "nadia@people.test",
+      role: "finance",
+      status: "invited",
+    });
+    expect(body.invite!.invite_url).toContain("/accept-invite?token=");
+
+    // The link is persisted, not just echoed.
+    const reread = await fetchWorker(`/v1/people/employees/${emp.employee_id}`, { headers: bearer });
+    expect(((await reread.json()) as Employee).user_id).toBe(body.user!.user_id);
+
+    const delivery = await env.DB.prepare(
+      "SELECT purpose, user_id, to_address, status FROM deliveries WHERE tenant_id = ? AND user_id = ?",
+    )
+      .bind(TENANT_ID, body.user!.user_id)
+      .first();
+    expect(delivery).toMatchObject({
+      purpose: "user_invite",
+      to_address: "nadia@people.test",
+      status: "sent",
+    });
+  });
+
+  it("defaults the platform role to operator", async () => {
+    const emp = (
+      await createEmployee({ name: "Default Role", email: "dr@people.test", department_id: "people" })
+    ).body;
+    const { body } = await inviteEmployee(emp.employee_id);
+    expect(body.user!.role).toBe("operator");
+  });
+
+  it("422s an employee with no email address", async () => {
+    const emp = (await createEmployee({ name: "No Email", department_id: "people" })).body;
+    const { status, body } = await inviteEmployee(emp.employee_id);
+    expect(status).toBe(422);
+    expect(body.code).toBe("no_email");
+  });
+
+  it("422s an inactive employee", async () => {
+    const emp = (
+      await createEmployee({
+        name: "Gone Fishing",
+        email: "gone@people.test",
+        department_id: "people",
+        status: "inactive",
+      })
+    ).body;
+    const { status, body } = await inviteEmployee(emp.employee_id);
+    expect(status).toBe(422);
+    expect(body.code).toBe("employee_inactive");
+  });
+
+  it("404s an unknown employee", async () => {
+    expect((await inviteEmployee("emp_missing")).status).toBe(404);
+  });
+
+  it("re-invites while the login is still pending, invalidating the old link", async () => {
+    const emp = (
+      await createEmployee({ name: "Twice Asked", email: "twice@people.test", department_id: "people" })
+    ).body;
+    const first = await inviteEmployee(emp.employee_id);
+    expect(first.status).toBe(201);
+    const firstToken = new URL(first.body.invite!.invite_url).searchParams.get("token")!;
+
+    const second = await inviteEmployee(emp.employee_id);
+    expect(second.status).toBe(200);
+    const secondToken = new URL(second.body.invite!.invite_url).searchParams.get("token")!;
+    expect(secondToken).not.toBe(firstToken);
+
+    // The superseded link no longer works; the fresh one does.
+    const stale = await fetchWorker("/v1/auth/invite/accept", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: firstToken, password: "stale link pass" }),
+    });
+    expect(stale.status).toBe(400);
+    const fresh = await fetchWorker("/v1/auth/invite/accept", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: secondToken, password: "fresh link pass" }),
+    });
+    expect(fresh.status).toBe(200);
+  });
+
+  it("409s when the employee already has active console access", async () => {
+    const linked = await createUser(env.DB, {
+      tenant_id: TENANT_ID,
+      email: "haslogin@people.test",
+      password: "already-has-access",
+      role: "operator",
+    });
+    const emp = (
+      await createEmployee({
+        name: "Has Login",
+        email: "haslogin-emp@people.test",
+        department_id: "people",
+        user_id: linked.user_id,
+      })
+    ).body;
+
+    const { status, body } = await inviteEmployee(emp.employee_id);
+    expect(status).toBe(409);
+    expect(body.code).toBe("already_has_access");
+  });
+
+  it("409s when an unlinked login already owns the employee's email", async () => {
+    await createUser(env.DB, {
+      tenant_id: TENANT_ID,
+      email: "collide@people.test",
+      password: "existing-account",
+      role: "support",
+    });
+    const emp = (
+      await createEmployee({
+        name: "Collides",
+        email: "collide@people.test",
+        department_id: "people",
+      })
+    ).body;
+
+    const { status, body } = await inviteEmployee(emp.employee_id);
+    expect(status).toBe(409);
+    expect(body.code).toBe("email_taken");
+    // No half-done state: the employee is still unlinked.
+    const reread = await fetchWorker(`/v1/people/employees/${emp.employee_id}`, { headers: bearer });
+    expect(((await reread.json()) as Employee).user_id).toBeNull();
+  });
+
+  it("is admin-only — an operator who may create employees may not grant logins", async () => {
+    const emp = (
+      await createEmployee({ name: "Gate Check", email: "gate@people.test", department_id: "people" })
+    ).body;
+    const op = await login("op@people.test", "operator-password");
+
+    const res = await fetchWorker(`/v1/people/employees/${emp.employee_id}/invite`, {
+      method: "POST",
+      headers: { Cookie: op.cookie, "X-CSRF-Token": op.csrf, "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(403);
+
+    const admin = await login("admin@people.test", "admin-password");
+    const allowed = await fetchWorker(`/v1/people/employees/${emp.employee_id}/invite`, {
+      method: "POST",
+      headers: { Cookie: admin.cookie, "X-CSRF-Token": admin.csrf, "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(allowed.status).toBe(201);
+  });
+});
+
 describe("teams", () => {
   it("creates, reads, and patches a team", async () => {
     const { status, body: team } = await createTeam({

@@ -6,16 +6,12 @@ import { requireRole } from "../middleware/session";
 import {
   createUser,
   getUserAuthState,
-  getUserById,
   listUsers,
   ROLES,
   updateUser,
   UserError,
 } from "../../auth/users";
-import { INVITE_TTL_SECONDS, issueUserToken } from "../../auth/tokens";
-import { DeliveryError, sendEmail } from "../../delivery/dispatch";
-import { userInviteEmail } from "../../delivery/templates/user-emails";
-import { acceptInvitePath, consoleBaseUrl } from "../../delivery/templates/links";
+import { issueAndSendInvite, type InviteResult } from "../../auth/invites";
 
 /**
  * User management. Admin-only for human callers; a tenant-API-key (system)
@@ -52,62 +48,21 @@ function userErrorResponse(c: Context<AuthedEnv>, err: unknown) {
   throw err;
 }
 
-interface InviteResult {
-  emailed: boolean;
-  provider: string | null;
-  expires_at: string;
-  /** Single-use accept link — lets the admin hand it over out-of-band when the
-   * tenant has no real email transport (console provider / send failure). */
-  invite_url: string;
+/** The acting human's user id, for invite attribution (undefined for system). */
+function inviterId(c: Context<AuthedEnv>): string | undefined {
+  const actor = c.get("user");
+  return actor?.type === "user" ? actor.id : undefined;
 }
 
-/** Issue a fresh invite token and try to email it. Send failure never throws:
- * the user exists either way, and the admin still gets the copyable link. */
-async function issueAndSendInvite(
+function sendInvite(
   c: Context<AuthedEnv>,
-  input: { user_id: string; email: string },
+  user: { user_id: string; email: string },
 ): Promise<InviteResult> {
-  const tenant = c.get("tenant");
-  const actor = c.get("user");
-  const { raw, expires_at } = await issueUserToken(c.env.DB, {
-    tenant_id: tenant.tenant_id,
-    user_id: input.user_id,
-    purpose: "invite",
-    ttlSeconds: INVITE_TTL_SECONDS,
-    created_by: actor?.type === "user" ? actor.id : undefined,
+  return issueAndSendInvite(c.env, c.get("tenant").tenant_id, {
+    user_id: user.user_id,
+    email: user.email,
+    inviter_user_id: inviterId(c),
   });
-  const invite_url = consoleBaseUrl(c.env) + acceptInvitePath(raw);
-
-  const inviter =
-    actor?.type === "user" && actor.id
-      ? (await getUserById(c.env.DB, tenant.tenant_id, actor.id))?.display_name ?? undefined
-      : undefined;
-  const tenantRow = await c.env.DB.prepare("SELECT name FROM tenants WHERE tenant_id = ?")
-    .bind(tenant.tenant_id)
-    .first<{ name: string }>();
-  const rendered = userInviteEmail({
-    tenantName: tenantRow?.name ?? "your workspace",
-    inviterName: inviter,
-    acceptUrl: invite_url,
-    expiresDays: INVITE_TTL_SECONDS / 86_400,
-  });
-
-  try {
-    const { provider } = await sendEmail(c.env, tenant.tenant_id, {
-      to: input.email,
-      subject: rendered.subject,
-      text: rendered.text,
-      html: rendered.html,
-      purpose: "user_invite",
-      refs: { user_id: input.user_id },
-    });
-    // The console provider "sends" by logging — surface that to the admin as
-    // not-emailed so the UI offers the copyable link instead.
-    return { emailed: provider !== "console", provider, expires_at, invite_url };
-  } catch (err) {
-    if (!(err instanceof DeliveryError)) throw err;
-    return { emailed: false, provider: null, expires_at, invite_url };
-  }
 }
 
 users.get("/", async (c) => {
@@ -119,7 +74,7 @@ users.post("/", zValidator("json", createSchema), async (c) => {
   const tenant = c.get("tenant");
   try {
     const user = await createUser(c.env.DB, { tenant_id: tenant.tenant_id, ...c.req.valid("json") });
-    const invite = await issueAndSendInvite(c, { user_id: user.user_id, email: user.email });
+    const invite = await sendInvite(c, { user_id: user.user_id, email: user.email });
     return c.json({ user, invite }, 201);
   } catch (err) {
     return userErrorResponse(c, err);
@@ -136,7 +91,7 @@ users.post("/:id/resend-invite", async (c) => {
       409,
     );
   }
-  const invite = await issueAndSendInvite(c, { user_id: state.user_id, email: state.email });
+  const invite = await sendInvite(c, { user_id: state.user_id, email: state.email });
   return c.json({ invite });
 });
 
