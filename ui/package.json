@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "//build:prod": "Production bundle for Cloudflare Pages. Bakes in the API origin — building without it silently ships a bundle that calls http://localhost:8787 on every visitor's machine.",
+    "build:prod": "tsc --noEmit && VITE_API_BASE_URL=https://api.companyos.com.my vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

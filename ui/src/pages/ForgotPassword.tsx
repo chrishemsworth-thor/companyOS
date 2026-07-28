@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { MailCheck } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/Button";
+import { ApiConfigWarning } from "../components/ApiConfigWarning";
 
 /**
  * Request a password-reset link. The server always answers 200 whether or not
@@ -48,6 +49,8 @@ export function ForgotPassword() {
             <p className="mt-1 text-sm text-muted">We'll email you a reset link</p>
           </div>
         </div>
+
+        <ApiConfigWarning />
 
         {sent ? (
           <div className="rounded-xl border border-border bg-surface p-6 text-sm shadow-md">

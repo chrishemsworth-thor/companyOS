@@ -3,6 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../components/Button";
+import { ApiConfigWarning } from "../components/ApiConfigWarning";
 
 /**
  * Landing page for the emailed reset link (/reset-password?token=…). On
@@ -66,6 +67,8 @@ export function ResetPassword() {
             <p className="mt-1 text-sm text-muted">For your CompanyOS operator account</p>
           </div>
         </div>
+
+        <ApiConfigWarning />
 
         {done ? (
           <div className="rounded-xl border border-border bg-surface p-6 text-sm shadow-md">
