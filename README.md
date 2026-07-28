@@ -49,9 +49,10 @@ src/
     crm/             Customers, pipeline/deals, activities
     support/         Tickets + explicit state machine
     build/           Projects, issues
+    files/           Tenant-scoped file storage (R2) with per-purpose policy
   delivery/          DeliveryProvider port (email/WhatsApp; console impl for dev)
   gateway/
-    routes/          /v1/invoices, payments, ledger, customers, deals, activities, tickets, projects, issues, events
+    routes/          /v1/invoices, payments, ledger, customers, deals, activities, tickets, projects, issues, events, files
     middleware/      API-key auth + tenant resolution (D1 truth, KV cache)
   agents/            CollectionsAgent Durable Object
   queue/             Event-bus consumer: validate → log → route to agent DO

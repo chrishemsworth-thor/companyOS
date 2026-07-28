@@ -39,10 +39,11 @@ Open a session and paste:
 3. **One session, one branch, one shippable increment.** Do not start the next
    session's scope because there is context left over.
 4. `npm run typecheck && npm test` must pass before the push that closes a
-   session. **Baseline after S1:** clean typecheck, 37 test files / 321 tests
-   passing on `main` at `b74a2f5`. A session finding fewer passing tests than
-   that has broken something. Re-check the current count on `main` before
-   assuming your own change caused a drop — `main` moves between sessions.
+   session. **Baseline after S2:** clean typecheck, 38 test files / 346 tests
+   (S1's baseline was 37 / 321 on `main` at `b74a2f5`). A session finding fewer
+   passing tests than that has broken something. Re-check the current count on
+   `main` before assuming your own change caused a drop — `main` moves between
+   sessions.
 5. **Take the next free migration number at session start.** Do not reserve
    numbers in this file — session order will move. Highest on `main` is
    `0019_transactional_email.sql`, so the next session takes `0020`. Note `0015`
@@ -74,7 +75,7 @@ Recorded so no session re-opens them.
 |---|---|---|---|---|---|---|
 | S0 | Plan & document landing | — | — | `claude/readme-p0-review-78jc3u` | — | **done** |
 | S1 | Ledger dimensions + profitability | 001a | P0 | `claude/readme-p0-review-78jc3u`² | S0 | **done** |
-| S2 | File storage primitive | 000a | P0 | `claude/prd-000a-file-storage` | S0 | not started |
+| S2 | File storage primitive | 000a | P0 | `claude/s2-implementation-plan-nv4e1f`³ | S0 | **done** |
 | S3 | Approvals primitive | 000b | P0 | `claude/prd-000b-approvals` | S2 | not started |
 | S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/prd-000c-007-notifications-inbox` | S3 | not started |
 | S5 | Expense claims + GL posting | 006a | P0 | `claude/prd-006a-expense-claims` | S1, S2, S4 | not started |
@@ -92,8 +93,12 @@ multi-currency until *"a design partner hits them"*. Treat S12/S13 as
 demand-driven rather than scheduled — with one exception, see conflict C2.
 
 ² S0 and S1 both landed on this branch, merged to `main` as PR #42. Migration
-`0020_ledger_dimensions.sql` is taken; **S2 takes `0021`.** Later sessions each
-get their own branch as listed.
+`0020_ledger_dimensions.sql` is taken; S2 took `0021_files.sql`, so **S3 takes
+`0022`.** Later sessions each get their own branch as listed.
+
+³ S2 ran on the branch its session was given rather than the one named here.
+The name is cosmetic; the scope is not. **S3 takes `claude/prd-000b-approvals`
+as listed.**
 
 ### How this differs from the index's build order
 
@@ -342,8 +347,10 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 
 | Thing | Reality |
 |---|---|
-| `files`, `approvals`, `notifications` tables | **None exist.** Confirmed against every `CREATE TABLE` in `migrations/`. |
-| R2 | **No bucket bound in either wrangler config.** S2 adds an `r2_buckets` block to *both* `wrangler.jsonc` and `wrangler.free.jsonc`. R2 has a free tier, so the free-plan deploy is not blocked. |
+| `files`, `approvals`, `notifications` tables | `files` **exists** as of S2 (`0021_files.sql`). `approvals` and `notifications` still do not — confirmed against every `CREATE TABLE` in `migrations/`. |
+| R2 | **Bound as of S2**: bucket `companyos-files`, binding `FILES`, in *both* `wrangler.jsonc` and `wrangler.free.jsonc`. Create it once with `npx wrangler r2 bucket create companyos-files` — R2 has a free tier, so the free-plan deploy is not blocked. |
+| File storage | `src/modules/files/` — `uploadFile`/`getFile`/`getPublicFile`/`deleteFile`, plus a per-purpose policy table (`policy.ts`). A module wanting to store a binary adds a `purpose` entry there and calls the service; it never touches R2. See [`docs/modules/files.md`](../modules/files.md). |
+| Public (credential-less) reads | `GET /files/:id`, mounted **outside `/v1`** alongside `/webhooks` and `/oauth/google`. Serves only purposes whose policy sets `publiclyReadable` — `quote_logo` alone in v1. S9/S11 extend the policy table, not the read path. |
 | Tenant timezone | **Does not exist anywhere in `src/`.** S10 needs it (C6). |
 | `is_internal` on ticket messages | **Does not exist.** S11 adds it, and must default it correctly — PRD-005 calls leaking an internal note the failure mode that would kill trust in the module. |
 | Event registry | `src/schemas/events/registry.ts`, one Zod file per event, mapped `event_type → latest schema`. Unknown types are rejected by the consumer. |
@@ -442,6 +449,25 @@ purpose is not.
 
 **Not in scope:** file versioning — uploads are immutable, a new file is a new
 object.
+
+**Shipped (S2, `0021_files.sql`).** All of the above, as specified. Details
+live in [`docs/modules/files.md`](../modules/files.md); what later sessions
+need to know:
+
+- Call `src/modules/files/service.ts` — never R2 directly. A new purpose is an
+  entry in `policy.ts` plus a value in the enum, **no migration**.
+- Public reads are `GET /files/:id`, **outside `/v1`**, purpose-gated. S9 gets
+  the public logo read for free; S11 adds a purpose rather than a route.
+- Column names diverge slightly from the brief's shorthand: `file_id` (not
+  `id`) and `r2_key` (not `key`), matching the codebase's `<entity>_id`
+  convention and the composite `PRIMARY KEY (tenant_id, file_id)`.
+- `quote_logo` allows png/jpeg/webp only — PDF is dropped for the one purpose
+  served to an unauthenticated caller, since it cannot render in an `<img>`
+  anyway.
+- Two test-harness traps, both hit during S2: an R2 `get()` in a test leaves an
+  unread body stream and breaks the isolated-storage teardown (use `head()`),
+  and a `FormData` request body carries no `Content-Length` in the test
+  runtime.
 
 ---
 

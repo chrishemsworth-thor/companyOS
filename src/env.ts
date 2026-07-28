@@ -17,6 +17,14 @@ export interface Env {
   COLLECTIONS_AGENT: DurableObjectNamespace;
 
   /**
+   * Binary object storage for the file primitive (src/modules/files). Keys are
+   * always `{tenant_id}/{uuid}` — but the key is a layout convention, never an
+   * authorization check: the `files` row owns tenancy and the read path
+   * verifies it before streaming a single byte.
+   */
+  FILES: R2Bucket;
+
+  /**
    * HMAC signing secret for session cookies. Production sets this via
    * `wrangler secret put SESSION_SECRET`; wrangler.jsonc carries a dev-only
    * placeholder so local dev and tests work out of the box.
