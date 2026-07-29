@@ -15,6 +15,12 @@ export const sourceModuleSchema = z.enum([
   "build",
   // Communications — inbound/outbound email (Google/Gmail integration).
   "comms",
+  // Cross-cutting platform primitives that belong to no single business module
+  // — approvals (PRD-000b) and, when it lands, notifications. Emitting these
+  // as "people" or "finance" would misattribute an event that leave, claims,
+  // quotes and support all raise. `events_log.source_module` is plain TEXT
+  // with no CHECK, so this is a code-only addition.
+  "platform",
 ]);
 export type SourceModule = z.infer<typeof sourceModuleSchema>;
 

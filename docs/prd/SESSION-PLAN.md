@@ -52,11 +52,12 @@ The generic shape, if you need it:
 3. **One session, one branch, one shippable increment.** Do not start the next
    session's scope because there is context left over.
 4. `npm run typecheck && npm test` must pass before the push that closes a
-   session. **Baseline after S2:** clean typecheck, 38 test files / 346 tests
-   (S1's baseline was 37 / 321 on `main` at `b74a2f5`). A session finding fewer
-   passing tests than that has broken something. Re-check the current count on
-   `main` before assuming your own change caused a drop — `main` moves between
-   sessions.
+   session. **Baseline after S3:** clean typecheck, 39 test files / 406 tests
+   (S2 recorded 38 / 346, but `main` was already at 38 / 361 when S3 measured it;
+   S1's was 37 / 321 at `b74a2f5`). A session finding fewer passing tests than
+   that has broken something. Re-check the current count on `main` before
+   assuming your own change caused a drop — `main` moves between sessions, and
+   the number written here goes stale exactly as often.
 5. **Take the next free migration number at session start** by checking `main`,
    not this file — session order moves and a hardcoded number here goes stale.
    As of S2, `0021_files.sql` is the highest, so S3 takes `0022`. Note `0015` is
@@ -89,7 +90,7 @@ Recorded so no session re-opens them.
 | S0 | Plan & document landing | — | — | `claude/readme-p0-review-78jc3u` | — | **done** |
 | S1 | Ledger dimensions + profitability | 001a | P0 | `claude/readme-p0-review-78jc3u`² | S0 | **done** |
 | S2 | File storage primitive | 000a | P0 | `claude/s2-implementation-plan-nv4e1f`³ | S0 | **done** |
-| S3 | Approvals primitive | 000b | P0 | `claude/prd-000b-approvals` | S2 | not started |
+| S3 | Approvals primitive | 000b | P0 | `claude/approvals-primitive-qygql6`⁴ | S2 | **done** |
 | S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/prd-000c-007-notifications-inbox` | S3 | not started |
 | S5 | Expense claims + GL posting | 006a | P0 | `claude/prd-006a-expense-claims` | S1, S2, S4 | not started |
 | S6 | Leave policy, holidays, balances | 006b | P0 | `claude/prd-006b-leave-policy` | S4 | not started |
@@ -113,6 +114,10 @@ demand-driven rather than scheduled — with one exception, see conflict C2.
 ³ S2 ran on the branch its session was given rather than the one named here.
 The name is cosmetic; the scope is not. **S3 takes `claude/prd-000b-approvals`
 as listed.**
+
+⁴ S3, like S2, ran on the branch its session was given rather than the one named
+here. Migration `0022_approvals.sql` is taken, so **S4 takes `0023`** — but check
+`main` rather than trusting this line, per standing rule 5.
 
 ### How this differs from the index's build order
 
@@ -362,7 +367,9 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 
 | Thing | Reality |
 |---|---|
-| `files`, `approvals`, `notifications` tables | `files` **exists** as of S2 (`0021_files.sql`). `approvals` and `notifications` still do not — confirmed against every `CREATE TABLE` in `migrations/`. |
+| `files`, `approvals`, `notifications` tables | `files` **exists** as of S2 (`0021_files.sql`); `approvals` as of S3 (`0022_approvals.sql`). `notifications` still does not — S4 builds it. |
+| Approvals | `src/modules/approvals/` — `requestApproval`/`decide`/`cancel`/`cancelForSubject`, plus `resolution.ts` (the C1 upward walk) and a per-`subject_type` strategy map. A module wanting a human decision adds a `subjectTypeSchema` value and calls the service; it never inserts into `approvals`. See [`docs/modules/approvals.md`](../modules/approvals.md). |
+| `source_module` values | `finance`, `people`, `sales`, `support`, `build`, `comms`, and **`platform`** (added by S3 for primitives belonging to no business module). Enforced by Zod in `src/schemas/envelope.ts`, not by SQL. |
 | R2 | **Bound as of S2**: bucket `companyos-files`, binding `FILES`, in *both* `wrangler.jsonc` and `wrangler.free.jsonc`. Create it once with `npx wrangler r2 bucket create companyos-files` — R2 has a free tier, so the free-plan deploy is not blocked. |
 | File storage | `src/modules/files/` — `uploadFile`/`getFile`/`getPublicFile`/`deleteFile`, plus a per-purpose policy table (`policy.ts`). A module wanting to store a binary adds a `purpose` entry there and calls the service; it never touches R2. See [`docs/modules/files.md`](../modules/files.md). |
 | Public (credential-less) reads | `GET /files/:id`, mounted **outside `/v1`** alongside `/webhooks` and `/oauth/google`. Serves only purposes whose policy sets `publiclyReadable` — `quote_logo` alone in v1. S9/S11 extend the policy table, not the read path. |
@@ -523,6 +530,54 @@ terminating at admin.
 
 **Do not deploy S3 without S4.** An approvals backend nobody can see is not a
 feature — PRD-007 exists because that is how approval features die.
+
+**Shipped (S3, `0022_approvals.sql`).** All of the above, as specified. Details
+live in [`docs/modules/approvals.md`](../modules/approvals.md); what S4 and the
+consuming sessions need to know:
+
+- Call `src/modules/approvals/service.ts` — `requestApproval` / `decide` /
+  `cancel` / `cancelForSubject`. A new subject type is a value in
+  `subjectTypeSchema` plus a line in `SUBJECT_STRATEGIES`, **no migration**, as
+  PRD-000's success metric requires.
+- **Resolution is one function**, `resolveApprover` in `resolution.ts`, per C1.
+  Order of resort: the subject type's strategy → a tenant admin who is not the
+  requester → the requester themselves *only if they hold admin* → 422
+  `no_approver` with **no row written**. S14's "no owner set → tenant admin"
+  fallback should reuse this shape rather than reinvent it.
+- **The solo-admin decision** (new, needed by the walk): a tenant whose only
+  active admin is the requester routes the request back to them. PRD-000 permits
+  self-approval for admins, and 422-ing would make claims and leave unusable for
+  a one-person finance function. Recorded here so S5/S7 do not re-open it.
+- `source_module` is **`platform`**, a value added to `sourceModuleSchema` this
+  session for primitives belonging to no business module. `events_log
+  .source_module` has no `CHECK`, so it needed no migration. S4's notification
+  events should use it too.
+- Wire event types are **unversioned** (`approval.requested`) while the schema
+  files carry `.v1` — the existing registry convention, and the envelope's
+  `<entity>.<action>` regex enforces it. There is deliberately **no
+  `approval.cancelled`**: cancellation happens because the subject went away and
+  the subject module emits its own event.
+- Every `approval.*` payload carries **both** `requested_by` and
+  `approver_user_id`, so S4's consumer never needs a DB lookup to know who to
+  notify. `approval.requested` also carries `resolution_strategy` /
+  `resolution_hops`.
+- **Two deliberate divergences from PRD-000's letter**, both for S4 to inherit
+  rather than re-litigate: `reject` does **not** require a comment at the API
+  (PRD-000 says optional; PRD-007's console enforces it client-side), and a
+  fourth route `POST /v1/approvals/:id/cancel` exists — requester-or-admin only
+  — because PRD-007's My requests tab needs it and the generic inbox cannot know
+  which subject module owns a row.
+- A **tenant API key cannot decide** (400): it authenticates a tenant, not a
+  person, so there is nobody to write into `decided_by`. Tests that need a
+  decision must use a cookie session.
+- Test-harness note: the test env has a real `EVENTS` queue binding, so a sent
+  envelope never reaches the consumer and **nothing lands in `events_log`**.
+  `test/approvals.test.ts` uses a capturing bus to assert emissions and
+  `ensureEventBus` on a stripped env for the one end-to-end check. S4 will want
+  the same two patterns.
+- **Baseline after S3:** clean typecheck, 39 test files / 406 tests. (S2's
+  recorded baseline of 38 / 346 was already stale by the time S3 ran — `main`
+  was at 38 / 361. Re-measure, per standing rule 5.)
 
 ---
 
