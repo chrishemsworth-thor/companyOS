@@ -96,6 +96,151 @@ Open **http://localhost:5173** and sign in with the seeded operator
 - **Record payment** (from an invoice) — allocate one payment across several of
   a customer's outstanding invoices.
 
+## Approvals & notifications (PRD-000b/c + PRD-007)
+
+**Read this before hunting for a bug.** There is deliberately **no
+`POST /v1/approvals`** — the approvals primitive is an internal service that
+consuming modules call, because an approval must point at a real subject (a claim,
+a leave request) and letting a client conjure one would create approvals pointing
+at nothing. And the modules that *would* create them — expense claims (S5), leave
+requests (S7), quote sign-off (S9) — are not built yet.
+
+So on a fresh local database `/approvals` is legitimately empty and the bell shows
+zero. That is correct behaviour, not a broken build. To see the screens with data,
+insert an approval directly and then drive the rest through the real API.
+
+### Expect a ~5 second delay on the badge
+
+The plain `npm run dev` works — miniflare runs the queue consumer locally, so
+notifications do get written. But `wrangler.jsonc` sets
+`max_batch_timeout: 5` on the consumer, so the queue waits up to **five seconds**
+to fill a batch before delivering. Nudge something and check the bell
+immediately and you will see an empty feed and conclude it is broken. It is not;
+wait five seconds and refetch.
+
+If you would rather not have that delay while poking at this, run the free-plan
+config instead, where there is no queue at all and events dispatch **inline**
+through `src/queue/direct.ts` — the notification row is written before the API
+call returns:
+
+```sh
+npx wrangler dev --config wrangler.free.jsonc
+```
+
+> **The two configs do not share a local database.** `wrangler.jsonc` and
+> `wrangler.free.jsonc` declare different `database_id`s, and miniflare keys its
+> local D1 state on that id. Migrating with `npm run db:migrate:local` (which
+> reads `wrangler.jsonc`) and then serving with `--config wrangler.free.jsonc`
+> gives you a Worker talking to an empty database, and every request 500s with
+> `no such table: tenants`. If you use the free config, pass it to
+> **everything** — `npx wrangler d1 migrations apply companyos-db --local
+> --config wrangler.free.jsonc`, and the same flag on every `d1 execute` below.
+
+### Seed one approval
+
+Take the `usr_…` id of your logged-in admin and its `biz_…` tenant id:
+
+```sh
+npx wrangler d1 execute companyos-db --local \
+  --command "SELECT user_id, tenant_id, email FROM users;"
+```
+
+Insert a pending approval that *you* raised, assigned to *you*:
+
+```sh
+npx wrangler d1 execute companyos-db --local --command "
+  INSERT INTO approvals (approval_id, tenant_id, subject_type, subject_id,
+                         requested_by, approver_user_id, state)
+  VALUES ('apr_local_1', '<tenant_id>', 'expense_claim', 'clm_demo',
+          '<user_id>', '<user_id>', 'pending');"
+```
+
+Reload the console. `/approvals` now shows it under **Awaiting me** *and* **My
+requests**, rendered by the generic fallback card — which is the only renderer
+that ships today, so every subject type takes it.
+
+### Then drive the real chain
+
+The nudge is the one path that produces a notification end to end over HTTP
+today, and it exercises everything: service → rate limit → event → registry
+validation → consumer → D1 → API → bell.
+
+1. Open **My requests**, click **Nudge**. The bell badge goes to 1 — after up to
+   five seconds on the default config (see above). The console polls every 60s,
+   so switch route or reload rather than waiting for the poll.
+2. Click **Nudge** again → blocked with "Already reminded" (the 24h cooldown,
+   429 + `Retry-After: 86398`). This one is *immediate* on both configs, because
+   the cooldown ledger is written synchronously by the request rather than by the
+   consumer — which is exactly why it is its own table.
+3. Open the bell → the reminder is grouped under **Reminders** and deep-links.
+   Because `expense_claim` has no console screen until S5, it renders as
+   "Opens in the approvals inbox" rather than linking nowhere — that is the
+   designed fallback, not a dead link.
+4. Click it → marked read, badge clears, and it stays cleared on refresh.
+5. Back on **Awaiting me**, **Reject** with an empty comment → blocked inline.
+   Add a comment and reject → the item leaves the list, and **History** shows it
+   with the comment. A notification lands for the requester (you).
+6. **Withdraw** a pending request from My requests → it disappears from Awaiting
+   me (`state = cancelled`, no event and no notification — nobody decided
+   anything, the subject simply went away).
+
+Watch the `wrangler dev` log while you do this. Every notification write logs
+through `[notifications]`, and a skipped one says why — a payload missing a
+recipient warns rather than throwing, by design.
+
+The same flow with curl, if you would rather not click (the whole sequence above
+was verified this way):
+
+```sh
+# Log in, keeping the cookie and the CSRF token.
+CSRF=$(curl -s -c /tmp/c.txt -X POST http://localhost:8787/v1/auth/login \
+  -H "Content-Type: application/json" -H "Origin: http://localhost:5173" \
+  -d '{"workspace":"test-sme","email":"admin@example.com","password":"companyos-admin"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['csrf_token'])")
+
+# The queue: should list apr_local_1.
+curl -s -b /tmp/c.txt "http://localhost:8787/v1/approvals?mine=true&state=pending"
+
+# Nudge → 202. Then again → 429 with Retry-After.
+curl -s -i -b /tmp/c.txt -X POST http://localhost:8787/v1/approvals/apr_local_1/nudge \
+  -H "X-CSRF-Token: $CSRF" -H "Origin: http://localhost:5173"
+
+# Wait ~5s on the default config, then the bell.
+sleep 6 && curl -s -b /tmp/c.txt http://localhost:8787/v1/notifications
+
+# Reject with a comment → the requester gets a notification carrying the comment
+# as its body. Re-deciding then returns 409.
+curl -s -b /tmp/c.txt -X POST http://localhost:8787/v1/approvals/apr_local_1/reject \
+  -H "X-CSRF-Token: $CSRF" -H "Content-Type: application/json" \
+  -H "Origin: http://localhost:5173" -d '{"comment":"Receipt is illegible"}'
+```
+
+### Checking the rows directly
+
+```sh
+npx wrangler d1 execute companyos-db --local --command \
+  "SELECT type, title, read_at FROM notifications ORDER BY notification_id DESC;"
+npx wrangler d1 execute companyos-db --local --command \
+  "SELECT approval_id, nudged_at FROM approval_nudges;"
+```
+
+To re-test the cooldown without waiting a day, backdate the ledger — it is the
+only state the check reads:
+
+```sh
+npx wrangler d1 execute companyos-db --local --command \
+  "UPDATE approval_nudges SET nudged_at = '2026-01-01T00:00:00.000Z';"
+```
+
+### Mobile
+
+`/approvals` and the bell are the only part of the console with a hard mobile
+requirement, and the tests cannot verify it — jsdom has no layout engine, so they
+pin the responsive contract (no fixed widths, stacked full-width controls) rather
+than measuring the result. **Open Safari or Chrome devtools at 375px** and check
+an approval can be read and decided with no horizontal scrolling. This is the one
+part of the feature that genuinely needs a human eye.
+
 ## Fast smoke test (no browser)
 
 The suites run against the real Workers runtime and cover the full auth flow,
@@ -120,9 +265,11 @@ curl http://localhost:8787/v1/insights/summary \
 
 ```sh
 # 1. Log in; save the cookie. The JSON response includes csrf_token.
+#    `workspace` is the tenant slug seed:local printed (default: test-sme) —
+#    email is only unique within a company, so login needs all three.
 curl -c cookies.txt -X POST http://localhost:8787/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@example.com","password":"companyos-admin"}'
+  -d '{"workspace":"test-sme","email":"admin@example.com","password":"companyos-admin"}'
 
 # 2. Read the current user (rides the cookie).
 curl -b cookies.txt http://localhost:8787/v1/auth/me

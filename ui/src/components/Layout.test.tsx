@@ -88,4 +88,27 @@ describe("Layout (authenticated shell)", () => {
     expect(screen.getByText("Sales & Business Development")).toBeDefined();
     expect(screen.getByText("Acme Inc")).toBeDefined();
   });
+
+  it("keeps Approvals in the sidebar, outside the department lens", async () => {
+    // This link was silently dropped once already, resolving a merge between
+    // PRD-007 (which added it) and PRD-008 (which restructured the nav). Nothing
+    // caught it: the route still existed, the page still worked, and the only
+    // symptom was that no one could reach it from the sidebar. Hence a test.
+    renderShell();
+
+    const link = await waitFor(() => screen.getByRole("link", { name: "Approvals" }));
+    expect(link.getAttribute("href")).toBe("/approvals");
+  });
+
+  it("puts Approvals under 'You', not under the department Overview", async () => {
+    // Deliberate placement, not cosmetic: "Overview" is hidden from the
+    // self-service tier (it sees no departments), and that tier is exactly who
+    // needs this screen — it is where an employee tracks the leave request or
+    // claim they filed. Under "You" it is visible to every role.
+    renderShell();
+
+    await waitFor(() => expect(screen.getByRole("link", { name: "Approvals" })).toBeDefined());
+    const section = screen.getByRole("link", { name: "Approvals" }).closest("div")?.parentElement;
+    expect(section?.textContent).toContain("You");
+  });
 });
