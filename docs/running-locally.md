@@ -293,32 +293,45 @@ curl -b cookies.txt -X POST http://localhost:8787/v1/customers \
 - **"table users has no column …" / missing table** — migrations weren't applied;
   run `npm run db:migrate:local`.
 
-- **`0022_roles_drop_check.sql` fails with `FOREIGN KEY constraint failed`**
-  ("Durable Object was reset and rolled back…"). It only fails on a database that
-  **already has data**, which is why it passes on a fresh one and in CI.
+- **`0022_roles_drop_check.sql` failed with `FOREIGN KEY constraint failed`**
+  ("Durable Object was reset and rolled back…"). **Fixed** — pull `main` and
+  re-run. If you are on an older checkout, the symptom appeared only on a
+  database that already had data, which is why it passed on a fresh one and in
+  CI.
 
-  That migration rebuilds `users` to drop a CHECK — create a new table, copy,
-  `DROP TABLE users`, rename. **D1 will not drop a table while rows in other
-  tables reference it**, and there is no way around it from inside a migration:
-  `PRAGMA defer_foreign_keys` still fails at commit (the deferred violation from
-  the DROP is never cleared by the later rename), `PRAGMA foreign_keys = off` is
-  ignored, `PRAGMA legacy_alter_table` is ignored, and `PRAGMA writable_schema`
-  returns `SQLITE_AUTH`. All four were tried. `users` is referenced by
-  `sessions`, `google_accounts` (twice), `employees`, `user_tokens`,
-  `files.uploaded_by`, `approvals` (three times) and `notifications`, so any
-  real database trips it.
+  Worth knowing for the next time somebody rebuilds a table: **D1 will not drop a
+  table while rows in other tables reference it**, and there is no way to suspend
+  that from inside a migration. Four escape hatches were tried and none work —
+  `PRAGMA defer_foreign_keys` defers but then fails at COMMIT (the violation the
+  DROP raises is never cleared by the later rename), `foreign_keys = off` and
+  `legacy_alter_table` are both silently ignored, and `writable_schema` returns
+  `SQLITE_AUTH`.
 
-  Locally, reset — local D1 data is disposable:
+  What does work is making the referencing rows genuinely not exist at the moment
+  of the drop, because foreign keys are checked per **row**, not per table
+  definition. 0022 now deletes the ephemeral children (`sessions`, `user_tokens`
+  — everyone is signed out and unclicked invite/reset links stop working), stashes
+  and nulls the nullable ones (`employees.user_id`, both `google_accounts`
+  columns), and copies `approvals` out and back because its `approver_user_id` is
+  NOT NULL. No other table is rebuilt, which is what keeps the change from
+  cascading into `teams` and `delivery_config` — and `employees`/`teams`
+  reference each other, so that cascade would have been genuinely unpleasant.
+
+  A useful property of the rebuild, if you ever need it: renaming the new table
+  into the old name makes SQLite rewrite every child FK that pointed at the
+  temporary name, so the references follow automatically.
+
+  Verified on a populated database through `wrangler d1 migrations apply` — all
+  values restored, indexes recreated, FKs still enforced.
+  `test/migration-roles-drop-check.test.ts` pins the resulting properties, though
+  note it cannot test the migration's data preservation: `applyD1Migrations` runs
+  against an empty database, which is precisely the blind spot that let the
+  original bug through.
+
+  To reset local state anyway (it is disposable):
 
   ```sh
   rm -rf .wrangler/state/v3/d1
   npm run db:migrate:local
   npm run seed:local            # re-seed; the old tenant and users are gone
   ```
-
-  **This is not just a local problem.** `npm run db:migrate:remote` will fail the
-  same way against any deployed database that has users and sessions in it, and
-  there is no reset option there. Fixing it properly means rebuilding the
-  referencing tables to drop their FK, then rebuilding `users`, then restoring
-  the FKs — or accepting that ephemeral children (`sessions`, `user_tokens`) are
-  deleted as part of the migration. Do that before the next remote deploy.
