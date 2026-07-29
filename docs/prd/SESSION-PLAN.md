@@ -1,6 +1,6 @@
-# PRD 000–007 — Multi-Session Build Plan
+# PRD 000–009 — Multi-Session Build Plan
 
-**Authored:** 2026-07-25 · **Covers:** all eight PRDs, now all present in this directory
+**Authored:** 2026-07-25 · **Covers:** every PRD in this directory
 **Source docs:** [`README.md`](README.md) (index & sequencing) ·
 [000](PRD-000-platform-foundations.md) ·
 [001](PRD-001-finance-ledger-completeness.md) ·
@@ -9,7 +9,15 @@
 [004](PRD-004-quote-branding-and-signing.md) ·
 [005](PRD-005-support-intake-and-tracking.md) ·
 [006](PRD-006-people-leave-and-claims.md) ·
-[007](PRD-007-console-approvals-inbox.md)
+[007](PRD-007-console-approvals-inbox.md) ·
+[008](PRD-008-roles-and-permissions.md) ·
+[009](PRD-009-project-scheduling.md)
+
+> **PRD-008 has no session slot yet.** It arrived after the original eight were
+> sequenced, it is marked **P0** ("security gap"), and its own header says it
+> blocks PRD-006 employee self-service — which is S6/S7. It therefore needs a
+> number *and* a position earlier than its number would imply. Not slotted here
+> because that is a sequencing decision, not a clerical one. See "Unslotted work".
 
 This file exists because the eight PRDs are being built across **separate Claude
 Code sessions**. Each session starts with no memory of the last, so everything a
@@ -44,11 +52,12 @@ The generic shape, if you need it:
 3. **One session, one branch, one shippable increment.** Do not start the next
    session's scope because there is context left over.
 4. `npm run typecheck && npm test` must pass before the push that closes a
-   session. **Baseline after S2:** clean typecheck, 38 test files / 346 tests
-   (S1's baseline was 37 / 321 on `main` at `b74a2f5`). A session finding fewer
-   passing tests than that has broken something. Re-check the current count on
-   `main` before assuming your own change caused a drop — `main` moves between
-   sessions.
+   session. **Baseline after S3:** clean typecheck, 39 test files / 406 tests
+   (S2 recorded 38 / 346, but `main` was already at 38 / 361 when S3 measured it;
+   S1's was 37 / 321 at `b74a2f5`). A session finding fewer passing tests than
+   that has broken something. Re-check the current count on `main` before
+   assuming your own change caused a drop — `main` moves between sessions, and
+   the number written here goes stale exactly as often.
 5. **Take the next free migration number at session start** by checking `main`,
    not this file — session order moves and a hardcoded number here goes stale.
    As of S2, `0021_files.sql` is the highest, so S3 takes `0022`. Note `0015` is
@@ -81,7 +90,7 @@ Recorded so no session re-opens them.
 | S0 | Plan & document landing | — | — | `claude/readme-p0-review-78jc3u` | — | **done** |
 | S1 | Ledger dimensions + profitability | 001a | P0 | `claude/readme-p0-review-78jc3u`² | S0 | **done** |
 | S2 | File storage primitive | 000a | P0 | `claude/s2-implementation-plan-nv4e1f`³ | S0 | **done** |
-| S3 | Approvals primitive | 000b | P0 | `claude/prd-000b-approvals` | S2 | not started |
+| S3 | Approvals primitive | 000b | P0 | `claude/approvals-primitive-qygql6`⁴ | S2 | **done** |
 | S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/prd-000c-007-notifications-inbox` | S3 | not started |
 | S5 | Expense claims + GL posting | 006a | P0 | `claude/prd-006a-expense-claims` | S1, S2, S4 | not started |
 | S6 | Leave policy, holidays, balances | 006b | P0 | `claude/prd-006b-leave-policy` | S4 | not started |
@@ -92,6 +101,7 @@ Recorded so no session re-opens them.
 | S11 | Support intake & tracking | 005 | P1 | `claude/prd-005-support-intake` | S2, **S4** | not started |
 | S12 | Tax (SST) | 001b | P0¹ | `claude/prd-001b-tax` | S1 | not started |
 | S13 | Credit notes + ledger multi-currency | 001c | P0¹ | `claude/prd-001c-credit-notes` | S1, S12 | not started |
+| S14 | Project scheduling + deadline reminders | 009 | P1 | `claude/prd-009-project-scheduling` | S4 | not started |
 
 ¹ PRD-001 marks all of these P0, but the index defers tax, credit notes and
 multi-currency until *"a design partner hits them"*. Treat S12/S13 as
@@ -104,6 +114,10 @@ demand-driven rather than scheduled — with one exception, see conflict C2.
 ³ S2 ran on the branch its session was given rather than the one named here.
 The name is cosmetic; the scope is not. **S3 takes `claude/prd-000b-approvals`
 as listed.**
+
+⁴ S3, like S2, ran on the branch its session was given rather than the one named
+here. Migration `0022_approvals.sql` is taken, so **S4 takes `0023`** — but check
+`main` rather than trusting this line, per standing rule 5.
 
 ### How this differs from the index's build order
 
@@ -343,6 +357,7 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 | S10 | `guardrail.override.v1`, plus `collections.decision.v2` (PRD-002 extends the payload with provider, model, prompt version, tokens, latency, cost, fallback and override flags — that is a breaking payload change, so it is a v2 file and a registry bump, per the convention documented in `registry.ts`) |
 | S11 | `ticket.assigned.v1`, `ticket.sla_breached.v1` |
 | S13 | `credit_note.issued.v1` |
+| S14 | `project.deadline_approaching.v1`, `project.overdue.v1` |
 
 ---
 
@@ -352,7 +367,9 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 
 | Thing | Reality |
 |---|---|
-| `files`, `approvals`, `notifications` tables | `files` **exists** as of S2 (`0021_files.sql`). `approvals` and `notifications` still do not — confirmed against every `CREATE TABLE` in `migrations/`. |
+| `files`, `approvals`, `notifications` tables | `files` **exists** as of S2 (`0021_files.sql`); `approvals` as of S3 (`0022_approvals.sql`). `notifications` still does not — S4 builds it. |
+| Approvals | `src/modules/approvals/` — `requestApproval`/`decide`/`cancel`/`cancelForSubject`, plus `resolution.ts` (the C1 upward walk) and a per-`subject_type` strategy map. A module wanting a human decision adds a `subjectTypeSchema` value and calls the service; it never inserts into `approvals`. See [`docs/modules/approvals.md`](../modules/approvals.md). |
+| `source_module` values | `finance`, `people`, `sales`, `support`, `build`, `comms`, and **`platform`** (added by S3 for primitives belonging to no business module). Enforced by Zod in `src/schemas/envelope.ts`, not by SQL. |
 | R2 | **Bound as of S2**: bucket `companyos-files`, binding `FILES`, in *both* `wrangler.jsonc` and `wrangler.free.jsonc`. Create it once with `npx wrangler r2 bucket create companyos-files` — R2 has a free tier, so the free-plan deploy is not blocked. |
 | File storage | `src/modules/files/` — `uploadFile`/`getFile`/`getPublicFile`/`deleteFile`, plus a per-purpose policy table (`policy.ts`). A module wanting to store a binary adds a `purpose` entry there and calls the service; it never touches R2. See [`docs/modules/files.md`](../modules/files.md). |
 | Public (credential-less) reads | `GET /files/:id`, mounted **outside `/v1`** alongside `/webhooks` and `/oauth/google`. Serves only purposes whose policy sets `publiclyReadable` — `quote_logo` alone in v1. S9/S11 extend the policy table, not the read path. |
@@ -513,6 +530,54 @@ terminating at admin.
 
 **Do not deploy S3 without S4.** An approvals backend nobody can see is not a
 feature — PRD-007 exists because that is how approval features die.
+
+**Shipped (S3, `0022_approvals.sql`).** All of the above, as specified. Details
+live in [`docs/modules/approvals.md`](../modules/approvals.md); what S4 and the
+consuming sessions need to know:
+
+- Call `src/modules/approvals/service.ts` — `requestApproval` / `decide` /
+  `cancel` / `cancelForSubject`. A new subject type is a value in
+  `subjectTypeSchema` plus a line in `SUBJECT_STRATEGIES`, **no migration**, as
+  PRD-000's success metric requires.
+- **Resolution is one function**, `resolveApprover` in `resolution.ts`, per C1.
+  Order of resort: the subject type's strategy → a tenant admin who is not the
+  requester → the requester themselves *only if they hold admin* → 422
+  `no_approver` with **no row written**. S14's "no owner set → tenant admin"
+  fallback should reuse this shape rather than reinvent it.
+- **The solo-admin decision** (new, needed by the walk): a tenant whose only
+  active admin is the requester routes the request back to them. PRD-000 permits
+  self-approval for admins, and 422-ing would make claims and leave unusable for
+  a one-person finance function. Recorded here so S5/S7 do not re-open it.
+- `source_module` is **`platform`**, a value added to `sourceModuleSchema` this
+  session for primitives belonging to no business module. `events_log
+  .source_module` has no `CHECK`, so it needed no migration. S4's notification
+  events should use it too.
+- Wire event types are **unversioned** (`approval.requested`) while the schema
+  files carry `.v1` — the existing registry convention, and the envelope's
+  `<entity>.<action>` regex enforces it. There is deliberately **no
+  `approval.cancelled`**: cancellation happens because the subject went away and
+  the subject module emits its own event.
+- Every `approval.*` payload carries **both** `requested_by` and
+  `approver_user_id`, so S4's consumer never needs a DB lookup to know who to
+  notify. `approval.requested` also carries `resolution_strategy` /
+  `resolution_hops`.
+- **Two deliberate divergences from PRD-000's letter**, both for S4 to inherit
+  rather than re-litigate: `reject` does **not** require a comment at the API
+  (PRD-000 says optional; PRD-007's console enforces it client-side), and a
+  fourth route `POST /v1/approvals/:id/cancel` exists — requester-or-admin only
+  — because PRD-007's My requests tab needs it and the generic inbox cannot know
+  which subject module owns a row.
+- A **tenant API key cannot decide** (400): it authenticates a tenant, not a
+  person, so there is nobody to write into `decided_by`. Tests that need a
+  decision must use a cookie session.
+- Test-harness note: the test env has a real `EVENTS` queue binding, so a sent
+  envelope never reaches the consumer and **nothing lands in `events_log`**.
+  `test/approvals.test.ts` uses a capturing bus to assert emissions and
+  `ensureEventBus` on a stripped env for the one end-to-end check. S4 will want
+  the same two patterns.
+- **Baseline after S3:** clean typecheck, 39 test files / 406 tests. (S2's
+  recorded baseline of 38 / 346 was already stale by the time S3 ran — `main`
+  was at 38 / 361. Re-measure, per standing rule 5.)
 
 ---
 
@@ -942,6 +1007,78 @@ scope. Seed values are a starting point, not advice.
 **Decide first:** whether `credited` is a distinct invoice state or derived from
 credit note totals (see Blocking decisions). Derived is cleaner but complicates
 the sweep query.
+
+---
+
+### S14 — PRD-009: Project scheduling & deadline reminders
+
+**PRD:** [009](PRD-009-project-scheduling.md) · **Branch:**
+`claude/prd-009-project-scheduling` · **Depends on:** S4
+
+The first session in this plan that came from **outside** the codebase. A beta
+user asked for project start/end dates and deadline reminders; `projects` has no
+date column at all, and every existing PRD treats a project purely as a cost tag
+for profitability. That makes this small but unusually well-evidenced — it is the
+only requirement here with a real user behind it.
+
+**Deliverables**
+
+- Nullable `start_date`, `target_end_date`, `actual_end_date`, `owner_user_id` on
+  `projects`. `target_end_date` before `start_date` → 400, validated in the
+  service. Archiving without an `actual_end_date` stamps the archive date.
+- Daily sweep **extending the existing `0 1 * * *` cron**, not a second trigger —
+  mirror `src/modules/finance/overdue-sweep.ts`.
+- Per-tenant lead times (default 7 days and 1 day), emitting
+  `project.deadline_approaching.v1` and `project.overdue.v1`, mapped to
+  notification rows by the **S4 consumer** — extending its event→notification map
+  is the designed way to add a type, not a new mechanism (standing rule 2).
+- No owner set → falls back to a tenant admin, same reasoning as approver
+  resolution in C1: never route work to nobody.
+- **Once per (project, threshold).** The sweep runs daily; re-notifying every
+  morning is how a badge becomes noise.
+- `GET /v1/projects?schedule=late|due_soon|on_track|no_date`, plus date columns
+  and a late badge in the console. Projects with no target date group under an
+  explicit "No date set", never as on-track — the same principle as PRD-001a's
+  "Unallocated" bucket.
+
+**Acceptance criteria → tests:** all of PRD-009's, including the idempotency one
+(run the sweep twice, assert exactly one notification), the archived-project
+silence, the free-plan inline path, and that the PRD-001a profitability figures
+are unchanged by this migration.
+
+**Decide before phase 2:** PRD-009's blocking question — who the reminder is for
+and how often. The schedule columns are safe to build either way; the wrong
+cadence trains people to ignore notifications, which is expensive to undo. Build
+phase 1 and the filter, then stop and ask if it is still unanswered.
+
+---
+
+## Unslotted work
+
+**PRD-008 — Roles, Permissions & Employee Self-Service** is in this directory but
+has no session number, because it landed after the original eight were sequenced
+and slotting it is a real decision rather than a formality:
+
+- It is marked **P0** and describes itself as a security gap, which argues for
+  running it early — earlier than S8–S14, all of which are P1.
+- Its own header says it **blocks PRD-006 employee self-service**, and PRD-006 is
+  S6 and S7. On that reading it belongs *before* S6.
+- But S3 and S4 are the P0 foundations everything else consumes, and PRD-008 says
+  it "must be designed against PRD-000 (approvals) and PRD-006 (leave & claims) so
+  it serves both" — which argues for running it *after* S3/S4 so the approvals
+  surface it must protect already exists.
+
+**Suggested position: immediately after S4, before S5.** That satisfies the
+design-against-PRD-000 requirement, puts a P0 security gap ahead of all the P1
+work, and lands before the self-service it blocks. It would take the next free
+session number while running out of numeric order — the session numbers are a
+naming convention, not an execution order, and this plan should say so once
+rather than renumber eleven sessions that are already referenced in commits and
+PRs.
+
+Not done here because it changes the run order for S5 onward, which is Chris's
+call. Once decided, add the row to the session map, a brief above, and a prompt to
+[`SESSION-PROMPTS.md`](SESSION-PROMPTS.md).
 
 ---
 

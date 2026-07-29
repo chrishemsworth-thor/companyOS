@@ -36,6 +36,9 @@ import { emailReceivedV1 } from "./email.received.v1";
 import { employeeCreatedV1 } from "./employee.created.v1";
 import { employeeUpdatedV1 } from "./employee.updated.v1";
 import { teamCreatedV1 } from "./team.created.v1";
+import { approvalRequestedV1 } from "./approval.requested.v1";
+import { approvalApprovedV1 } from "./approval.approved.v1";
+import { approvalRejectedV1 } from "./approval.rejected.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -84,6 +87,14 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "employee.created": employeeCreatedV1,
   "employee.updated": employeeUpdatedV1,
   "team.created": teamCreatedV1,
+  // Approvals primitive (PRD-000b). There is deliberately no
+  // `approval.cancelled`: cancellation happens because the SUBJECT went away,
+  // and the subject module emits its own `*.cancelled` event. A second event
+  // here would have the notification consumer telling an approver about work
+  // that has simply evaporated.
+  "approval.requested": approvalRequestedV1,
+  "approval.approved": approvalApprovedV1,
+  "approval.rejected": approvalRejectedV1,
 };
 
 export function validatePayload(
