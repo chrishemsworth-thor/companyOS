@@ -292,3 +292,33 @@ curl -b cookies.txt -X POST http://localhost:8787/v1/customers \
   (the allowlisted origin), not `127.0.0.1`.
 - **"table users has no column …" / missing table** — migrations weren't applied;
   run `npm run db:migrate:local`.
+
+- **`0022_roles_drop_check.sql` fails with `FOREIGN KEY constraint failed`**
+  ("Durable Object was reset and rolled back…"). It only fails on a database that
+  **already has data**, which is why it passes on a fresh one and in CI.
+
+  That migration rebuilds `users` to drop a CHECK — create a new table, copy,
+  `DROP TABLE users`, rename. **D1 will not drop a table while rows in other
+  tables reference it**, and there is no way around it from inside a migration:
+  `PRAGMA defer_foreign_keys` still fails at commit (the deferred violation from
+  the DROP is never cleared by the later rename), `PRAGMA foreign_keys = off` is
+  ignored, `PRAGMA legacy_alter_table` is ignored, and `PRAGMA writable_schema`
+  returns `SQLITE_AUTH`. All four were tried. `users` is referenced by
+  `sessions`, `google_accounts` (twice), `employees`, `user_tokens`,
+  `files.uploaded_by`, `approvals` (three times) and `notifications`, so any
+  real database trips it.
+
+  Locally, reset — local D1 data is disposable:
+
+  ```sh
+  rm -rf .wrangler/state/v3/d1
+  npm run db:migrate:local
+  npm run seed:local            # re-seed; the old tenant and users are gone
+  ```
+
+  **This is not just a local problem.** `npm run db:migrate:remote` will fail the
+  same way against any deployed database that has users and sessions in it, and
+  there is no reset option there. Fixing it properly means rebuilding the
+  referencing tables to drop their FK, then rebuilding `users`, then restoring
+  the FKs — or accepting that ephemeral children (`sessions`, `user_tokens`) are
+  deleted as part of the migration. Do that before the next remote deploy.
