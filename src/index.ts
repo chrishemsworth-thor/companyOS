@@ -22,6 +22,7 @@ import { quotes } from "./gateway/routes/quotes";
 import { settings } from "./gateway/routes/settings";
 import { people } from "./gateway/routes/people";
 import { files, publicFiles } from "./gateway/routes/files";
+import { approvals } from "./gateway/routes/approvals";
 import { webhookSources } from "./gateway/routes/webhook-sources";
 import { googleAccounts } from "./gateway/routes/google-accounts";
 import { googleOAuth } from "./gateway/routes/google-oauth";
@@ -125,6 +126,10 @@ app.route("/v1/quotes", quotes);
 app.route("/v1/settings", settings);
 app.route("/v1/people", people);
 app.route("/v1/files", files);
+// No requireRole guard: every authenticated user has an approvals queue, so
+// authorization is per-row inside the service ("is this row yours") rather than
+// per-route ("what role are you"). See src/gateway/routes/approvals.ts.
+app.route("/v1/approvals", approvals);
 app.route("/v1/webhook-sources", webhookSources);
 app.route("/v1/google-accounts", googleAccounts);
 
