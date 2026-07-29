@@ -9,6 +9,7 @@ import {
   getApproval,
   listApprovals,
 } from "../../modules/approvals/service";
+import { nudge, NudgeRateLimited } from "../../modules/approvals/nudge";
 import { approvalStateSchema, subjectTypeSchema } from "../../modules/approvals/types";
 
 /**
@@ -32,6 +33,15 @@ export const approvals = new Hono<AuthedEnv>();
 function approvalsErrorResponse(c: Context<AuthedEnv>, err: unknown) {
   if (err instanceof ApprovalsError) {
     return c.json({ error: err.message, code: err.code }, err.httpStatus);
+  }
+  // The nudge cooldown. Carries Retry-After so a client knows when the button
+  // becomes useful again instead of guessing.
+  if (err instanceof NudgeRateLimited) {
+    c.header("Retry-After", String(err.retryAfterSeconds));
+    return c.json(
+      { error: err.message, code: err.code, last_nudged_at: err.lastNudgedAt },
+      err.httpStatus,
+    );
   }
   throw err;
 }
@@ -197,6 +207,29 @@ approvals.post("/:id/cancel", async (c) => {
 
   try {
     return c.json(await cancel(c.env, tenant.tenant_id, c.req.param("id")));
+  } catch (err) {
+    return approvalsErrorResponse(c, err);
+  }
+});
+
+/**
+ * `POST /v1/approvals/:id/nudge` — remind the approver (PRD-007, added by S4).
+ *
+ * Emits `approval.nudged` rather than writing a notification row, so the
+ * notifications table keeps one writer (SESSION-PLAN conflict C4). The 24h
+ * cooldown lives in the service and surfaces here as 429 + `Retry-After`.
+ *
+ * Requester-only, with no admin override — unlike cancel. An admin who wants a
+ * request to move can decide it themselves; letting them nudge on somebody
+ * else's behalf would send a reminder the named requester never asked for.
+ */
+approvals.post("/:id/nudge", async (c) => {
+  const userId = requireUser(c, "nudging a request");
+  if (typeof userId !== "string") return userId;
+
+  const tenant = c.get("tenant");
+  try {
+    return c.json(await nudge(c.env, tenant.tenant_id, c.req.param("id"), userId), 202);
   } catch (err) {
     return approvalsErrorResponse(c, err);
   }

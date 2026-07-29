@@ -1,6 +1,7 @@
 import type { Env } from "../env";
 import { eventEnvelopeSchema, type EventEnvelope } from "../schemas/envelope";
 import { validatePayload } from "../schemas/events/registry";
+import { fanoutNotifications } from "../modules/notifications/consumer";
 import type { CollectionsAgent } from "../agents/collections";
 
 /**
@@ -21,13 +22,22 @@ export async function handleEventBatch(batch: MessageBatch<unknown>, env: Env): 
 }
 
 /**
- * One event's full processing: validate → audit-log → route to agent. Shared
- * by the queue consumer and the queue-less direct bus (src/queue/direct.ts),
- * so both paths stay behaviorally identical.
+ * One event's full processing: validate → audit-log → fan out notifications →
+ * route to agent. Shared by the queue consumer and the queue-less direct bus
+ * (src/queue/direct.ts), so both paths stay behaviorally identical.
+ *
+ * Notification fanout sits between the audit log and agent routing on purpose.
+ * It runs after the log so a notification failure can never cost us the audit
+ * record, and before agent routing because it is the cheap deterministic step —
+ * an agent DO call is the slow one, and on the free plan this whole pipeline is
+ * inline with the request that emitted the event. `fanoutNotifications` never
+ * throws (see src/modules/notifications/consumer.ts), so it cannot break either
+ * neighbour.
  */
 export async function processEvent(env: Env, body: unknown): Promise<void> {
   const envelope = parseEnvelope(body);
   await logEvent(env, envelope);
+  await fanoutNotifications(env, envelope);
   await routeToAgent(env, envelope);
 }
 

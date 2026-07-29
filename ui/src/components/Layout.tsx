@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
 import { departmentsForRole } from "../lib/departments";
 import { ThemeToggle } from "./ThemeToggle";
+import { TopBar } from "./TopBar";
 
 type Icon = ComponentType<{ className?: string }>;
 
@@ -205,17 +206,9 @@ export function Layout() {
         <SidebarContent />
       </aside>
 
-      {/* Mobile top bar */}
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur lg:hidden">
-        <button
-          aria-label="Open menu"
-          onClick={() => setDrawerOpen(true)}
-          className="-ml-1.5 cursor-pointer rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-fg"
-        >
-          <Menu className="size-5" />
-        </button>
-        <Brand />
-      </header>
+      {/* Top bar, all breakpoints — it carries the notification bell, which
+          PRD-007 requires on every page. */}
+      <TopBar onOpenMenu={() => setDrawerOpen(true)} brand={<Brand />} />
 
       {/* Mobile drawer */}
       {drawerOpen && (

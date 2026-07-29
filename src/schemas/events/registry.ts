@@ -39,6 +39,7 @@ import { teamCreatedV1 } from "./team.created.v1";
 import { approvalRequestedV1 } from "./approval.requested.v1";
 import { approvalApprovedV1 } from "./approval.approved.v1";
 import { approvalRejectedV1 } from "./approval.rejected.v1";
+import { approvalNudgedV1 } from "./approval.nudged.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -95,6 +96,10 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "approval.requested": approvalRequestedV1,
   "approval.approved": approvalApprovedV1,
   "approval.rejected": approvalRejectedV1,
+  // PRD-007's nudge (S4). Registered rather than inserting a notification row
+  // directly, so the notifications table keeps exactly one writer — see
+  // SESSION-PLAN conflict C4 and src/schemas/events/approval.nudged.v1.ts.
+  "approval.nudged": approvalNudgedV1,
 };
 
 export function validatePayload(

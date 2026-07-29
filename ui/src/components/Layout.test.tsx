@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, waitFor, cleanup } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "../auth/AuthContext";
 import { Layout } from "./Layout";
 
@@ -34,6 +35,14 @@ beforeEach(() => {
         { status: 200 },
       );
     }
+    // The shell's notification bell polls this. Answer it rather than throwing:
+    // an unhandled rejection here would surface as an unrelated shell failure.
+    if (String(url).includes("/v1/notifications")) {
+      return new Response(JSON.stringify({ items: [], next_cursor: null, unread_count: 0 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
     throw new Error(`unexpected fetch: ${url}`);
   });
 });
@@ -44,7 +53,14 @@ afterEach(() => {
 });
 
 function renderShell() {
+  // The shell mounts the notification bell (TopBar → NotificationBell), which is
+  // a React Query consumer, so the provider is part of the shell's contract now.
+  // App.tsx has always supplied one; this test has to as well.
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false, gcTime: 0 } },
+  });
   return render(
+    <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
@@ -53,7 +69,8 @@ function renderShell() {
           </Route>
         </Routes>
       </MemoryRouter>
-    </AuthProvider>,
+    </AuthProvider>
+    </QueryClientProvider>,
   );
 }
 
