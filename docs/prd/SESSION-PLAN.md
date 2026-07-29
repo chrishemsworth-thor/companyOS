@@ -52,9 +52,11 @@ The generic shape, if you need it:
 3. **One session, one branch, one shippable increment.** Do not start the next
    session's scope because there is context left over.
 4. `npm run typecheck && npm test` must pass before the push that closes a
-   session. **Baseline after S3:** clean typecheck, 39 test files / 406 tests
-   (S2 recorded 38 / 346, but `main` was already at 38 / 361 when S3 measured it;
-   S1's was 37 / 321 at `b74a2f5`). A session finding fewer passing tests than
+   session. **Baseline after S4:** clean typecheck, 42 test files / 476 tests in
+   the Workers suite, plus 12 files / 88 tests in `ui/` (`cd ui && npm test`,
+   which root `npm test` does NOT run — see the console note below)
+   (S3 recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at
+   38 / 361; S1's was 37 / 321 at `b74a2f5`). A session finding fewer passing tests than
    that has broken something. Re-check the current count on `main` before
    assuming your own change caused a drop — `main` moves between sessions, and
    the number written here goes stale exactly as often.
@@ -91,7 +93,7 @@ Recorded so no session re-opens them.
 | S1 | Ledger dimensions + profitability | 001a | P0 | `claude/readme-p0-review-78jc3u`² | S0 | **done** |
 | S2 | File storage primitive | 000a | P0 | `claude/s2-implementation-plan-nv4e1f`³ | S0 | **done** |
 | S3 | Approvals primitive | 000b | P0 | `claude/approvals-primitive-qygql6`⁴ | S2 | **done** |
-| S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/prd-000c-007-notifications-inbox` | S3 | not started |
+| S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/notifications-inbox-renderer-ud7gu1`⁵ | S3 | **done** |
 | S5 | Expense claims + GL posting | 006a | P0 | `claude/prd-006a-expense-claims` | S1, S2, S4 | not started |
 | S6 | Leave policy, holidays, balances | 006b | P0 | `claude/prd-006b-leave-policy` | S4 | not started |
 | S7 | Leave requests + team calendar | 006c | P0 | `claude/prd-006c-leave-requests` | S6 | not started |
@@ -118,6 +120,9 @@ as listed.**
 ⁴ S3, like S2, ran on the branch its session was given rather than the one named
 here. Migration `0022_approvals.sql` is taken, so **S4 takes `0023`** — but check
 `main` rather than trusting this line, per standing rule 5.
+
+⁵ S4 likewise ran on its given branch. `0023_notifications.sql` is taken, so the
+next session takes **`0024`** — check `main`, per standing rule 5.
 
 ### How this differs from the index's build order
 
@@ -332,7 +337,7 @@ these answered before they start.
 | Does profitability's "direct cost" come only from dimensioned expense entries, or also employee cost rate × logged time? There is **no time tracking module**. | 001 | S1's rollup | Ship revenue-side and expense-side rollups only. Time-based cost is a separate PRD, and PRD-001 says as much. |
 | Default escalation threshold in days? Malaysian SME norms run 60–90 days in practice, so 30 may be culturally aggressive. | 002 | S10 guardrails | Needs a design partner's view. Ship it tenant-configurable with a conservative default so the decision is cheap to change. |
 | Should `at_risk` health auto-pause outbound sales activity, or only surface as a signal? | 003 | S8 health | Signal only in v1. Auto-pause is the more impressive behaviour and the more dangerous one; it wants real data first. |
-| Should high-value approvals require re-authentication? | 007 | S4 | Probably not in v1 — but PRD-007 asks for a deliberate decision rather than one by omission. |
+| ~~Should high-value approvals require re-authentication?~~ | 007 | ~~S4~~ | **Answered by S4: no, not in v1.** Taken deliberately rather than by omission, as PRD-007 asks. Revisit when a tenant actually approves something large enough to care. |
 | Where do public holidays come from each year — manual seed or a maintained data file shipped with releases? | 006 | S6 | Shipped data file. State variation makes manual seeding per tenant an annual support burden. |
 | WhatsApp inbound before or after the public intake form? | 005 | S11 internal order | WhatsApp is how Malaysian SME customers actually complain, but needs a BSP relationship. Do the email path first either way — it is built on integrations that already exist. |
 | Is `credited` a distinct invoice state or derived from credit note totals? | 001 | S13 | — |
@@ -348,8 +353,8 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 
 | Session | Events to register |
 |---|---|
-| S3 | `approval.requested.v1`, `approval.approved.v1`, `approval.rejected.v1` |
-| S4 | `approval.nudged.v1` (see C4) |
+| S3 | `approval.requested.v1`, `approval.approved.v1`, `approval.rejected.v1` — **done** |
+| S4 | `approval.nudged.v1` (see C4) — **done** |
 | S5 | `claim.submitted.v1`, `claim.approved.v1`, `claim.rejected.v1`, `claim.paid.v1` |
 | S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` |
 | S8 | `customer.no_contact.v1` (PRD-003 writes it without a version suffix — add one, per the existing convention) |
@@ -367,7 +372,11 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 
 | Thing | Reality |
 |---|---|
-| `files`, `approvals`, `notifications` tables | `files` **exists** as of S2 (`0021_files.sql`); `approvals` as of S3 (`0022_approvals.sql`). `notifications` still does not — S4 builds it. |
+| `files`, `approvals`, `notifications` tables | All three **exist**: `files` (S2, `0021`), `approvals` (S3, `0022`), `notifications` + `approval_nudges` (S4, `0023`). |
+| Notifications | `src/modules/notifications/` — rows written **only** by `fanoutNotifications` in `consumer.ts`, hooked into `processEvent`. A module that wants to notify somebody emits an event and adds one entry to `NOTIFICATION_MAP`; it never inserts. The consumer **never throws** (the free-plan inline path has no retry) and inserts idempotently on a `dedupe_key`. See [`docs/modules/notifications.md`](../modules/notifications.md). |
+| Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. **Empty in S4** — every approval takes the generic fallback card. S5 adds `expense_claim`, S7 adds `leave_request`, S9 adds `quote`; no `invoice` card is ever built (C5). Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. |
+| Console tests | `ui/` has its **own** vitest (jsdom + Testing Library, `ui/vitest.config.ts`), and root `npm test` does not run it — `vitest.config.ts` includes `test/**/*.test.ts` only. A session touching `ui/` must run `cd ui && npm test` separately or its console tests never execute in CI. `@testing-library/user-event` is **not** a dependency; use `fireEvent`. |
+| Name directory | `GET /v1/meta/users` (S4) — id, display name, email for the tenant, readable by **any** authenticated user. `/v1/users` is admin-only, so a non-admin manager needs this to see "requested by Aisha" instead of `usr_01J...`. |
 | Approvals | `src/modules/approvals/` — `requestApproval`/`decide`/`cancel`/`cancelForSubject`, plus `resolution.ts` (the C1 upward walk) and a per-`subject_type` strategy map. A module wanting a human decision adds a `subjectTypeSchema` value and calls the service; it never inserts into `approvals`. See [`docs/modules/approvals.md`](../modules/approvals.md). |
 | `source_module` values | `finance`, `people`, `sales`, `support`, `build`, `comms`, and **`platform`** (added by S3 for primitives belonging to no business module). Enforced by Zod in `src/schemas/envelope.ts`, not by SQL. |
 | R2 | **Bound as of S2**: bucket `companyos-files`, binding `FILES`, in *both* `wrangler.jsonc` and `wrangler.free.jsonc`. Create it once with `npx wrangler r2 bucket create companyos-files` — R2 has a free tier, so the free-plan deploy is not blocked. |
@@ -633,6 +642,44 @@ console (bell + inbox).
 plus PRD-007's bell, inbox, requester and mobile criteria. Two are easy to miss:
 polling pauses in a background tab, and a `subject_type` with no registered
 renderer falls back rather than crashing.
+
+**Shipped (S4, `0023_notifications.sql`).** All of the above, as specified,
+including the nudge. Details live in
+[`docs/modules/notifications.md`](../modules/notifications.md); what the
+consuming sessions need to know:
+
+- **Only the consumer writes `notifications`.** Add a mapper entry to
+  `NOTIFICATION_MAP` in `src/modules/notifications/consumer.ts` — that is the
+  designed way to add a type (standing rule 2). S11 and S14 both have entries to
+  add.
+- **Put the recipient on your event payload.** The consumer must not query D1 to
+  compose a row: on the free plan it runs inline with the emitting request. S3's
+  `approval.*` payloads carry both parties for exactly this reason.
+- **`dedupe_key` semantics matter.** Key a one-off on the subject
+  (`approval.requested:<approval_id>`); key a *repeatable* act on
+  `envelope.event_id` (`approval.nudged:<event_id>`), or the second legitimate
+  occurrence is silently swallowed by the unique index.
+- **The consumer never throws** — every failure degrades to "no row, one log
+  line". A test asserting that a bad payload rejects will fail; the contract is
+  the opposite.
+- **The nudge cooldown has its own table**, `approval_nudges`, not a column on
+  `approvals` and not derived from `notifications` (the notification row is
+  written asynchronously on the paid plan, so deriving it would let a second
+  nudge through). Requester-only, no admin override.
+- **`GET /v1/meta/users`** was added for requester/approver names — see the
+  codebase-facts table.
+- **Two PRD-007 decisions taken deliberately:** high-value approvals do **not**
+  require re-authentication in v1 (PRD-007 asks for a deliberate choice rather
+  than one by omission), and the "Needs your attention" dashboard tile counts
+  approvals only — not overdue invoices or breached SLAs, which PRD-007 flags as
+  a risk of becoming a second dashboard.
+- **Known gap, not covered by tests:** PRD-007's two mobile criteria are visual
+  and jsdom has no layout engine, so the tests pin the responsive *contract* (no
+  fixed widths, stacked full-width controls, 40px targets) rather than measuring
+  overflow at 375px. `/approvals` and the bell want one manual pass in a narrow
+  viewport before this is called done.
+- **Baseline after S4:** clean typecheck, 42 test files / 476 tests in the
+  Workers suite; 12 files / 88 tests in `ui/`.
 
 **Not in scope:** WebSockets/DO fanout, mobile push, email fanout (P1),
 notification preferences (P1), bulk approve (P1), keyboard shortcuts (P1),

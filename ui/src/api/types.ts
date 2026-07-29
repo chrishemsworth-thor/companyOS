@@ -359,3 +359,47 @@ export interface Team {
   created_at: string;
   updated_at: string;
 }
+
+// ── Approvals (PRD-000b) and notifications (PRD-000c) ────────────────────────
+
+export type ApprovalState = "pending" | "approved" | "rejected" | "cancelled";
+
+/**
+ * `subject_type` is deliberately a plain string, not a union of the types this
+ * build knows about. The backend column has no CHECK so a newer server can
+ * legitimately return a value this bundle has never heard of, and PRD-007
+ * requires the inbox to fall back to a generic card rather than crash on one.
+ * Narrowing it here would turn that runtime fallback into a compile-time lie.
+ */
+export interface Approval {
+  approval_id: string;
+  subject_type: string;
+  subject_id: string;
+  requested_by: string | null;
+  approver_user_id: string;
+  state: ApprovalState;
+  decision_comment: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
+  created_at: string;
+  idempotency_key: string | null;
+}
+
+export interface Notification {
+  notification_id: string;
+  /** The source event_type, e.g. `approval.requested`. */
+  type: string;
+  subject_type: string;
+  subject_id: string;
+  title: string;
+  body: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+
+export interface NotificationPage {
+  items: Notification[];
+  next_cursor: string | null;
+  /** Every unread row, not just this page — this is the badge number. */
+  unread_count: number;
+}

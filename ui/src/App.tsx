@@ -35,6 +35,7 @@ import { EmployeeList } from "./pages/people/EmployeeList";
 import { EmployeeDetail } from "./pages/people/EmployeeDetail";
 import { TeamList } from "./pages/people/TeamList";
 import { Onboarding } from "./pages/onboarding/Onboarding";
+import { ApprovalsInbox } from "./pages/approvals/ApprovalsInbox";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15_000 } },
@@ -76,6 +77,9 @@ function AppRoutes() {
         <Route index element={<Dashboard />} />
         <Route path="onboarding" element={<Onboarding />} />
         <Route path="departments" element={<Departments />} />
+        {/* Cross-module approvals inbox (PRD-007). Not under a department: a
+            manager's queue spans leave, claims and quotes. */}
+        <Route path="approvals" element={<ApprovalsInbox />} />
         <Route path="agent" element={<AgentActivity />} />
         <Route path="invoices" element={<InvoiceList />} />
         <Route path="invoices/:id" element={<InvoiceDetail />} />

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Receipt, TrendingUp, LifeBuoy, CircleDot, type LucideIcon } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Receipt, TrendingUp, LifeBuoy, CircleDot, CheckSquare, type LucideIcon } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { LoadingState, ErrorState } from "../components/AsyncState";
 import { DataTable } from "../components/DataTable";
@@ -75,6 +76,15 @@ export function Dashboard() {
     queryFn: () => client!.get<Profitability>(`/v1/insights/profitability?group_by=${groupBy}`),
     enabled: !!client,
   });
+  // "Needs your attention" (PRD-007 § "P0 — Dashboard integration"). Shares the
+  // ["approvals"] key prefix with the inbox, so deciding something there
+  // refreshes this tile too.
+  const awaitingMe = useQuery({
+    queryKey: ["approvals", "awaiting-count"],
+    queryFn: () =>
+      client!.get<{ items: unknown[] }>("/v1/approvals?mine=true&state=pending&limit=100"),
+    enabled: !!client,
+  });
 
   if (summary.isLoading) return <LoadingState label="Loading dashboard…" />;
   if (summary.error) return <ErrorState error={summary.error} />;
@@ -92,6 +102,24 @@ export function Dashboard() {
       <h1>Dashboard</h1>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {/* First tile, because it is the only one on this dashboard that asks the
+            viewer to *do* something rather than telling them how the business is
+            doing. PRD-007: "nothing awaiting action is discoverable only by
+            remembering to look." */}
+        <StatCard
+          icon={CheckSquare}
+          tone="warn"
+          label="Needs your attention"
+          value={
+            awaitingMe.data ? `${awaitingMe.data.items.length} to decide` : "—"
+          }
+          sub={
+            awaitingMe.data?.items.length
+              ? "Oldest first in the approvals inbox"
+              : "Nothing waiting on you"
+          }
+          to="/approvals"
+        />
         <StatCard
           icon={Receipt}
           tone="bad"
@@ -207,15 +235,18 @@ function StatCard({
   label,
   value,
   sub,
+  to,
 }: {
   icon: LucideIcon;
   tone: Tone;
   label: string;
   value: string;
   sub: string;
+  /** When set the whole tile is a link. Used by the approvals tile. */
+  to?: string;
 }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+  const body = (
+    <>
       <div className="flex items-center gap-3">
         <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${TONE_CHIP[tone]}`}>
           <Icon className="size-[1.05rem]" />
@@ -224,6 +255,19 @@ function StatCard({
       </div>
       <div className="mt-3 text-2xl font-semibold tracking-tight text-fg">{value}</div>
       <div className="mt-1 text-sm text-subtle">{sub}</div>
-    </div>
+    </>
   );
+  const shell = "rounded-xl border border-border bg-surface p-5 shadow-sm";
+
+  if (to) {
+    return (
+      <Link
+        to={to}
+        className={`${shell} block no-underline transition-colors hover:border-border-strong hover:bg-surface-2 hover:no-underline`}
+      >
+        {body}
+      </Link>
+    );
+  }
+  return <div className={shell}>{body}</div>;
 }

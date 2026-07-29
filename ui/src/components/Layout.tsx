@@ -1,10 +1,11 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutGrid, Shield, Menu, X, LogOut } from "lucide-react";
+import { LayoutGrid, Shield, X, LogOut, CheckSquare } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
 import { departmentsForRole } from "../lib/departments";
 import { ThemeToggle } from "./ThemeToggle";
+import { TopBar } from "./TopBar";
 
 type Icon = ComponentType<{ className?: string }>;
 
@@ -89,6 +90,12 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
         <NavSection label="Overview">
           <NavItemLink to="/departments" label="Departments" icon={LayoutGrid} onClose={onClose} />
+          {/* Approvals is cross-department by design — a manager's queue spans
+              leave, claims and quotes — so it sits in Overview rather than under
+              any one department. That also keeps it out of the department
+              registry, whose ids `lib/departments.test.ts` pins against the
+              server's. */}
+          <NavItemLink to="/approvals" label="Approvals" icon={CheckSquare} onClose={onClose} />
         </NavSection>
 
         {/* One group per live department; its tools are the module surfaces it owns. */}
@@ -198,17 +205,9 @@ export function Layout() {
         <SidebarContent />
       </aside>
 
-      {/* Mobile top bar */}
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur lg:hidden">
-        <button
-          aria-label="Open menu"
-          onClick={() => setDrawerOpen(true)}
-          className="-ml-1.5 cursor-pointer rounded-md p-1.5 text-muted transition-colors hover:bg-surface-2 hover:text-fg"
-        >
-          <Menu className="size-5" />
-        </button>
-        <Brand />
-      </header>
+      {/* Top bar, all breakpoints — it carries the notification bell, which
+          PRD-007 requires on every page. */}
+      <TopBar onOpenMenu={() => setDrawerOpen(true)} brand={<Brand />} />
 
       {/* Mobile drawer */}
       {drawerOpen && (
