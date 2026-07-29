@@ -15,6 +15,8 @@ import {
   updateEmployee,
   updateTeam,
 } from "../../modules/people/service";
+import { createUser, getUserAuthState, ROLES, UserError } from "../../auth/users";
+import { issueAndSendInvite } from "../../auth/invites";
 
 /**
  * People module routes, mounted at /v1/people — one sub-app for both entities
@@ -28,6 +30,9 @@ import {
 export const people = new Hono<AuthedEnv>();
 
 const writeGuard = requireRole("admin", "operator");
+// Granting console access creates a login with a role, so it is held to the
+// same bar as /v1/users — admin only, not the operator-level write guard.
+const inviteGuard = requireRole("admin");
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const isoDate = z.string().regex(ISO_DATE, "must be YYYY-MM-DD");
@@ -121,6 +126,111 @@ people.post("/employees", writeGuard, zValidator("json", createEmployeeSchema), 
     return peopleErrorResponse(c, err);
   }
 });
+
+const inviteEmployeeSchema = z
+  .object({ role: z.enum(ROLES).optional() })
+  .optional()
+  .default({});
+
+/**
+ * Grant an existing employee access to the console: create the linked login
+ * (employees.user_id) and email them a single-use invite to set their own
+ * password. Deliberately explicit rather than automatic on employee creation —
+ * not every employee needs a login, and the platform role can't be inferred
+ * from an HR record.
+ *
+ * Re-invitable while the login is still pending, so this doubles as "resend".
+ */
+people.post(
+  "/employees/:id/invite",
+  inviteGuard,
+  zValidator("json", inviteEmployeeSchema),
+  async (c) => {
+    const tenant = c.get("tenant");
+    const actor = c.get("user");
+    const inviterUserId = actor?.type === "user" ? actor.id : undefined;
+    const { role } = c.req.valid("json");
+
+    const employee = await getEmployee(c.env.DB, tenant.tenant_id, c.req.param("id"));
+    if (!employee) return c.json({ error: "employee not found", code: "not_found" }, 404);
+    if (!employee.email) {
+      return c.json(
+        { error: "employee has no email address to invite", code: "no_email" },
+        422,
+      );
+    }
+    if (employee.status !== "active") {
+      return c.json(
+        { error: "cannot invite an inactive employee", code: "employee_inactive" },
+        422,
+      );
+    }
+
+    // Already linked to a login: re-issue while it is still pending, otherwise
+    // there is nothing to invite.
+    if (employee.user_id) {
+      const state = await getUserAuthState(c.env.DB, tenant.tenant_id, {
+        user_id: employee.user_id,
+      });
+      if (!state) {
+        return c.json(
+          { error: "linked login no longer exists", code: "user_not_found" },
+          409,
+        );
+      }
+      if (state.status === "disabled") {
+        return c.json({ error: "linked login is disabled", code: "user_disabled" }, 409);
+      }
+      if (state.has_password) {
+        return c.json(
+          { error: "employee already has console access", code: "already_has_access" },
+          409,
+        );
+      }
+      const invite = await issueAndSendInvite(c.env, tenant.tenant_id, {
+        user_id: state.user_id,
+        email: state.email,
+        inviter_user_id: inviterUserId,
+      });
+      return c.json({ employee, invite });
+    }
+
+    let user;
+    try {
+      user = await createUser(c.env.DB, {
+        tenant_id: tenant.tenant_id,
+        email: employee.email,
+        display_name: employee.name,
+        role,
+      });
+    } catch (err) {
+      // A login already exists on this email but isn't linked to this
+      // employee — linking is a deliberate act, so point them at it rather
+      // than guessing that the two records are the same person.
+      if (err instanceof UserError && err.code === "email_taken") {
+        return c.json(
+          {
+            error: `a login already exists for ${employee.email}; link it from the employee's Edit form`,
+            code: "email_taken",
+          },
+          409,
+        );
+      }
+      throw err;
+    }
+
+    // Link through the service so employee.updated is emitted for the audit log.
+    const linked = await updateEmployee(c.env, tenant.tenant_id, employee.employee_id, {
+      user_id: user.user_id,
+    });
+    const invite = await issueAndSendInvite(c.env, tenant.tenant_id, {
+      user_id: user.user_id,
+      email: user.email,
+      inviter_user_id: inviterUserId,
+    });
+    return c.json({ employee: linked, user, invite }, 201);
+  },
+);
 
 people.get("/employees/:id", async (c) => {
   const tenant = c.get("tenant");

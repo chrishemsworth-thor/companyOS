@@ -22,6 +22,19 @@ const CONFIGURED_BASE_URL =
 export const BASE_URL_LOCKED = CONFIGURED_BASE_URL !== null;
 export const DEFAULT_BASE_URL = CONFIGURED_BASE_URL ?? "http://localhost:8787";
 
+/**
+ * True when a deployed (non-local) bundle was built without VITE_API_BASE_URL,
+ * so it would silently call http://localhost:8787 on the visitor's own machine
+ * and fail with ERR_CONNECTION_REFUSED. Anyone who previously typed an origin
+ * into the dev-only base-URL field has a localStorage override and won't notice
+ * — which makes this misconfiguration look like a bug in whatever page a fresh
+ * visitor lands on. Surface it instead of letting it masquerade.
+ */
+export const API_MISCONFIGURED =
+  CONFIGURED_BASE_URL === null &&
+  typeof location !== "undefined" &&
+  !["localhost", "127.0.0.1", "0.0.0.0", ""].includes(location.hostname);
+
 export type AuthStatus = "loading" | "authenticated" | "anonymous";
 
 export interface AuthUser {

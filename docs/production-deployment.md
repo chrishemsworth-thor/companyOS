@@ -143,12 +143,23 @@ to run every deploy. Never edit an applied migration — add the next
 
 ```sh
 cd ui && npm install
-VITE_API_BASE_URL=https://api.companyos.com.my npm run build
+npm run build:prod          # bakes in VITE_API_BASE_URL=https://api.companyos.com.my
 npx wrangler pages deploy dist --project-name companyos-console
 ```
 
-`VITE_API_BASE_URL` pins the API origin into the bundle: operators never see
-an "API base URL" field, and stale localStorage overrides are ignored. The
+**Use `build:prod`, never a bare `npm run build`, for anything you deploy.**
+`VITE_API_BASE_URL` pins the API origin into the bundle: operators never see an
+"API base URL" field, and stale localStorage overrides are ignored. Built
+without it, the bundle silently falls back to `http://localhost:8787` — every
+visitor's own machine — and the only symptom is `ERR_CONNECTION_REFUSED` behind
+a generic "could not reach the server". Worse, anyone who previously typed an
+origin into the dev-only base-URL field keeps working via their localStorage
+override, so the deploy looks fine to whoever tests it and fails for every new
+person. The public auth pages now detect this and say so outright, but the fix
+is to rebuild with the var set.
+
+Sanity check after deploying: load the login page in a private window. If an
+"API base URL" field is visible, the var did not bake in. The
 custom domain `console.companyos.com.my` is attached to the Pages project in
 the Cloudflare dashboard (Pages → companyos-console → Custom domains); it
 survives redeploys.

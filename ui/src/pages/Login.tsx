@@ -4,6 +4,7 @@ import { AlertCircle } from "lucide-react";
 import { BASE_URL_LOCKED, useAuth } from "../auth/AuthContext";
 import { ApiError } from "../api/client";
 import { Button } from "../components/Button";
+import { ApiConfigWarning } from "../components/ApiConfigWarning";
 
 export function Login() {
   const { login, baseUrl, setBaseUrl } = useAuth();
@@ -48,6 +49,8 @@ export function Login() {
             <p className="mt-1 text-sm text-muted">Sign in to your operator console</p>
           </div>
         </div>
+
+        <ApiConfigWarning />
 
         <form
           onSubmit={onSubmit}

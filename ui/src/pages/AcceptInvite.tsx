@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AlertCircle } from "lucide-react";
 import { useAuth, type AuthCompletion } from "../auth/AuthContext";
 import { Button } from "../components/Button";
+import { ApiConfigWarning } from "../components/ApiConfigWarning";
 
 /**
  * Landing page for the emailed invite link (/accept-invite?token=…). The new
@@ -72,6 +73,8 @@ export function AcceptInvite() {
             <p className="mt-1 text-sm text-muted">Set a password to activate your account</p>
           </div>
         </div>
+
+        <ApiConfigWarning />
 
         {!token ? (
           <div className="rounded-xl border border-border bg-surface p-6 text-sm shadow-md">

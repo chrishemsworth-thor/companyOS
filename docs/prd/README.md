@@ -1,7 +1,8 @@
 # CompanyOS PRDs — Index & Sequencing
 
 Eight PRDs covering the seven gaps identified on 2026-07-24, plus the platform
-foundation they all depend on.
+foundation they all depend on. PRD-008 was added on 2026-07-28 from a gap found
+while building user invites: roles exist but are not enforced.
 
 | # | PRD | Priority | Depends on |
 |---|---|---|---|
@@ -13,6 +14,7 @@ foundation they all depend on.
 | 005 | Support — customer-facing intake & tracking | P1 | 000 (partial) |
 | 006 | People — leave & expense claims | P0 | 000, 001 |
 | 007 | Console — approvals inbox & notifications | P0 | 000 |
+| 008 | Roles, permissions & employee self-service | P0 | — (design against 000, 006) |
 
 ## Dependency graph
 
