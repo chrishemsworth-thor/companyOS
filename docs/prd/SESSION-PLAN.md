@@ -1,6 +1,6 @@
-# PRD 000–007 — Multi-Session Build Plan
+# PRD 000–009 — Multi-Session Build Plan
 
-**Authored:** 2026-07-25 · **Covers:** all eight PRDs, now all present in this directory
+**Authored:** 2026-07-25 · **Covers:** every PRD in this directory
 **Source docs:** [`README.md`](README.md) (index & sequencing) ·
 [000](PRD-000-platform-foundations.md) ·
 [001](PRD-001-finance-ledger-completeness.md) ·
@@ -9,7 +9,15 @@
 [004](PRD-004-quote-branding-and-signing.md) ·
 [005](PRD-005-support-intake-and-tracking.md) ·
 [006](PRD-006-people-leave-and-claims.md) ·
-[007](PRD-007-console-approvals-inbox.md)
+[007](PRD-007-console-approvals-inbox.md) ·
+[008](PRD-008-roles-and-permissions.md) ·
+[009](PRD-009-project-scheduling.md)
+
+> **PRD-008 has no session slot yet.** It arrived after the original eight were
+> sequenced, it is marked **P0** ("security gap"), and its own header says it
+> blocks PRD-006 employee self-service — which is S6/S7. It therefore needs a
+> number *and* a position earlier than its number would imply. Not slotted here
+> because that is a sequencing decision, not a clerical one. See "Unslotted work".
 
 This file exists because the eight PRDs are being built across **separate Claude
 Code sessions**. Each session starts with no memory of the last, so everything a
@@ -92,6 +100,7 @@ Recorded so no session re-opens them.
 | S11 | Support intake & tracking | 005 | P1 | `claude/prd-005-support-intake` | S2, **S4** | not started |
 | S12 | Tax (SST) | 001b | P0¹ | `claude/prd-001b-tax` | S1 | not started |
 | S13 | Credit notes + ledger multi-currency | 001c | P0¹ | `claude/prd-001c-credit-notes` | S1, S12 | not started |
+| S14 | Project scheduling + deadline reminders | 009 | P1 | `claude/prd-009-project-scheduling` | S4 | not started |
 
 ¹ PRD-001 marks all of these P0, but the index defers tax, credit notes and
 multi-currency until *"a design partner hits them"*. Treat S12/S13 as
@@ -343,6 +352,7 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 | S10 | `guardrail.override.v1`, plus `collections.decision.v2` (PRD-002 extends the payload with provider, model, prompt version, tokens, latency, cost, fallback and override flags — that is a breaking payload change, so it is a v2 file and a registry bump, per the convention documented in `registry.ts`) |
 | S11 | `ticket.assigned.v1`, `ticket.sla_breached.v1` |
 | S13 | `credit_note.issued.v1` |
+| S14 | `project.deadline_approaching.v1`, `project.overdue.v1` |
 
 ---
 
@@ -942,6 +952,78 @@ scope. Seed values are a starting point, not advice.
 **Decide first:** whether `credited` is a distinct invoice state or derived from
 credit note totals (see Blocking decisions). Derived is cleaner but complicates
 the sweep query.
+
+---
+
+### S14 — PRD-009: Project scheduling & deadline reminders
+
+**PRD:** [009](PRD-009-project-scheduling.md) · **Branch:**
+`claude/prd-009-project-scheduling` · **Depends on:** S4
+
+The first session in this plan that came from **outside** the codebase. A beta
+user asked for project start/end dates and deadline reminders; `projects` has no
+date column at all, and every existing PRD treats a project purely as a cost tag
+for profitability. That makes this small but unusually well-evidenced — it is the
+only requirement here with a real user behind it.
+
+**Deliverables**
+
+- Nullable `start_date`, `target_end_date`, `actual_end_date`, `owner_user_id` on
+  `projects`. `target_end_date` before `start_date` → 400, validated in the
+  service. Archiving without an `actual_end_date` stamps the archive date.
+- Daily sweep **extending the existing `0 1 * * *` cron**, not a second trigger —
+  mirror `src/modules/finance/overdue-sweep.ts`.
+- Per-tenant lead times (default 7 days and 1 day), emitting
+  `project.deadline_approaching.v1` and `project.overdue.v1`, mapped to
+  notification rows by the **S4 consumer** — extending its event→notification map
+  is the designed way to add a type, not a new mechanism (standing rule 2).
+- No owner set → falls back to a tenant admin, same reasoning as approver
+  resolution in C1: never route work to nobody.
+- **Once per (project, threshold).** The sweep runs daily; re-notifying every
+  morning is how a badge becomes noise.
+- `GET /v1/projects?schedule=late|due_soon|on_track|no_date`, plus date columns
+  and a late badge in the console. Projects with no target date group under an
+  explicit "No date set", never as on-track — the same principle as PRD-001a's
+  "Unallocated" bucket.
+
+**Acceptance criteria → tests:** all of PRD-009's, including the idempotency one
+(run the sweep twice, assert exactly one notification), the archived-project
+silence, the free-plan inline path, and that the PRD-001a profitability figures
+are unchanged by this migration.
+
+**Decide before phase 2:** PRD-009's blocking question — who the reminder is for
+and how often. The schedule columns are safe to build either way; the wrong
+cadence trains people to ignore notifications, which is expensive to undo. Build
+phase 1 and the filter, then stop and ask if it is still unanswered.
+
+---
+
+## Unslotted work
+
+**PRD-008 — Roles, Permissions & Employee Self-Service** is in this directory but
+has no session number, because it landed after the original eight were sequenced
+and slotting it is a real decision rather than a formality:
+
+- It is marked **P0** and describes itself as a security gap, which argues for
+  running it early — earlier than S8–S14, all of which are P1.
+- Its own header says it **blocks PRD-006 employee self-service**, and PRD-006 is
+  S6 and S7. On that reading it belongs *before* S6.
+- But S3 and S4 are the P0 foundations everything else consumes, and PRD-008 says
+  it "must be designed against PRD-000 (approvals) and PRD-006 (leave & claims) so
+  it serves both" — which argues for running it *after* S3/S4 so the approvals
+  surface it must protect already exists.
+
+**Suggested position: immediately after S4, before S5.** That satisfies the
+design-against-PRD-000 requirement, puts a P0 security gap ahead of all the P1
+work, and lands before the self-service it blocks. It would take the next free
+session number while running out of numeric order — the session numbers are a
+naming convention, not an execution order, and this plan should say so once
+rather than renumber eleven sessions that are already referenced in commits and
+PRs.
+
+Not done here because it changes the run order for S5 onward, which is Chris's
+call. Once decided, add the row to the session map, a brief above, and a prompt to
+[`SESSION-PROMPTS.md`](SESSION-PROMPTS.md).
 
 ---
 

@@ -309,6 +309,43 @@ When this lands it unblocks S10's disputed-invoice eval scenario, which shipped
 as a fixture-only context — wire it to real credit-note data if S10 has run.
 ```
 
+## S14 — Project scheduling & deadline reminders (PRD-009)
+
+```
+Read docs/prd/SESSION-PLAN.md and the brief for S14, plus
+docs/prd/PRD-009-project-scheduling.md.
+
+This one came from a beta user rather than from the codebase, so treat its scope
+as evidenced rather than guessed — but note its blocking open question: who the
+reminder is for and how often it fires. Build the schedule columns and the
+visibility filter regardless; stop and ask before fixing the reminder cadence if
+that question is still open.
+
+Extend the existing daily cron rather than adding a second trigger — mirror
+src/modules/finance/overdue-sweep.ts. Reminders become notification rows by
+extending the S4 consumer's event-to-notification map, which is the designed way
+to add a type; do not create a reminder mechanism inside the Build module. A
+project with no owner falls back to a tenant admin, same reasoning as approver
+resolution in conflict C1.
+
+Before writing code, produce an implementation plan covering D1 migrations,
+new/changed endpoints, event types to register in the schema registry, the change
+to the daily sweep, and the test files you will add. Confirm the plan before
+implementing. Every acceptance criterion must have a corresponding test in the
+Workers runtime suite — including that running the sweep twice produces exactly
+one notification, that archived projects stay silent, and that the PRD-001a
+profitability figures are unchanged by this migration.
+```
+
+---
+
+## Unslotted: PRD-008 (roles & permissions)
+
+PRD-008 is in `docs/prd/` but has no session number yet — see "Unslotted work" in
+the plan. It is P0, it blocks PRD-006 self-service, and the suggested position is
+**immediately after S4, before S5**. Once that is decided it needs a session row,
+a brief, and a prompt here.
+
 ---
 
 ## After the last session
