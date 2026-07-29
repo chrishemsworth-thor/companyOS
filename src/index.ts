@@ -114,33 +114,55 @@ app.route("/v1/auth", auth);
 // Everything else under /v1 requires either a session cookie (humans) or a
 // tenant API key (agents/programmatic). authenticate() resolves both.
 app.use("/v1/*", authenticate());
-app.route("/v1/users", users);
-app.route("/v1/meta", meta);
-app.route("/v1/insights", insights);
-app.route("/v1/invoices", invoices);
-app.route("/v1/customers", customers);
-app.route("/v1/ledger", ledger);
-app.route("/v1/payments", payments);
-app.route("/v1/deals", deals);
-app.route("/v1/leads", leads);
-app.route("/v1/activities", activities);
-app.route("/v1/tickets", tickets);
-app.route("/v1/projects", projects);
-app.route("/v1/issues", issues);
-app.route("/v1/events", events);
-app.route("/v1/quotes", quotes);
-app.route("/v1/settings", settings);
-app.route("/v1/people", people);
-app.route("/v1/files", files);
-// No requireRole guard: every authenticated user has an approvals queue, so
-// authorization is per-row inside the service ("is this row yours") rather than
-// per-route ("what role are you"). See src/gateway/routes/approvals.ts.
-app.route("/v1/approvals", approvals);
-// Same reasoning as approvals: every authenticated user has a notification feed,
-// and it is scoped to them rather than to a role.
-app.route("/v1/notifications", notifications);
-app.route("/v1/webhook-sources", webhookSources);
-app.route("/v1/google-accounts", googleAccounts);
+
+/**
+ * The capability mount table — every `/v1` router paired with the capability
+ * module that gates it (PRD-008). Reads need `<module>:read`, writes
+ * `<module>:write`, derived from the HTTP method by `guardModule()`; roles are
+ * mapped to capabilities in `src/auth/capabilities.ts`.
+ *
+ * This is a table rather than a series of `app.route()` calls on purpose: a new
+ * router cannot be exposed without naming its module, so "a route shipped with
+ * no gate" is not a mistake that survives review. `test/capabilities.test.ts`
+ * additionally asserts every registered `/v1` path resolves to a row here.
+ *
+ * Per-route overrides that raise the bar (admin-only actions inside a broader
+ * router) live in the route files via `requireCapability()`.
+ */
+export const V1_MOUNTS: ReadonlyArray<readonly [string, CapabilityModule, Hono<AuthedEnv>]> = [
+  ["/v1/me", "self", me],
+  ["/v1/users", "admin", users],
+  ["/v1/webhook-sources", "admin", webhookSources],
+  ["/v1/google-accounts", "admin", googleAccounts],
+  ["/v1/meta", "meta", meta],
+  ["/v1/insights", "insights", insights],
+  ["/v1/invoices", "finance", invoices],
+  ["/v1/ledger", "finance", ledger],
+  ["/v1/payments", "finance", payments],
+  ["/v1/customers", "crm", customers],
+  ["/v1/deals", "crm", deals],
+  ["/v1/leads", "crm", leads],
+  ["/v1/activities", "crm", activities],
+  ["/v1/quotes", "crm", quotes],
+  ["/v1/tickets", "support", tickets],
+  ["/v1/projects", "build", projects],
+  ["/v1/issues", "build", issues],
+  ["/v1/events", "agents", events],
+  ["/v1/settings", "settings", settings],
+  ["/v1/people", "people", people],
+  ["/v1/files", "files", files],
+  // Approvals and notifications are on the `self` axis, not a business module.
+  // Every role that can log in has an approvals queue and a notification feed,
+  // and `self` is the only module every role holds read AND write on —
+  // including `readonly` and the `employee` self-service tier, who are exactly
+  // the people filing the leave requests and claims these surfaces carry.
+  // Authorization is per-row inside the services ("is this row yours"), never
+  // per-role, which is why gating them on any business module would be wrong.
+  ["/v1/approvals", "self", approvals],
+  ["/v1/notifications", "self", notifications],
+];
+
+for (const [path, module, router] of V1_MOUNTS) app.route(path, guardModule(module, router));
 
 // 404s and unhandled 500s still carry the CORS and security headers: cors()
 // sets its headers on c.res before next() and Hono preserves them, and the

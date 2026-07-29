@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutGrid, Shield, Menu, X, LogOut, UserCircle } from "lucide-react";
+import { LayoutGrid, Shield, X, LogOut, UserCircle, CheckSquare } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
 import { departmentsForRole } from "../lib/departments";
@@ -90,6 +90,16 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
         <NavSection label="You">
           <NavItemLink to="/me" label="My profile" icon={UserCircle} onClose={onClose} />
+          {/* Approvals lives under "You", not "Overview".
+              It started in Overview, which was wrong once PRD-008 landed: that
+              section is hidden from the self-service tier, and those are exactly
+              the people who need this screen most — it is where an employee
+              tracks the leave request or expense claim they filed. It is also
+              not a department surface (a manager's queue spans leave, claims and
+              quotes), and keeping it out of the department registry is what
+              keeps `lib/departments.test.ts` in parity with the server. Gated on
+              `self`, like the route it points at. */}
+          <NavItemLink to="/approvals" label="Approvals" icon={CheckSquare} onClose={onClose} />
         </NavSection>
 
         {/* Hidden from the self-service tier, which sees no departments at all. */}
