@@ -5,6 +5,7 @@ import { useAuth } from "../../auth/AuthContext";
 import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { DataTable } from "../../components/DataTable";
 import { JournalEntryModal } from "../../components/modals/JournalEntryModal";
 import { JournalEntryDetailModal } from "../../components/modals/JournalEntryDetailModal";
@@ -33,9 +34,11 @@ export function Ledger() {
   return (
     <div>
       <PageHeader title="Chart of accounts">
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setPosting(true)}>
-          New journal entry
-        </Button>
+        <CanWrite module="finance">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setPosting(true)}>
+            New journal entry
+          </Button>
+        </CanWrite>
       </PageHeader>
       {posting && <JournalEntryModal accounts={accounts} onClose={() => setPosting(false)} />}
       {openEntry && (

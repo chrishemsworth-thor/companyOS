@@ -237,6 +237,7 @@ React + Vite + TanStack Query single-page app over the same `/v1` API:
 | People: directory, teams, reporting lines | ✅ Built (no leave/payroll) |
 | Cross-module insights / dashboard | ✅ Built |
 | Multi-tenant platform + multi-company identity + roles | ✅ Built |
+| Capability enforcement on every `/v1` route + self-service `employee` tier (PRD-008) | ✅ Built |
 | Real delivery: Resend email, Twilio WhatsApp, Gmail (in+out) | ✅ Built |
 | Transactional email (invites, password reset) | ✅ Built |
 | Operator console covering all modules + onboarding | ✅ Built |

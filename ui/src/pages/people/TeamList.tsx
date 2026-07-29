@@ -6,6 +6,7 @@ import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { TeamFormModal } from "../../components/modals/TeamFormModal";
 import { departmentLabel } from "./EmployeeList";
 import type { Employee, Team } from "../../api/types";
@@ -34,9 +35,11 @@ export function TeamList() {
   return (
     <div>
       <PageHeader title="Teams">
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New team
-        </Button>
+        <CanWrite module="people">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New team
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && <TeamFormModal onClose={() => setCreating(false)} />}
       {editing && <TeamFormModal existing={editing} onClose={() => setEditing(null)} />}

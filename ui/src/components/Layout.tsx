@@ -1,6 +1,6 @@
 import { useEffect, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutGrid, Shield, Menu, X, LogOut } from "lucide-react";
+import { LayoutGrid, Shield, Menu, X, LogOut, UserCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
 import { departmentsForRole } from "../lib/departments";
@@ -65,7 +65,7 @@ function Brand() {
 }
 
 function SidebarContent({ onClose }: { onClose?: () => void }) {
-  const { logout, user, tenant } = useAuth();
+  const { logout, user, tenant, can } = useAuth();
   // Sidebar is the department lens, filtered to what the current role may see.
   const visible = departmentsForRole(user?.role);
   const live = visible.filter((d) => d.status === "live");
@@ -87,9 +87,16 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
       </div>
 
       <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-3 pb-4">
-        <NavSection label="Overview">
-          <NavItemLink to="/departments" label="Departments" icon={LayoutGrid} onClose={onClose} />
+        <NavSection label="You">
+          <NavItemLink to="/me" label="My profile" icon={UserCircle} onClose={onClose} />
         </NavSection>
+
+        {/* Hidden from the self-service tier, which sees no departments at all. */}
+        {live.length + planned.length > 0 && (
+          <NavSection label="Overview">
+            <NavItemLink to="/departments" label="Departments" icon={LayoutGrid} onClose={onClose} />
+          </NavSection>
+        )}
 
         {/* One group per live department; its tools are the module surfaces it owns. */}
         {live.map((dept) => (
@@ -129,7 +136,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
           </NavSection>
         )}
 
-        {user?.role === "admin" && (
+        {can("admin:read") && (
           <NavSection label="Admin">
             <NavItemLink to="/users" label="Users" icon={Shield} onClose={onClose} />
           </NavSection>

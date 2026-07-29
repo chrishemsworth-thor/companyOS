@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import { ApiClient, ApiError } from "../api/client";
+import { can as roleCan, type Capability, type Role } from "../lib/roles";
 
 const STORAGE_BASE_URL = "companyos_base_url";
 
@@ -41,7 +42,7 @@ export interface AuthUser {
   user_id: string;
   email: string;
   display_name: string | null;
-  role: "admin" | "operator" | "finance" | "support" | "readonly";
+  role: Role;
   status: "active" | "disabled";
 }
 
@@ -58,6 +59,8 @@ export interface AuthCompletion {
   user: AuthUser;
   tenant?: AuthTenant | null;
   csrf_token: string;
+  /** Server-derived capability list; absent on older responses. */
+  capabilities?: Capability[];
 }
 
 interface AuthContextValue {
@@ -75,6 +78,13 @@ interface AuthContextValue {
   markOnboarded: () => void;
   /** Reflect the tenant rename that a company-profile save performs server-side. */
   renameTenant: (name: string) => void;
+  /**
+   * Does the signed-in user hold this capability? Used to hide actions that
+   * would only come back 403 (PRD-008). This is a rendering convenience — the
+   * server enforces the same matrix on every request, so a client that lies to
+   * itself gains nothing.
+   */
+  can: (capability: Capability) => boolean;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -126,11 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setStatus("anonymous");
           return;
         }
-        const body = (await res.json()) as {
-          user: AuthUser;
-          tenant: AuthTenant | null;
-          csrf_token: string;
-        };
+        const body = (await res.json()) as AuthCompletion & { tenant: AuthTenant | null };
         csrfRef.current = body.csrf_token;
         setUser(body.user);
         setTenant(body.tenant ?? null);
@@ -186,6 +192,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const renameTenant = (name: string) => setTenant((t) => (t && name ? { ...t, name } : t));
 
+  // Capabilities are derived from the role rather than stored from the login
+  // response, so a role change picked up by /v1/auth/me takes effect without a
+  // second source of truth to keep in step.
+  const can = (capability: Capability) => roleCan(user?.role, capability);
+
   return (
     <AuthContext.Provider
       value={{
@@ -200,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setBaseUrl,
         markOnboarded,
         renameTenant,
+        can,
       }}
     >
       {children}

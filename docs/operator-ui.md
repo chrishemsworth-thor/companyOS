@@ -22,8 +22,8 @@ backed by `GET /v1/events`), a per-customer agent snapshot
 
 **Auth is now option 2** (§3): a backend-for-frontend session layer —
 per-tenant `users`, email + password login (`POST /v1/auth/login`), an
-HttpOnly HMAC-signed session cookie, CSRF on cookie writes, a 5-role
-model, admin `/v1/users` management, and per-user audit attribution on
+HttpOnly HMAC-signed session cookie, CSRF on cookie writes, a 6-role
+capability model (PRD-008), admin `/v1/users` management, and per-user audit attribution on
 `events_log` (see migrations 0010/0011, `src/auth/*`,
 `src/gateway/middleware/session.ts`). Agents keep the tenant-API-key path;
 `authenticate()` accepts either. CORS is now credentialed against an
@@ -46,10 +46,18 @@ anti-enumeration, revokes all sessions on reset) and a
 (`POST /v1/auth/password/change`). See `src/auth/tokens.ts`,
 `src/gateway/routes/auth.ts`, and migration 0019.
 
+Built since (roles): **per-route capability enforcement** on every `/v1`
+route (PRD-008). Roles map to `<module>:<action>` capabilities in
+`src/auth/capabilities.ts`, enforced by the mount table in `src/index.ts`
+rather than per-route guards, so a new route is gated the moment it exists.
+Adds the self-service `employee` tier and `GET /v1/me/employee`; the console
+gets capability-aware navigation, `<CanWrite>` around write actions, a
+*"Not available on your role"* 403 state, and a **My profile** page. See
+[`../docs/architecture/roles-and-permissions.md`](architecture/roles-and-permissions.md).
+
 Still not built: pagination/search on the other list views (invoices,
 customers, deals, tickets, issues — the API supports cursors; only the
-ledger list is wired so far), Kanban boards, passkeys, and
-per-route business-role gating (phase-2 gates only admin surfaces).
+ledger list is wired so far), Kanban boards, and passkeys.
 
 ## 1. What exists to build on
 

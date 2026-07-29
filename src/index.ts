@@ -3,7 +3,10 @@ import { cors } from "hono/cors";
 import type { Env } from "./env";
 import { type AuthedEnv } from "./gateway/middleware/auth";
 import { authenticate } from "./gateway/middleware/session";
+import { guardModule } from "./gateway/middleware/capability";
+import type { CapabilityModule } from "./auth/capabilities";
 import { auth } from "./gateway/routes/auth";
+import { me } from "./gateway/routes/me";
 import { platform } from "./gateway/routes/platform";
 import { users } from "./gateway/routes/users";
 import { meta } from "./gateway/routes/meta";
@@ -34,7 +37,9 @@ import { runGoogleInboxSync } from "./integrations/google/sync";
 
 export { CollectionsAgent } from "./agents/collections";
 
-const app = new Hono<AuthedEnv>();
+// Exported so `test/capabilities.test.ts` can walk `app.routes` and prove every
+// registered /v1 path is covered by the capability mount table below.
+export const app = new Hono<AuthedEnv>();
 
 // Baseline security response headers on every route. The API is JSON-only for
 // programmatic/agent callers, but the OAuth callback and any future HTML
@@ -104,26 +109,46 @@ app.route("/v1/auth", auth);
 // Everything else under /v1 requires either a session cookie (humans) or a
 // tenant API key (agents/programmatic). authenticate() resolves both.
 app.use("/v1/*", authenticate());
-app.route("/v1/users", users);
-app.route("/v1/meta", meta);
-app.route("/v1/insights", insights);
-app.route("/v1/invoices", invoices);
-app.route("/v1/customers", customers);
-app.route("/v1/ledger", ledger);
-app.route("/v1/payments", payments);
-app.route("/v1/deals", deals);
-app.route("/v1/leads", leads);
-app.route("/v1/activities", activities);
-app.route("/v1/tickets", tickets);
-app.route("/v1/projects", projects);
-app.route("/v1/issues", issues);
-app.route("/v1/events", events);
-app.route("/v1/quotes", quotes);
-app.route("/v1/settings", settings);
-app.route("/v1/people", people);
-app.route("/v1/files", files);
-app.route("/v1/webhook-sources", webhookSources);
-app.route("/v1/google-accounts", googleAccounts);
+
+/**
+ * The capability mount table — every `/v1` router paired with the capability
+ * module that gates it (PRD-008). Reads need `<module>:read`, writes
+ * `<module>:write`, derived from the HTTP method by `guardModule()`; roles are
+ * mapped to capabilities in `src/auth/capabilities.ts`.
+ *
+ * This is a table rather than a series of `app.route()` calls on purpose: a new
+ * router cannot be exposed without naming its module, so "a route shipped with
+ * no gate" is not a mistake that survives review. `test/capabilities.test.ts`
+ * additionally asserts every registered `/v1` path resolves to a row here.
+ *
+ * Per-route overrides that raise the bar (admin-only actions inside a broader
+ * router) live in the route files via `requireCapability()`.
+ */
+export const V1_MOUNTS: ReadonlyArray<readonly [string, CapabilityModule, Hono<AuthedEnv>]> = [
+  ["/v1/me", "self", me],
+  ["/v1/users", "admin", users],
+  ["/v1/webhook-sources", "admin", webhookSources],
+  ["/v1/google-accounts", "admin", googleAccounts],
+  ["/v1/meta", "meta", meta],
+  ["/v1/insights", "insights", insights],
+  ["/v1/invoices", "finance", invoices],
+  ["/v1/ledger", "finance", ledger],
+  ["/v1/payments", "finance", payments],
+  ["/v1/customers", "crm", customers],
+  ["/v1/deals", "crm", deals],
+  ["/v1/leads", "crm", leads],
+  ["/v1/activities", "crm", activities],
+  ["/v1/quotes", "crm", quotes],
+  ["/v1/tickets", "support", tickets],
+  ["/v1/projects", "build", projects],
+  ["/v1/issues", "build", issues],
+  ["/v1/events", "agents", events],
+  ["/v1/settings", "settings", settings],
+  ["/v1/people", "people", people],
+  ["/v1/files", "files", files],
+];
+
+for (const [path, module, router] of V1_MOUNTS) app.route(path, guardModule(module, router));
 
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {

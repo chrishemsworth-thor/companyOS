@@ -8,6 +8,7 @@ import { DataTable } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { ProjectCreateModal } from "../../components/modals/ProjectCreateModal";
 import { formatDate } from "../../lib/format";
 import type { Project } from "../../api/types";
@@ -25,9 +26,11 @@ export function ProjectList() {
   return (
     <div>
       <PageHeader title="Projects">
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New project
-        </Button>
+        <CanWrite module="build">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New project
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <ProjectCreateModal

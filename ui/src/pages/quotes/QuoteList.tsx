@@ -9,6 +9,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { QuoteCreateModal } from "../../components/modals/QuoteCreateModal";
 import { formatMoney, formatDate } from "../../lib/format";
 import type { Quote, QuoteStatus } from "../../api/types";
@@ -30,9 +31,11 @@ export function QuoteList() {
     <div>
       <PageHeader title="Quotes">
         <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New quote
-        </Button>
+        <CanWrite module="crm">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New quote
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <QuoteCreateModal

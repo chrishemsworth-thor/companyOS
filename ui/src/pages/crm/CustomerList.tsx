@@ -7,6 +7,7 @@ import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { CustomerFormModal } from "../../components/modals/CustomerFormModal";
 import type { Customer } from "../../api/types";
 
@@ -23,9 +24,11 @@ export function CustomerList() {
   return (
     <div>
       <PageHeader title="Customers">
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New customer
-        </Button>
+        <CanWrite module="crm">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New customer
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <CustomerFormModal

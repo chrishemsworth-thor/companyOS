@@ -1,4 +1,4 @@
-import { ROLES, type Role } from "../auth/roles";
+import { canReadAll, type CapabilityModule } from "../auth/capabilities";
 
 /**
  * Department registry — the org-chart *lens* over CompanyOS's capability
@@ -9,8 +9,10 @@ import { ROLES, type Role } from "../auth/roles";
  * customer record), so departments are deliberately NOT a 1:1 mirror of the
  * `src/modules/*` data domains — mapping them 1:1 would duplicate data and
  * break the one-normalized-database thesis. Instead each department declares
- * which capability modules it surfaces, which human roles may see it, and the
- * console routes it exposes as tools.
+ * which capability modules it surfaces and the console routes it exposes as
+ * tools. Who may *see* a department is no longer declared here: it is derived
+ * from the capability matrix (`src/auth/capabilities.ts`) by
+ * `departmentsForRole`, so navigation and route enforcement cannot disagree.
  *
  * This is the canonical source of truth: `GET /v1/meta/departments` serves it
  * (so agents can discover the taxonomy) and the operator console mirrors it in
@@ -19,8 +21,16 @@ import { ROLES, type Role } from "../auth/roles";
  * and flipping that department's `status` from `planned` to `live`.
  */
 
-/** Capability modules a department can surface. `agents` is the DO runtime. */
-export type ModuleKey = "finance" | "crm" | "support" | "build" | "insights" | "agents" | "people";
+/**
+ * Capability modules a department can surface. `agents` is the DO runtime.
+ * Narrowed from `CapabilityModule` so the taxonomy cannot drift from the
+ * capability matrix that now decides visibility — naming a module here that
+ * nobody can be granted is a type error.
+ */
+export type ModuleKey = Extract<
+  CapabilityModule,
+  "finance" | "crm" | "support" | "build" | "insights" | "agents" | "people"
+>;
 
 /**
  * `live` — backed by a shipped module, with working console tools.
@@ -42,15 +52,9 @@ export interface Department {
   summary: string;
   /** Capability modules this department reads from. */
   modules: ModuleKey[];
-  /** Roles allowed to see this department. Subset of `ROLES`. */
-  roles: Role[];
   /** Console routes; empty for `planned` departments. */
   tools: DepartmentTool[];
 }
-
-// Roles that see every business department: full operators + read-only
-// observers, plus admins. Finance and support are scoped to their own surfaces.
-const BROAD: Role[] = ["admin", "operator", "readonly"];
 
 export const DEPARTMENTS: Department[] = [
   {
@@ -59,7 +63,6 @@ export const DEPARTMENTS: Department[] = [
     status: "live",
     summary: "Double-entry ledger, invoices, and payments.",
     modules: ["finance"],
-    roles: [...BROAD, "finance"],
     tools: [
       { label: "Invoices", route: "/invoices" },
       { label: "Ledger", route: "/ledger" },
@@ -71,7 +74,6 @@ export const DEPARTMENTS: Department[] = [
     status: "live",
     summary: "Customers, deal pipeline, and activity history.",
     modules: ["crm"],
-    roles: BROAD,
     tools: [
       { label: "Customers", route: "/customers" },
       { label: "Deals", route: "/deals" },
@@ -84,7 +86,6 @@ export const DEPARTMENTS: Department[] = [
     status: "live",
     summary: "Support tickets and the customer relationship they attach to.",
     modules: ["support", "crm"],
-    roles: [...BROAD, "support"],
     tools: [{ label: "Tickets", route: "/tickets" }],
   },
   {
@@ -93,7 +94,6 @@ export const DEPARTMENTS: Department[] = [
     status: "live",
     summary: "Delivery projects and the issues that make them up.",
     modules: ["build"],
-    roles: BROAD,
     tools: [
       { label: "Projects", route: "/projects" },
       { label: "Issues", route: "/issues" },
@@ -105,7 +105,6 @@ export const DEPARTMENTS: Department[] = [
     status: "live",
     summary: "Autonomous agent activity and the decisions it audits.",
     modules: ["agents", "insights"],
-    roles: BROAD,
     tools: [{ label: "Agent activity", route: "/agent" }],
   },
   {
@@ -114,7 +113,6 @@ export const DEPARTMENTS: Department[] = [
     status: "live",
     summary: "Cross-module overview stitched from one database.",
     modules: ["insights"],
-    roles: [...BROAD, "finance"],
     tools: [
       { label: "Dashboard", route: "/" },
       { label: "Company Profile", route: "/settings/company" },
@@ -127,7 +125,6 @@ export const DEPARTMENTS: Department[] = [
     status: "planned",
     summary: "Roadmap, feedback, and releases (grouped over Build for now).",
     modules: ["build"],
-    roles: BROAD,
     tools: [],
   },
   {
@@ -136,7 +133,6 @@ export const DEPARTMENTS: Department[] = [
     status: "planned",
     summary: "Experiments and ideas ahead of the delivery pipeline.",
     modules: ["build"],
-    roles: BROAD,
     tools: [],
   },
   {
@@ -145,7 +141,6 @@ export const DEPARTMENTS: Department[] = [
     status: "live",
     summary: "Employee directory, teams, and reporting lines.",
     modules: ["people"],
-    roles: BROAD,
     tools: [
       { label: "Employees", route: "/employees" },
       { label: "Teams", route: "/teams" },
@@ -157,7 +152,6 @@ export const DEPARTMENTS: Department[] = [
     status: "planned",
     summary: "Contracts, entities, and policy compliance.",
     modules: [],
-    roles: BROAD,
     tools: [],
   },
   {
@@ -166,7 +160,6 @@ export const DEPARTMENTS: Department[] = [
     status: "planned",
     summary: "Vendors, procurement, and asset tracking.",
     modules: [],
-    roles: BROAD,
     tools: [],
   },
 ];
@@ -174,12 +167,28 @@ export const DEPARTMENTS: Department[] = [
 /** Stable id list — the parity anchor the UI mirror is checked against. */
 export const DEPARTMENT_IDS = DEPARTMENTS.map((d) => d.id);
 
+/** Every module the taxonomy surfaces — what "a business role" means here. */
+const ALL_MODULE_KEYS: ModuleKey[] = [...new Set(DEPARTMENTS.flatMap((d) => d.modules))];
+
 /**
- * Departments visible to a human role. A `system`/agent caller sees everything
- * (pass no role). Unknown roles see nothing rather than leaking the full list.
+ * Departments visible to a human role, **derived from the capability matrix**
+ * rather than a second list of roles kept alongside it (PRD-008). A department
+ * is visible when the role can read *every* module it surfaces — the strict
+ * reading, so the console never offers a department whose pages would 403 in
+ * part. Its write actions are gated separately, per capability, by the UI.
+ *
+ * A `system`/agent caller sees everything (pass no role). An unknown role, or
+ * the self-service `employee` tier, sees nothing: both hold no business read
+ * capability, so the filter empties rather than leaking the taxonomy.
+ *
+ * `planned` departments that surface no module yet (Legal, Operations) are
+ * shown to roles that can read the whole business — an empty module list would
+ * otherwise be vacuously readable and leak the placeholders to every login,
+ * self-service included.
  */
 export function departmentsForRole(role?: string): Department[] {
   if (!role) return DEPARTMENTS;
-  if (!ROLES.includes(role as Role)) return [];
-  return DEPARTMENTS.filter((d) => d.roles.includes(role as Role));
+  return DEPARTMENTS.filter((d) =>
+    canReadAll(role, d.modules.length > 0 ? d.modules : ALL_MODULE_KEYS),
+  );
 }

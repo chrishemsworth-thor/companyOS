@@ -38,7 +38,6 @@ The canonical, machine-readable taxonomy. Each `Department` declares:
 | `id`, `label`, `summary` | Identity + human description |
 | `status` | `live` (backed by a shipped module, working console tools) or `planned` (part of the org model, not yet built — shown disabled so the taxonomy and build order stay visible) |
 | `modules` | Which capability modules it reads from (`finance` \| `crm` \| `support` \| `build` \| `insights` \| `agents` \| `people`) |
-| `roles` | Which human roles may see it |
 | `tools` | Console routes it exposes (empty for `planned`) |
 
 **11 departments — 7 live, 4 planned:**
@@ -57,15 +56,24 @@ The canonical, machine-readable taxonomy. Each `Department` declares:
 | Legal | planned | — | — |
 | Operations | planned | — | — |
 
-**`departmentsForRole(role?)`** is the one access function:
-- no role (a `system`/agent caller) → **all** departments;
-- an unknown role → **`[]`** (fails closed rather than leaking the full list);
-- a known role → departments whose `roles` include it.
+**`departmentsForRole(role?)`** is the one access function. Since PRD-008 it
+**derives** visibility from the capability matrix rather than a `roles` field on
+each department — one source of truth, so the sidebar cannot offer a department
+whose pages would 403:
 
-`BROAD = [admin, operator, readonly]` see every business department. `finance`
-additionally maps to **Finance + Management**; `support` maps to **Customer
-Experience**. This is why an API key sees 11, an admin/operator/readonly sees
-11, a finance user sees 2, and a support user sees 1.
+- no role (a `system`/agent caller) → **all** departments;
+- an unknown role, or the self-service `employee` tier → **`[]`** (fails closed
+  rather than leaking the full list);
+- otherwise → departments whose **every** module the role can read.
+
+`admin`, `operator` and `readonly` read every business module, so they see all
+11. `finance` sees **Finance + Sales + Management** and `support` sees
+**Customer Experience + Sales** — both read `crm` because you cannot invoice or
+support a customer you cannot see, and Sales is read-only for them (its write
+actions are hidden by capability). `planned` departments that surface no module
+yet are shown only to roles that read the whole business.
+
+See [`roles-and-permissions.md`](roles-and-permissions.md).
 
 ## 3. Roles extracted to a dependency-free leaf — `src/auth/roles.ts`
 

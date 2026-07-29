@@ -7,6 +7,7 @@ import { Field } from "../../components/Field";
 import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
+import { CanWrite } from "../../components/CanWrite";
 import { FormError } from "../../components/FormError";
 import { formatDate } from "../../lib/format";
 import type { Issue, IssueStatus } from "../../api/types";
@@ -55,19 +56,21 @@ export function IssueDetail() {
     <div>
       <BackLink to="/issues">Issues</BackLink>
       <PageHeader title={issue.title}>
-        <select
-          className="input"
-          style={{ width: "auto" }}
-          value={issue.status}
-          onChange={(e) => statusMutation.mutate(e.target.value as IssueStatus)}
-          disabled={statusMutation.isPending}
-        >
-          {legalStatuses(issue.status).map((s) => (
-            <option key={s} value={s}>
-              {s.replace("_", " ")}
-            </option>
-          ))}
-        </select>
+        <CanWrite module="build">
+          <select
+            className="input"
+            style={{ width: "auto" }}
+            value={issue.status}
+            onChange={(e) => statusMutation.mutate(e.target.value as IssueStatus)}
+            disabled={statusMutation.isPending}
+          >
+            {legalStatuses(issue.status).map((s) => (
+              <option key={s} value={s}>
+                {s.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+        </CanWrite>
         <StatusBadge status={issue.status} />
       </PageHeader>
       <FormError error={statusMutation.error} />

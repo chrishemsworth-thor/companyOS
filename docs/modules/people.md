@@ -34,9 +34,13 @@ manager-based authorization, multi-team membership.
   express this as a constraint). Hierarchy is stored, not authorized on — a
   manager gets no extra access in v1.
 - **No hard deletes:** offboarding is `status = 'inactive'`.
-- **Write gate:** People mutations require role `admin` or `operator` — the
-  first business-route use of `requireRole()`. Reads stay open to any
-  authenticated caller; system (API-key) callers bypass the gate as everywhere.
+- **Capability gate:** reads require `people:read` and writes `people:write`,
+  enforced by the mount table in `src/index.ts` (PRD-008). That means
+  `admin`/`operator`/`readonly` read the directory and `admin`/`operator` write
+  it; `finance`, `support` and the self-service `employee` tier get a 403 —
+  employment terms and HR notes are not general business data. System (API-key)
+  callers bypass the matrix as everywhere. An employee reads *their own* record
+  via `GET /v1/me/employee`.
 
 ## API
 
@@ -51,7 +55,7 @@ Auth as everywhere. `PeopleError` maps to 404 (`not_found`), 409
 | `POST /v1/people/employees` | `{name, department_id, email?, phone?, job_title?, team_id?, manager_employee_id?, user_id?, employment_type?, status?, start_date?, end_date?, location?, notes?}` | 201 employee |
 | `GET /v1/people/employees/:id` | — | employee or 404 |
 | `PATCH /v1/people/employees/:id` | any subset (nullable fields clear with `null`) | updated employee |
-| `POST /v1/people/employees/:id/invite` | `{role?}` (default `operator`) | 201 `{employee, user, invite}` — or 200 `{employee, invite}` when re-sending |
+| `POST /v1/people/employees/:id/invite` | `{role?}` (default `employee`, the least-privilege tier) | 201 `{employee, user, invite}` — or 200 `{employee, invite}` when re-sending |
 | `GET /v1/people/teams` | — | `{teams: [...]}` |
 | `POST /v1/people/teams` | `{name, description?, department_id?, lead_employee_id?}` | 201 team |
 | `GET /v1/people/teams/:id` | — | team or 404 |
@@ -69,8 +73,8 @@ employee provisions no login and sends no email.
 
 `employees.user_id` optionally links the two. `POST
 /v1/people/employees/:id/invite` is the bridge: **admin only** (it mints a
-login with a role, so it is held to the `/v1/users` bar rather than the
-admin+operator write gate), it creates the user, sets `user_id` via
+login with a role, so it requires `admin:write` — the `/v1/users` bar — rather
+than the router's `people:write`), it creates the user, sets `user_id` via
 `updateEmployee` so `employee.updated` is emitted, and emails a single-use
 invite through the shared `issueAndSendInvite` service (`src/auth/invites.ts`,
 also used by `/v1/users`). Calling it again while the login is still pending
@@ -81,10 +85,16 @@ linked login has a password), `user_disabled`, or `email_taken` (a login owns
 that address but isn't linked — link it via `PATCH … {user_id}` instead, which
 is a deliberate act rather than a guess that the two records are one person).
 
-Caveat: platform roles are **not yet enforced** on most business routes — only
-`/v1/users`, people writes, and onboarding-complete gate on role — so any
-login can currently read and write business data whatever its role. Grant
-access deliberately until per-module enforcement lands.
+The role picked here decides real access: every `/v1` route enforces the
+capability matrix in `src/auth/capabilities.ts` (PRD-008). It defaults to
+`employee` — own records only — so an invite grants business access solely when
+an admin chooses it. See
+[`../architecture/roles-and-permissions.md`](../architecture/roles-and-permissions.md)
+for what each role reaches.
+
+Reporting lines feed approver resolution: `src/modules/approvals/resolver.ts`
+climbs `manager_employee_id` to the first manager with an enabled login, which is
+why linking `employees.user_id` matters beyond console access.
 
 ## Events emitted
 

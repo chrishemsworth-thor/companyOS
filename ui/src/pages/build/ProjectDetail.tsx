@@ -11,6 +11,7 @@ import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { IssueCreateModal } from "../../components/modals/IssueCreateModal";
 import { formatDate } from "../../lib/format";
 import type { Project, Issue } from "../../api/types";
@@ -41,9 +42,11 @@ export function ProjectDetail() {
     <div>
       <BackLink to="/projects">Projects</BackLink>
       <PageHeader title={project.name}>
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New issue
-        </Button>
+        <CanWrite module="build">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New issue
+          </Button>
+        </CanWrite>
         <StatusBadge status={project.status} />
       </PageHeader>
       {creating && (

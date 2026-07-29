@@ -7,6 +7,7 @@ import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
 import { EmployeeFormModal } from "../../components/modals/EmployeeFormModal";
@@ -44,9 +45,11 @@ export function EmployeeList() {
   return (
     <div>
       <PageHeader title="Employees">
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New employee
-        </Button>
+        <CanWrite module="people">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New employee
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <EmployeeFormModal

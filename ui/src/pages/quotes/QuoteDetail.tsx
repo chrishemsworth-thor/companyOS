@@ -9,6 +9,7 @@ import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { DataTable } from "../../components/DataTable";
 import { FormError } from "../../components/FormError";
 import { useApiMutation } from "../../hooks/useApiMutation";
@@ -67,26 +68,31 @@ export function QuoteDetail() {
         <a href={documentUrl} target="_blank" rel="noreferrer">
           <Button icon={<FileText className="size-4" />}>View document</Button>
         </a>
-        {quote.status === "draft" && (
-          <Button variant="primary" onClick={() => sendMutation.mutate(quote.quote_id)} loading={sendMutation.isPending}>
-            Send quote
-          </Button>
-        )}
-        {quote.status === "sent" && (
-          <>
-            <Button variant="primary" onClick={() => acceptMutation.mutate(quote.quote_id)} loading={acceptMutation.isPending}>
-              Mark accepted
+        <CanWrite module="crm">
+          {quote.status === "draft" && (
+            <Button variant="primary" onClick={() => sendMutation.mutate(quote.quote_id)} loading={sendMutation.isPending}>
+              Send quote
             </Button>
-            <Button variant="danger" onClick={() => rejectMutation.mutate(quote.quote_id)} loading={rejectMutation.isPending}>
-              Mark rejected
+          )}
+          {quote.status === "sent" && (
+            <>
+              <Button variant="primary" onClick={() => acceptMutation.mutate(quote.quote_id)} loading={acceptMutation.isPending}>
+                Mark accepted
+              </Button>
+              <Button variant="danger" onClick={() => rejectMutation.mutate(quote.quote_id)} loading={rejectMutation.isPending}>
+                Mark rejected
+              </Button>
+            </>
+          )}
+        </CanWrite>
+        {/* Converting a quote writes an invoice, so it needs finance, not CRM. */}
+        <CanWrite module="finance">
+          {quote.status === "accepted" && (
+            <Button variant="primary" onClick={() => convertMutation.mutate(quote.quote_id)} loading={convertMutation.isPending}>
+              Convert to invoice
             </Button>
-          </>
-        )}
-        {quote.status === "accepted" && (
-          <Button variant="primary" onClick={() => convertMutation.mutate(quote.quote_id)} loading={convertMutation.isPending}>
-            Convert to invoice
-          </Button>
-        )}
+          )}
+        </CanWrite>
         <StatusBadge status={quote.status} />
       </PageHeader>
       <FormError
