@@ -1,4 +1,6 @@
 import type { ComponentType } from "react";
+import type { ModuleKey } from "../../../src/departments/registry";
+import { canReadAll, type Role } from "./roles";
 import {
   LayoutDashboard,
   Bot,
@@ -36,7 +38,6 @@ import {
  * concern the API has no business carrying).
  */
 
-export type Role = "admin" | "operator" | "finance" | "support" | "readonly";
 export type DepartmentStatus = "live" | "planned";
 
 type Icon = ComponentType<{ className?: string }>;
@@ -52,12 +53,15 @@ export interface Department {
   label: string;
   status: DepartmentStatus;
   summary: string;
-  roles: Role[];
+  /**
+   * Capability modules the department surfaces — the same list the server
+   * registry carries, and what decides visibility. Kept in step by the parity
+   * test in `departments.test.ts`.
+   */
+  modules: ModuleKey[];
   icon: Icon;
   tools: DepartmentTool[];
 }
-
-const BROAD: Role[] = ["admin", "operator", "readonly"];
 
 export const DEPARTMENTS: Department[] = [
   {
@@ -65,7 +69,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Finance",
     status: "live",
     summary: "Double-entry ledger, invoices, and payments.",
-    roles: [...BROAD, "finance"],
+    modules: ["finance"],
     icon: Landmark,
     tools: [
       { label: "Invoices", route: "/invoices", icon: Receipt },
@@ -77,7 +81,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Sales & Business Development",
     status: "live",
     summary: "Leads, customers, deal pipeline, and activity history.",
-    roles: BROAD,
+    modules: ["crm"],
     icon: TrendingUp,
     tools: [
       { label: "Leads", route: "/leads", icon: UserPlus },
@@ -91,7 +95,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Customer Experience",
     status: "live",
     summary: "Support tickets and the customer relationship they attach to.",
-    roles: [...BROAD, "support"],
+    modules: ["support", "crm"],
     icon: Headset,
     tools: [{ label: "Tickets", route: "/tickets", icon: LifeBuoy }],
   },
@@ -100,7 +104,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Technology / Engineering",
     status: "live",
     summary: "Delivery projects and the issues that make them up.",
-    roles: BROAD,
+    modules: ["build"],
     icon: Code2,
     tools: [
       { label: "Projects", route: "/projects", icon: FolderKanban },
@@ -112,7 +116,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Data & AI",
     status: "live",
     summary: "Autonomous agent activity and the decisions it audits.",
-    roles: BROAD,
+    modules: ["agents", "insights"],
     icon: Sparkles,
     tools: [{ label: "Agent activity", route: "/agent", icon: Bot }],
   },
@@ -121,7 +125,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Management",
     status: "live",
     summary: "Cross-module overview stitched from one database.",
-    roles: [...BROAD, "finance"],
+    modules: ["insights"],
     icon: LayoutDashboard,
     tools: [
       { label: "Dashboard", route: "/", icon: LayoutDashboard },
@@ -134,7 +138,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Product",
     status: "planned",
     summary: "Roadmap, feedback, and releases (grouped over Build for now).",
-    roles: BROAD,
+    modules: ["build"],
     icon: Package,
     tools: [],
   },
@@ -143,7 +147,7 @@ export const DEPARTMENTS: Department[] = [
     label: "R&D / Innovation",
     status: "planned",
     summary: "Experiments and ideas ahead of the delivery pipeline.",
-    roles: BROAD,
+    modules: ["build"],
     icon: Lightbulb,
     tools: [],
   },
@@ -152,7 +156,7 @@ export const DEPARTMENTS: Department[] = [
     label: "People",
     status: "live",
     summary: "Employee directory, teams, and reporting lines.",
-    roles: BROAD,
+    modules: ["people"],
     icon: UserRound,
     tools: [
       { label: "Employees", route: "/employees", icon: UsersRound },
@@ -164,7 +168,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Legal",
     status: "planned",
     summary: "Contracts, entities, and policy compliance.",
-    roles: BROAD,
+    modules: [],
     icon: Scale,
     tools: [],
   },
@@ -173,7 +177,7 @@ export const DEPARTMENTS: Department[] = [
     label: "Operations",
     status: "planned",
     summary: "Vendors, procurement, and asset tracking.",
-    roles: BROAD,
+    modules: [],
     icon: Boxes,
     tools: [],
   },
@@ -182,8 +186,22 @@ export const DEPARTMENTS: Department[] = [
 /** Stable id list — the anchor the parity test checks against the server. */
 export const UI_DEPARTMENT_IDS = DEPARTMENTS.map((d) => d.id);
 
-/** Departments a role may see; used to build the sidebar. */
+/** Every module the taxonomy surfaces — what "a business role" means here. */
+const ALL_MODULE_KEYS: ModuleKey[] = [...new Set(DEPARTMENTS.flatMap((d) => d.modules))];
+
+/**
+ * Departments a role may see, derived from the shared capability matrix exactly
+ * as the server derives it (`departmentsForRole` in src/departments/registry.ts)
+ * — so the sidebar cannot offer a department whose pages would 403. An
+ * unauthenticated shell, and the self-service `employee` tier, see none.
+ *
+ * `planned` departments surfacing no module yet are shown to roles that can read
+ * the whole business, since an empty module list is otherwise vacuously
+ * readable.
+ */
 export function departmentsForRole(role: Role | undefined): Department[] {
   if (!role) return [];
-  return DEPARTMENTS.filter((d) => d.roles.includes(role));
+  return DEPARTMENTS.filter((d) =>
+    canReadAll(role, d.modules.length > 0 ? d.modules : ALL_MODULE_KEYS),
+  );
 }

@@ -10,6 +10,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { formatMoney } from "../../lib/format";
 import type { Deal, DealStatus, PipelineStage } from "../../api/types";
 
@@ -42,9 +43,11 @@ export function DealList() {
     <div>
       <PageHeader title="Deals">
         <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New deal
-        </Button>
+        <CanWrite module="crm">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New deal
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <DealCreateModal

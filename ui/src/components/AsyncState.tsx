@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Lock } from "lucide-react";
+import { ApiError } from "../api/client";
 
 const SKELETON_WIDTHS = ["70%", "92%", "60%", "82%"];
 
@@ -24,7 +25,35 @@ export function LoadingState({ label = "Loading…" }: { label?: string }) {
   );
 }
 
+/**
+ * A 403 is not a fault — it is the role working as configured (PRD-008), so it
+ * reads as an explanation rather than a red alarm. Every page inherits this via
+ * `ErrorState`, which means a surface reachable by a role that cannot read it
+ * degrades to a clear message instead of "Something went wrong".
+ */
+export function ForbiddenState({ message }: { message?: string }) {
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-3 rounded-lg border border-border-strong bg-surface p-4 text-muted"
+    >
+      <Lock className="mt-0.5 size-5 shrink-0 text-subtle" aria-hidden />
+      <div className="text-sm">
+        <div className="font-semibold text-fg">Not available on your role</div>
+        <div className="opacity-90">
+          {message ?? "Ask an administrator if you need access to this."}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function ErrorState({ error }: { error: unknown }) {
+  if (error instanceof ApiError && error.status === 403) {
+    // CSRF failures also 403; those carry no `forbidden` code and are a genuine
+    // fault, so they keep the error treatment.
+    if (error.code === "forbidden") return <ForbiddenState />;
+  }
   const message = error instanceof Error ? error.message : "Something went wrong";
   return (
     <div

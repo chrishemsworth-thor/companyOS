@@ -4,6 +4,7 @@ import worker from "../src/index";
 import { sha256Hex } from "../src/gateway/middleware/auth";
 import { createUser } from "../src/auth/users";
 import { ROLES } from "../src/auth/roles";
+import { CAPABILITY_MODULES, capabilitiesFor } from "../src/auth/capabilities";
 import {
   DEPARTMENTS,
   DEPARTMENT_IDS,
@@ -60,10 +61,18 @@ describe("registry invariants", () => {
     expect(new Set(DEPARTMENT_IDS).size).toBe(DEPARTMENT_IDS.length);
   });
 
-  it("only references roles that exist", () => {
+  // Visibility is derived from the capability matrix rather than declared on
+  // the department (PRD-008), so the invariant worth asserting is the reverse
+  // one: every module a department surfaces must be a module roles can actually
+  // be granted, or the department would be invisible to everyone.
+  it("only surfaces modules the capability matrix can grant", () => {
     for (const dept of DEPARTMENTS) {
-      for (const role of dept.roles) expect(ROLES).toContain(role);
+      for (const module of dept.modules) expect(CAPABILITY_MODULES).toContain(module);
     }
+  });
+
+  it("keeps every role in ROLES resolvable against the matrix", () => {
+    for (const role of ROLES) expect(capabilitiesFor(role).length).toBeGreaterThan(0);
   });
 
   it("gives every live department at least one tool with a real route", () => {
@@ -86,16 +95,30 @@ describe("departmentsForRole", () => {
     expect(departmentsForRole(undefined)).toHaveLength(11);
   });
 
-  it("scopes the finance role to Finance + Management", () => {
-    expect(departmentsForRole("finance").map((d) => d.id).sort()).toEqual(["finance", "management"]);
+  // Finance reads CRM because you cannot invoice a customer you cannot see, so
+  // Sales joins Finance + Management. It cannot write there — that is the
+  // capability matrix's job, not the lens's.
+  it("scopes the finance role to Finance + Sales + Management", () => {
+    expect(departmentsForRole("finance").map((d) => d.id).sort()).toEqual([
+      "finance",
+      "management",
+      "sales",
+    ]);
   });
 
-  it("scopes the support role to Customer Experience", () => {
-    expect(departmentsForRole("support").map((d) => d.id)).toEqual(["customer-experience"]);
+  it("scopes the support role to Customer Experience + Sales", () => {
+    expect(departmentsForRole("support").map((d) => d.id).sort()).toEqual([
+      "customer-experience",
+      "sales",
+    ]);
   });
 
   it("shows every department to a readonly observer", () => {
     expect(departmentsForRole("readonly")).toHaveLength(11);
+  });
+
+  it("shows the self-service tier no business departments at all", () => {
+    expect(departmentsForRole("employee")).toHaveLength(0);
   });
 
   it("returns nothing for an unknown role rather than leaking the list", () => {
@@ -118,10 +141,10 @@ describe("GET /v1/meta/departments", () => {
 
   it("filters to the caller's role for a human session", async () => {
     const fin = await departmentsFor({ Cookie: await login("fin@dep.test", "finance-password") });
-    expect(fin.map((d) => d.id).sort()).toEqual(["finance", "management"]);
+    expect(fin.map((d) => d.id).sort()).toEqual(["finance", "management", "sales"]);
 
     const sup = await departmentsFor({ Cookie: await login("sup@dep.test", "support-password") });
-    expect(sup.map((d) => d.id)).toEqual(["customer-experience"]);
+    expect(sup.map((d) => d.id).sort()).toEqual(["customer-experience", "sales"]);
 
     const admin = await departmentsFor({ Cookie: await login("admin@dep.test", "admin-password") });
     expect(admin).toHaveLength(11);

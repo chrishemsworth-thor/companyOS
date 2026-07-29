@@ -58,7 +58,9 @@ Because this returns before `consumeOAuthState`, it was reachable **completely u
 if (!user || user.type !== "user") return next(); // system/agent bypass
 ```
 
-Every programmatic (`system`/API-key) caller skips role enforcement entirely. Combined with per-route business gating not yet being layered in (only `/v1/users` gates on `admin`), **a single tenant API key is effectively root within its tenant** — full read/write across finance (ledger, invoices, payments), CRM, HR/people, and quotes.
+Every programmatic (`system`/API-key) caller skips role enforcement entirely, so **a single tenant API key is effectively root within its tenant** — full read/write across finance (ledger, invoices, payments), CRM, HR/people, and quotes.
+
+*Update (PRD-008, 2026-07-29):* human role enforcement is now complete — every `/v1` route requires a capability (`src/auth/capabilities.ts`, enforced via the mount table in `src/index.ts`), so the "no per-route business gating" half of this finding is closed. The API-key bypass itself is **retained deliberately** as trusted root for agents, per PRD-008's problem statement; scoping API keys remains open.
 
 This is documented as intentional ("trusted root credentials"). It is safe *within* the tenant-isolation boundary (a key cannot cross tenants — see the positives section), but for a client demo where agent keys are handed out, the blast radius of a single leaked key is the entire tenant dataset.
 

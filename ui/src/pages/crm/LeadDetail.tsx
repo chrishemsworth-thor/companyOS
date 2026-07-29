@@ -8,6 +8,7 @@ import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { StatusBadge } from "../../components/StatusBadge";
 import { LeadFormModal } from "../../components/modals/LeadFormModal";
 import { LeadConvertModal } from "../../components/modals/LeadConvertModal";
@@ -56,22 +57,24 @@ export function LeadDetail() {
     <div>
       <BackLink to="/leads">Leads</BackLink>
       <PageHeader title={lead.name}>
-        {workable && <Button onClick={() => setOpenModal("edit")}>Edit</Button>}
-        {workable && (
-          <Button onClick={() => enrichMutation.mutate()} loading={enrichMutation.isPending}>
-            {enrichMutation.isPending ? "Enriching…" : "Enrich"}
-          </Button>
-        )}
-        {workable && (
-          <Button variant="primary" onClick={() => setOpenModal("convert")}>
-            Convert
-          </Button>
-        )}
-        {workable && (
-          <Button onClick={() => loseMutation.mutate()} loading={loseMutation.isPending}>
-            Mark lost
-          </Button>
-        )}
+        <CanWrite module="crm">
+          {workable && <Button onClick={() => setOpenModal("edit")}>Edit</Button>}
+          {workable && (
+            <Button onClick={() => enrichMutation.mutate()} loading={enrichMutation.isPending}>
+              {enrichMutation.isPending ? "Enriching…" : "Enrich"}
+            </Button>
+          )}
+          {workable && (
+            <Button variant="primary" onClick={() => setOpenModal("convert")}>
+              Convert
+            </Button>
+          )}
+          {workable && (
+            <Button onClick={() => loseMutation.mutate()} loading={loseMutation.isPending}>
+              Mark lost
+            </Button>
+          )}
+        </CanWrite>
       </PageHeader>
 
       {openModal === "edit" && (

@@ -10,6 +10,7 @@ import {
   setPassword,
   UserError,
 } from "../../auth/users";
+import { capabilitiesFor } from "../../auth/capabilities";
 import { resolveTenantBySlug } from "../../auth/tenants";
 import {
   createSession,
@@ -76,7 +77,13 @@ auth.post("/login", zValidator("json", loginSchema), async (c) => {
       user_agent: c.req.header("User-Agent") ?? undefined,
     });
     c.header("Set-Cookie", sessionSetCookie(cookieValue, isSecureRequest(c.req.raw)));
-    return c.json({ user, csrf_token, tenant_id, tenant: await sessionTenant(c.env.DB, tenant_id) });
+    return c.json({
+      user,
+      csrf_token,
+      tenant_id,
+      tenant: await sessionTenant(c.env.DB, tenant_id),
+      capabilities: capabilitiesFor(user.role),
+    });
   } catch (err) {
     if (err instanceof UserError) return c.json({ error: err.message, code: err.code }, err.httpStatus);
     throw err;
@@ -97,7 +104,15 @@ auth.get("/me", async (c) => {
   const user = await getUserById(c.env.DB, session.tenant_id, session.user_id);
   if (!user) return c.json({ error: "not authenticated" }, 401);
   const tenant = await sessionTenant(c.env.DB, session.tenant_id);
-  return c.json({ user, tenant, csrf_token: session.csrf_token });
+  // The console needs the caller's capabilities to hide actions that would only
+  // come back 403 (PRD-008). Derived from the role, never sent by the client —
+  // this is a convenience for rendering, not the enforcement point.
+  return c.json({
+    user,
+    tenant,
+    csrf_token: session.csrf_token,
+    capabilities: capabilitiesFor(user.role),
+  });
 });
 
 // ---------------------------------------------------------------------------

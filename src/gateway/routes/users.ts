@@ -2,7 +2,6 @@ import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
-import { requireRole } from "../middleware/session";
 import {
   createUser,
   getUserAuthState,
@@ -12,19 +11,20 @@ import {
   UserError,
 } from "../../auth/users";
 import { issueAndSendInvite, type InviteResult } from "../../auth/invites";
+import { revokeAllUserSessions } from "../../auth/session";
 
 /**
- * User management. Admin-only for human callers; a tenant-API-key (system)
- * caller bypasses the role gate — that is the bootstrap path for creating the
- * first admin user when a tenant has none yet.
+ * User management. Mounted against the `admin` capability module (see the mount
+ * table in src/index.ts), which only the `admin` role holds — so this whole
+ * router is admin-only for human callers without a guard of its own. A
+ * tenant-API-key (system) caller bypasses the matrix, which is the bootstrap
+ * path for creating the first admin user when a tenant has none yet.
  *
  * New users are created WITHOUT a password: they receive a single-use invite
  * link (emailed, and returned to the admin as invite_url for tenants with no
  * email transport) and set their own credential via /v1/auth/invite/accept.
  */
 export const users = new Hono<AuthedEnv>();
-
-users.use("*", requireRole("admin"));
 
 const roleSchema = z.enum(ROLES);
 
@@ -97,8 +97,17 @@ users.post("/:id/resend-invite", async (c) => {
 
 users.patch("/:id", zValidator("json", patchSchema), async (c) => {
   const tenant = c.get("tenant");
+  const patch = c.req.valid("json");
   try {
-    const user = await updateUser(c.env.DB, tenant.tenant_id, c.req.param("id"), c.req.valid("json"));
+    const user = await updateUser(c.env.DB, tenant.tenant_id, c.req.param("id"), patch);
+    // A session carries the role it was minted with (KV hot copy, 7-day TTL),
+    // and that role now decides what every route allows. So a demotion or a
+    // disable has to invalidate live sessions or it would not take effect until
+    // the session expired — the same "treat the old credential as gone"
+    // reasoning as the password-reset path.
+    if (patch.role !== undefined || patch.status === "disabled") {
+      await revokeAllUserSessions(c.env, user.user_id);
+    }
     return c.json(user);
   } catch (err) {
     return userErrorResponse(c, err);

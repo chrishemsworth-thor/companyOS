@@ -159,12 +159,15 @@ describe("invite an employee to the platform", () => {
     });
   });
 
-  it("defaults the platform role to operator", async () => {
+  // PRD-008: the default is the least-privilege self-service tier, not a
+  // business-capable role. An invite that grants business access is a
+  // deliberate choice the admin makes in the role selector.
+  it("defaults the platform role to the self-service tier", async () => {
     const emp = (
       await createEmployee({ name: "Default Role", email: "dr@people.test", department_id: "people" })
     ).body;
     const { body } = await inviteEmployee(emp.employee_id);
-    expect(body.user!.role).toBe("operator");
+    expect(body.user!.role).toBe("employee");
   });
 
   it("422s an employee with no email address", async () => {

@@ -1,4 +1,4 @@
-import type { Context, MiddlewareHandler, Next } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import type { AuthedEnv } from "./auth";
 import { resolveTenantByApiKey } from "./auth";
 import type { Actor } from "../../auth/actor-context";
@@ -71,17 +71,8 @@ export function authenticate(): MiddlewareHandler<AuthedEnv> {
   };
 }
 
-/**
- * Restrict a route to human users holding one of `roles`. Programmatic callers
- * (tenant API key → `system` actor) are trusted root credentials and bypass the
- * check. Phase-2 policy applies this only to admin surfaces (e.g. /v1/users);
- * per-route business gating is layered in later without touching call sites.
- */
-export function requireRole(...roles: string[]): MiddlewareHandler<AuthedEnv> {
-  return async (c: Context<AuthedEnv>, next: Next) => {
-    const user = c.get("user");
-    if (!user || user.type !== "user") return next(); // system/agent bypass
-    if (user.role && roles.includes(user.role)) return next();
-    return c.json({ error: "forbidden: requires role " + roles.join("|") }, 403);
-  };
-}
+// Authorization used to live here as `requireRole(...roles)`, applied to four
+// surfaces while every other business route was ungated. PRD-008 replaced it
+// with the capability matrix in `src/auth/capabilities.ts`, enforced for every
+// /v1 router by `src/gateway/middleware/capability.ts` — so gating is now a
+// property of the mount table rather than something a route can omit.

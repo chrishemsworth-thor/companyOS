@@ -9,6 +9,7 @@ import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { FormError } from "../../components/FormError";
 import { ActivityLogModal } from "../../components/modals/ActivityLogModal";
 import { formatMoney, formatDate } from "../../lib/format";
@@ -60,22 +61,24 @@ export function DealDetail() {
     <div>
       <BackLink to="/deals">Deals</BackLink>
       <PageHeader title={deal.title}>
-        <Button onClick={() => setLoggingActivity(true)}>Log activity</Button>
-        {deal.status === "open" && stages.length > 0 && (
-          <select
-            className="input"
-            style={{ width: "auto" }}
-            value={deal.stage_id}
-            onChange={(e) => stageMutation.mutate(e.target.value)}
-            disabled={stageMutation.isPending}
-          >
-            {stages.map((s) => (
-              <option key={s.stage_id} value={s.stage_id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        )}
+        <CanWrite module="crm">
+          <Button onClick={() => setLoggingActivity(true)}>Log activity</Button>
+          {deal.status === "open" && stages.length > 0 && (
+            <select
+              className="input"
+              style={{ width: "auto" }}
+              value={deal.stage_id}
+              onChange={(e) => stageMutation.mutate(e.target.value)}
+              disabled={stageMutation.isPending}
+            >
+              {stages.map((s) => (
+                <option key={s.stage_id} value={s.stage_id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </CanWrite>
         <StatusBadge status={deal.status} />
       </PageHeader>
       <FormError error={stageMutation.error} />

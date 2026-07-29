@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
-import { requireRole } from "../middleware/session";
+import { requireCapability } from "../middleware/capability";
 import { pageQuerySchema } from "../pagination";
 import {
   createEmployee,
@@ -22,17 +22,19 @@ import { issueAndSendInvite } from "../../auth/invites";
  * People module routes, mounted at /v1/people — one sub-app for both entities
  * (employees + teams) since the module owns the whole HR surface.
  *
- * Reads are open to any authenticated caller (visibility is the department
- * lens's job); writes are the first business-route use of `requireRole` —
- * the "layered in later" gate the session middleware anticipates. System
- * (API-key) callers bypass it, as everywhere else.
+ * Gating comes from the mount table in `src/index.ts`: reads need
+ * `people:read` and writes `people:write` (see src/auth/capabilities.ts). The
+ * directory carries employment terms and HR notes, so it is *not* readable by
+ * every login — `finance`, `support` and the self-service `employee` tier get a
+ * 403 here, and an employee reads their own record via /v1/me/employee instead.
+ * System (API-key) callers bypass the matrix, as everywhere else.
  */
 export const people = new Hono<AuthedEnv>();
 
-const writeGuard = requireRole("admin", "operator");
-// Granting console access creates a login with a role, so it is held to the
-// same bar as /v1/users — admin only, not the operator-level write guard.
-const inviteGuard = requireRole("admin");
+// Granting console access creates a login with a role, which is tenant
+// administration rather than an HR edit — so it is held to the /v1/users bar
+// (admin) rather than the operator-level `people:write` the router carries.
+const inviteGuard = requireCapability("admin:write");
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const isoDate = z.string().regex(ISO_DATE, "must be YYYY-MM-DD");
@@ -117,7 +119,7 @@ people.get("/employees", zValidator("query", employeeListQuerySchema), async (c)
   return c.json(await listEmployees(c.env.DB, tenant.tenant_id, c.req.valid("query")));
 });
 
-people.post("/employees", writeGuard, zValidator("json", createEmployeeSchema), async (c) => {
+people.post("/employees", zValidator("json", createEmployeeSchema), async (c) => {
   const tenant = c.get("tenant");
   try {
     const employee = await createEmployee(c.env, tenant.tenant_id, c.req.valid("json"));
@@ -239,7 +241,7 @@ people.get("/employees/:id", async (c) => {
   return c.json(employee);
 });
 
-people.patch("/employees/:id", writeGuard, zValidator("json", patchEmployeeSchema), async (c) => {
+people.patch("/employees/:id", zValidator("json", patchEmployeeSchema), async (c) => {
   const tenant = c.get("tenant");
   try {
     return c.json(
@@ -257,7 +259,7 @@ people.get("/teams", async (c) => {
   return c.json({ teams: await listTeams(c.env.DB, tenant.tenant_id) });
 });
 
-people.post("/teams", writeGuard, zValidator("json", createTeamSchema), async (c) => {
+people.post("/teams", zValidator("json", createTeamSchema), async (c) => {
   const tenant = c.get("tenant");
   try {
     const team = await createTeam(c.env, tenant.tenant_id, c.req.valid("json"));
@@ -274,7 +276,7 @@ people.get("/teams/:id", async (c) => {
   return c.json(team);
 });
 
-people.patch("/teams/:id", writeGuard, zValidator("json", patchTeamSchema), async (c) => {
+people.patch("/teams/:id", zValidator("json", patchTeamSchema), async (c) => {
   const tenant = c.get("tenant");
   try {
     return c.json(await updateTeam(c.env.DB, tenant.tenant_id, c.req.param("id"), c.req.valid("json")));

@@ -9,6 +9,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { InvoiceCreateModal } from "../../components/modals/InvoiceCreateModal";
 import { formatMoney, formatDate } from "../../lib/format";
 import type { Invoice, InvoiceStatus } from "../../api/types";
@@ -31,9 +32,11 @@ export function InvoiceList() {
     <div>
       <PageHeader title="Invoices">
         <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New invoice
-        </Button>
+        <CanWrite module="finance">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New invoice
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <InvoiceCreateModal

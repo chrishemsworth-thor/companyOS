@@ -12,6 +12,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Departments } from "./pages/Departments";
 import { AgentActivity } from "./pages/AgentActivity";
 import { Users } from "./pages/Users";
+import { MyProfile } from "./pages/me/MyProfile";
 import { InvoiceList } from "./pages/finance/InvoiceList";
 import { InvoiceDetail } from "./pages/finance/InvoiceDetail";
 import { Ledger } from "./pages/finance/Ledger";
@@ -42,10 +43,16 @@ const queryClient = new QueryClient({
 });
 
 function RequireAuth({ children }: { children: ReactElement }) {
-  const { status, user, tenant } = useAuth();
+  const { status, user, tenant, can } = useAuth();
   const location = useLocation();
   if (status === "loading") return <div className="login-screen">Loading…</div>;
   if (status === "anonymous") return <Navigate to="/login" replace />;
+  // The self-service tier holds no business capability, so the dashboard (which
+  // reads insights) would only 403 for them. Land them on their own record —
+  // the one surface their role is for (PRD-008).
+  if (!can("insights:read") && location.pathname === "/") {
+    return <Navigate to="/me" replace />;
+  }
   // First-run: send the company's admin into the setup journey until it is
   // finished or dismissed. Only admins — other roles can't create teams or
   // employees, so the wizard would be a dead end for them.
@@ -104,6 +111,7 @@ function AppRoutes() {
         <Route path="employees/:id" element={<EmployeeDetail />} />
         <Route path="teams" element={<TeamList />} />
         <Route path="users" element={<Users />} />
+        <Route path="me" element={<MyProfile />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -6,15 +6,15 @@ import { Button } from "../Button";
 import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import { InvitePanel, type InviteInfo } from "../InvitePanel";
+import { RoleSelect } from "../RoleSelect";
+import { DEFAULT_ROLE, type Role } from "../../lib/roles";
 
-export const USER_ROLES = ["admin", "operator", "finance", "support", "readonly"] as const;
-export type UserRole = (typeof USER_ROLES)[number];
 
 export interface AdminUser {
   user_id: string;
   email: string;
   display_name: string | null;
-  role: UserRole;
+  role: Role;
   /** `invited` = created without a password, waiting on the invite link. */
   status: "active" | "disabled" | "invited";
   created_at: string;
@@ -41,7 +41,7 @@ export function UserFormModal({
 }) {
   const [email, setEmail] = useState(existing?.email ?? "");
   const [displayName, setDisplayName] = useState(existing?.display_name ?? "");
-  const [role, setRole] = useState<UserRole>(existing?.role ?? "operator");
+  const [role, setRole] = useState<Role>(existing?.role ?? DEFAULT_ROLE);
   const [status, setStatus] = useState<"active" | "disabled">(
     existing?.status === "disabled" ? "disabled" : "active",
   );
@@ -106,15 +106,7 @@ export function UserFormModal({
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </FormRow>
-        <FormRow label="Role">
-          <select className="input" value={role} onChange={(e) => setRole(e.target.value as UserRole)}>
-            {USER_ROLES.map((r) => (
-              <option key={r} value={r}>
-                {r}
-              </option>
-            ))}
-          </select>
-        </FormRow>
+        <RoleSelect value={role} onChange={setRole} label="Role" />
         {existing && (
           <FormRow label="Status">
             <select
