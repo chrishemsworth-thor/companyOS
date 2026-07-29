@@ -6,6 +6,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { FormRow } from "../../components/FormRow";
 import { FormError } from "../../components/FormError";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import type { QuoteBranding as QuoteBrandingType } from "../../api/types";
 
@@ -177,7 +178,9 @@ export function QuoteBranding() {
 
           <FormError error={mutation.error} />
           <div className="mt-2">
-            <Button type="submit" variant="primary" loading={mutation.isPending}>Save branding</Button>
+            <CanWrite module="settings">
+              <Button type="submit" variant="primary" loading={mutation.isPending}>Save branding</Button>
+            </CanWrite>
           </div>
         </form>
 

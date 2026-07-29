@@ -9,6 +9,7 @@ import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { FormError } from "../../components/FormError";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import { formatDate } from "../../lib/format";
@@ -62,16 +63,18 @@ export function TicketDetail() {
     <div>
       <BackLink to="/tickets">Tickets</BackLink>
       <PageHeader title={ticket.subject}>
-        {nextStatuses.map((status) => (
-          <Button
-            key={status}
-            size="sm"
-            onClick={() => statusMutation.mutate(status)}
-            disabled={statusMutation.isPending}
-          >
-            Mark {status}
-          </Button>
-        ))}
+        <CanWrite module="support">
+          {nextStatuses.map((status) => (
+            <Button
+              key={status}
+              size="sm"
+              onClick={() => statusMutation.mutate(status)}
+              disabled={statusMutation.isPending}
+            >
+              Mark {status}
+            </Button>
+          ))}
+        </CanWrite>
         <StatusBadge status={ticket.status} />
       </PageHeader>
       <FormError error={statusMutation.error} />

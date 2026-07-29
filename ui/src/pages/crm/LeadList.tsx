@@ -7,6 +7,7 @@ import { LoadingState, ErrorState } from "../../components/AsyncState";
 import { DataTable } from "../../components/DataTable";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { StatusBadge } from "../../components/StatusBadge";
 import { LeadFormModal } from "../../components/modals/LeadFormModal";
 import type { Lead } from "../../api/types";
@@ -24,9 +25,11 @@ export function LeadList() {
   return (
     <div>
       <PageHeader title="Leads">
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New lead
-        </Button>
+        <CanWrite module="crm">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New lead
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <LeadFormModal

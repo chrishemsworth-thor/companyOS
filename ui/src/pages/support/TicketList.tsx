@@ -10,6 +10,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { formatDate } from "../../lib/format";
 import type { Ticket, TicketStatus } from "../../api/types";
 
@@ -31,9 +32,11 @@ export function TicketList() {
     <div>
       <PageHeader title="Tickets">
         <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New ticket
-        </Button>
+        <CanWrite module="support">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New ticket
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <TicketCreateModal

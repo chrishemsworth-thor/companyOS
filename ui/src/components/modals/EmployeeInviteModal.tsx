@@ -1,12 +1,12 @@
 import { useState } from "react";
 import { Modal } from "../Modal";
-import { FormRow } from "../FormRow";
 import { FormError } from "../FormError";
 import { Button } from "../Button";
 import { ModalActions } from "../ModalActions";
 import { InvitePanel, type InviteInfo } from "../InvitePanel";
 import { useApiMutation } from "../../hooks/useApiMutation";
-import { USER_ROLES, type UserRole } from "./UserFormModal";
+import { RoleSelect } from "../RoleSelect";
+import { DEFAULT_ROLE, type Role } from "../../lib/roles";
 import type { Employee } from "../../api/types";
 
 interface InviteResponse {
@@ -26,12 +26,14 @@ export function EmployeeInviteModal({
   employee: Employee;
   onClose: () => void;
 }) {
-  const [role, setRole] = useState<UserRole>("operator");
+  // Least privilege by default: granting business access is a deliberate
+  // choice the admin makes here, not something an invite hands out silently.
+  const [role, setRole] = useState<Role>(DEFAULT_ROLE);
   const [result, setResult] = useState<InviteInfo | null>(null);
   const pending = employee.user_id !== null;
 
   const mutation = useApiMutation({
-    mutationFn: (client, body: { role?: UserRole }) =>
+    mutationFn: (client, body: { role?: Role }) =>
       client.post<InviteResponse>(`/v1/people/employees/${employee.employee_id}/invite`, body),
     invalidates: () => [["employees", employee.employee_id], ["employees"], ["users"]],
     onSuccess: (data) => setResult(data.invite),
@@ -76,21 +78,7 @@ export function EmployeeInviteModal({
             </>
           )}
         </p>
-        {!pending && (
-          <FormRow label="Platform role">
-            <select
-              className="input"
-              value={role}
-              onChange={(e) => setRole(e.target.value as UserRole)}
-            >
-              {USER_ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </FormRow>
-        )}
+        {!pending && <RoleSelect value={role} onChange={setRole} />}
         <FormError error={mutation.error} />
         <ModalActions>
           <Button type="button" onClick={onClose}>

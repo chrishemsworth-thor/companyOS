@@ -9,6 +9,7 @@ import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { DataTable } from "../../components/DataTable";
 import { FormError } from "../../components/FormError";
 import { AgentEventFeed } from "../../components/AgentEventFeed";
@@ -46,23 +47,25 @@ export function InvoiceDetail() {
     <div>
       <BackLink to="/invoices">Invoices</BackLink>
       <PageHeader title={<span className="font-mono">{invoice.invoice_id}</span>}>
-        {invoice.status === "draft" && (
-          <Button
-            variant="primary"
-            onClick={() => sendMutation.mutate(invoice.invoice_id)}
-            loading={sendMutation.isPending}
-          >
-            {sendMutation.isPending ? "Sending…" : "Send invoice"}
-          </Button>
-        )}
-        {canRemind && (
-          <Button onClick={() => setReminderModalOpen(true)}>Send reminder</Button>
-        )}
-        {canPay && (
-          <Button variant="primary" onClick={() => setPayModalOpen(true)}>
-            Record payment
-          </Button>
-        )}
+        <CanWrite module="finance">
+          {invoice.status === "draft" && (
+            <Button
+              variant="primary"
+              onClick={() => sendMutation.mutate(invoice.invoice_id)}
+              loading={sendMutation.isPending}
+            >
+              {sendMutation.isPending ? "Sending…" : "Send invoice"}
+            </Button>
+          )}
+          {canRemind && (
+            <Button onClick={() => setReminderModalOpen(true)}>Send reminder</Button>
+          )}
+          {canPay && (
+            <Button variant="primary" onClick={() => setPayModalOpen(true)}>
+              Record payment
+            </Button>
+          )}
+        </CanWrite>
         <StatusBadge status={invoice.status} />
       </PageHeader>
       <FormError error={sendMutation.error} />

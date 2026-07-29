@@ -3,7 +3,10 @@ import { cors } from "hono/cors";
 import type { Env } from "./env";
 import { type AuthedEnv } from "./gateway/middleware/auth";
 import { authenticate } from "./gateway/middleware/session";
+import { guardModule } from "./gateway/middleware/capability";
+import type { CapabilityModule } from "./auth/capabilities";
 import { auth } from "./gateway/routes/auth";
+import { me } from "./gateway/routes/me";
 import { platform } from "./gateway/routes/platform";
 import { users } from "./gateway/routes/users";
 import { meta } from "./gateway/routes/meta";
@@ -35,7 +38,9 @@ import { runGoogleInboxSync } from "./integrations/google/sync";
 
 export { CollectionsAgent } from "./agents/collections";
 
-const app = new Hono<AuthedEnv>();
+// Exported so `test/capabilities.test.ts` can walk `app.routes` and prove every
+// registered /v1 path is covered by the capability mount table below.
+export const app = new Hono<AuthedEnv>();
 
 // Baseline security response headers on every route. The API is JSON-only for
 // programmatic/agent callers, but the OAuth callback and any future HTML

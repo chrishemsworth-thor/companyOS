@@ -1,8 +1,12 @@
 # PRD-008 — Roles, Permissions & Employee Self-Service
 
-**Status:** Not started · **Priority:** P0 (security gap + blocks PRD-006 self-service)
+**Status:** Implemented (2026-07-29) · **Priority:** P0 (security gap + blocks PRD-006 self-service)
 **Depends on:** none to start; must be designed against PRD-000 (approvals) and
 PRD-006 (leave & claims) so it serves both
+
+**Outcome:** see [`docs/architecture/roles-and-permissions.md`](../architecture/roles-and-permissions.md)
+for the shipped model. The six decisions below were confirmed with the user before
+implementation; each is recorded under *Resolutions*.
 
 ---
 
@@ -71,9 +75,10 @@ the manager chain, and roles compose.
 - SSO / passkeys / SCIM provisioning.
 - Rebuilding the department lens; reconcile with it (see below), don't replace it.
 
-## Decisions required
+## Decisions taken
 
-Propose, then confirm with the user — do not settle these silently.
+Confirmed with the user before implementation (2026-07-29). The original framing
+of each question is kept for the record.
 
 1. **Vocabulary vs. model.** Flat role list, or an access **tier** plus module
    **scopes** (e.g. `operator` + `["finance","crm"]`)? Consider a
@@ -135,23 +140,72 @@ Propose, then confirm with the user — do not settle these silently.
    tier → UI (role pickers, nav gating, 403 states).
 3. Call out anything that changes existing users' effective access **before** doing it.
 
+## Resolutions
+
+1. **Vocabulary vs. model** — a **capability matrix**: roles stay a flat list, mapped to
+   `<module>:<action>` in `src/auth/capabilities.ts`. No tier+scopes column, no per-route
+   role lists.
+2. **The self-service tier** — named **`employee`**, reaching its own employee record
+   (`GET /v1/me/employee`, ownership from the session), its own leave/claims when PRD-006
+   lands, and `meta`. 403 on every business module, the employee directory included: it
+   carries employment terms and HR notes.
+3. **Auto-provisioning** — no. The explicit admin-only invite stays, but its default role
+   is now `employee` rather than `operator`, so a default invite grants no business access.
+4. **The DB `CHECK`** — dropped, in one `users` rebuild (migration 0022, `PRAGMA
+   defer_foreign_keys` for the five FK references). `src/auth/roles.ts` is the only
+   vocabulary.
+5. **Migration path** — the five roles map 1:1 with no re-grants. What changes is that the
+   matrix is enforced: `readonly` loses writes (the point), `finance`/`support` lose writes
+   outside their module and lose People reads. Full table in the architecture doc, § 9.
+6. **Enforcement mechanism** — the **mount table** (`V1_MOUNTS` in `src/index.ts`): each
+   router is mounted with a declared module and the action is derived from the HTTP method,
+   so a route added later is gated the moment it exists, and a new router cannot be mounted
+   without naming a module. `test/capabilities.test.ts` walks `app.routes` and fails on any
+   uncovered `/v1` path.
+
+Reconciled alongside: the department lens no longer declares `roles` per department —
+`departmentsForRole()` derives visibility from the matrix, so navigation and enforcement
+cannot disagree.
+
 ## Acceptance criteria
 
-- [ ] Every `/v1/*` business route has an explicit capability requirement, and a route
+- [x] Every `/v1/*` business route has an explicit capability requirement, and a route
       with none either fails closed or fails a test.
-- [ ] Given a `readonly` user, when they attempt any write, then 403 — proven per module.
-- [ ] Given a self-service user, when they read business data (invoices, customers,
+      *(Mount table + `mount table coverage` tests; `/v1/auth` exempt by design.)*
+- [x] Given a `readonly` user, when they attempt any write, then 403 — proven per module.
+      *(`per-module enforcement` table in `test/capabilities.test.ts`, plus a no-partial-effect check.)*
+- [x] Given a self-service user, when they read business data (invoices, customers,
       deals, ledger), then 403; when they read their own employee record, then 200.
-- [ ] Given a tenant-API-key (system) caller, when they call any route, then role checks
+- [x] Given a tenant-API-key (system) caller, when they call any route, then role checks
       are bypassed as before.
-- [ ] Given each of the five pre-migration roles, when the migration runs, then their
+- [x] Given each of the five pre-migration roles, when the migration runs, then their
       effective access matches the documented mapping — no silent escalation.
-- [ ] Adding a role requires changing `src/auth/roles.ts` (and the UI list) only — no
+      *(Migration 0022 changes no row; the matrix tests assert no role but `admin` holds `admin:*`.)*
+- [x] Adding a role requires changing `src/auth/roles.ts` (and the UI list) only — no
       migration.
-- [ ] Approver resolution works for both strategies: manager-chain (leave/claims) and
+- [x] Approver resolution works for both strategies: manager-chain (leave/claims) and
       role-based (quote/invoice), including the no-manager → admin fallback.
+      *(`src/modules/approvals/resolver.ts`, `test/approver-resolution.test.ts`.)*
+
+## Delivered beyond the brief
+
+- **Role changes take effect immediately.** A session carries the role it was minted with
+  (KV, 7-day TTL). Once that role decides access, `PATCH /v1/users/:id` must revoke the
+  target's sessions on a demotion or disable — otherwise a demotion waits up to a week.
+- **Console capability awareness.** `GET /v1/auth/me` returns the caller's capabilities;
+  `<CanWrite module>` hides unusable write actions and a 403 renders as *"Not available on
+  your role"*. The duplicated role literal in `UserFormModal.tsx` now imports the server
+  vocabulary (both `roles.ts` and `capabilities.ts` are dependency-free leaves, so the
+  browser bundle uses them directly).
+- **A landing surface for the tier.** A **My profile** page, since an `employee` login
+  would otherwise sign in to an empty console; the dashboard redirects there for roles
+  with no business read.
 
 ## Verification
+
+*As implemented:* `npm test` → **617 pass** (355 before this work; +262, largely the
+per-role × per-module enforcement table), `npm run typecheck` clean,
+`cd ui && npm run typecheck && npm run build && npm test` → **24 pass**.
 
 - `npm test` (330 tests pass as of this PRD — keep green; add cases per new rule) and
   `npm run typecheck`.

@@ -7,8 +7,8 @@ import { hashPassword, verifyPassword, type PasswordHash } from "./password";
  */
 
 // Re-exported from the dependency-free leaf so existing importers are unaffected.
-export { ROLES, type Role } from "./roles";
-import type { Role } from "./roles";
+export { ROLES, DEFAULT_ROLE, type Role } from "./roles";
+import { DEFAULT_ROLE, type Role } from "./roles";
 
 export interface UserPublic {
   user_id: string;
@@ -56,6 +56,7 @@ export async function createUser(
     /** Absent for invited users — they set their own via the invite link. */
     password?: string;
     display_name?: string;
+    /** Omitted → `DEFAULT_ROLE`, the least-privilege self-service tier. */
     role?: Role;
   },
 ): Promise<UserPublic> {
@@ -79,7 +80,7 @@ export async function createUser(
       input.tenant_id,
       input.email,
       input.display_name ?? null,
-      input.role ?? "operator",
+      input.role ?? DEFAULT_ROLE,
       pwd?.hash ?? null,
       pwd?.salt ?? null,
       pwd?.iterations ?? null,

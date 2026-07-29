@@ -23,6 +23,13 @@ Payroll remains deliberately out of scope — the EPF/SOCSO/EIS/PCB compliance t
 was already assessed as an undefensible moat, and plenty of SMEs run leave and claims
 separately from an outsourced payroll bureau.
 
+**Groundwork already in place (PRD-008):** the `employee` self-service role, the
+`self:read`/`self:write` capability every role holds, `GET /v1/me/employee` (ownership
+resolved from the session), a **My profile** console page to hang leave and claims off,
+and `resolveApprover()` for the manager chain. Leave/claim routes belong under `/v1/me`
+against the `self` module — that is what lets an employee act without any business
+access. See [`../architecture/roles-and-permissions.md`](../architecture/roles-and-permissions.md).
+
 ## Goals
 
 1. An employee can request leave and see their balance without asking HR.

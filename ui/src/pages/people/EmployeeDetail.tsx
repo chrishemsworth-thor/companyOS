@@ -9,6 +9,7 @@ import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { DataTable } from "../../components/DataTable";
 import { StatusBadge } from "../../components/StatusBadge";
 import { EmployeeFormModal } from "../../components/modals/EmployeeFormModal";
@@ -20,10 +21,12 @@ import type { Employee, Team } from "../../api/types";
 
 export function EmployeeDetail() {
   const { id } = useParams<{ id: string }>();
-  const { client, user } = useAuth();
+  const { client, can } = useAuth();
   const [editing, setEditing] = useState(false);
   const [inviting, setInviting] = useState(false);
-  const isAdmin = user?.role === "admin";
+  // Granting a login is tenant administration, and the platform-access field
+  // reads /v1/users — both need the admin capability, not merely People write.
+  const isAdmin = can("admin:read");
 
   const employeeQuery = useQuery({
     queryKey: ["employees", id],
@@ -84,9 +87,11 @@ export function EmployeeDetail() {
             {employee.user_id ? "Resend invite" : "Invite to platform"}
           </Button>
         )}
-        <Button icon={<Pencil className="size-4" />} onClick={() => setEditing(true)}>
-          Edit
-        </Button>
+        <CanWrite module="people">
+          <Button icon={<Pencil className="size-4" />} onClick={() => setEditing(true)}>
+            Edit
+          </Button>
+        </CanWrite>
       </PageHeader>
       {editing && <EmployeeFormModal existing={employee} onClose={() => setEditing(false)} />}
       {inviting && (

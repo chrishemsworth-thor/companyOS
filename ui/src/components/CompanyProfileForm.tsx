@@ -5,6 +5,7 @@ import { LoadingState, ErrorState } from "./AsyncState";
 import { FormRow } from "./FormRow";
 import { FormError } from "./FormError";
 import { Button } from "./Button";
+import { CanWrite } from "./CanWrite";
 import { CurrencySelect } from "./CurrencySelect";
 import { useApiMutation } from "../hooks/useApiMutation";
 import type { CompanyProfile as CompanyProfileType } from "../api/types";
@@ -149,9 +150,11 @@ export function CompanyProfileForm({
       </FormRow>
       <FormError error={mutation.error} />
       <div className="mt-2">
-        <Button type="submit" variant="primary" loading={mutation.isPending} disabled={!form.legal_name.trim()}>
-          {submitLabel}
-        </Button>
+        <CanWrite module="settings">
+          <Button type="submit" variant="primary" loading={mutation.isPending} disabled={!form.legal_name.trim()}>
+            {submitLabel}
+          </Button>
+        </CanWrite>
       </div>
     </form>
   );

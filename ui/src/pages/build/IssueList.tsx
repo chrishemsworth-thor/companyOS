@@ -10,6 +10,7 @@ import { StatusBadge } from "../../components/StatusBadge";
 import { StatusFilter } from "../../components/FilterBar";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import type { Issue, IssueStatus } from "../../api/types";
 
 const STATUSES: IssueStatus[] = ["todo", "in_progress", "done", "cancelled"];
@@ -30,9 +31,11 @@ export function IssueList() {
     <div>
       <PageHeader title="Issues">
         <StatusFilter value={status} options={STATUSES} onChange={setStatus} />
-        <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
-          New issue
-        </Button>
+        <CanWrite module="build">
+          <Button variant="primary" icon={<Plus className="size-4" />} onClick={() => setCreating(true)}>
+            New issue
+          </Button>
+        </CanWrite>
       </PageHeader>
       {creating && (
         <IssueCreateModal

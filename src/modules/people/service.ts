@@ -176,6 +176,22 @@ export async function getEmployee(
     .first<Employee>();
 }
 
+/**
+ * The employee record linked to a login, for the self-service surface
+ * (`GET /v1/me/employee`). `employees.user_id` is unique per tenant, so at most
+ * one row matches; employees with no login link are unreachable here.
+ */
+export async function getEmployeeByUserId(
+  db: D1Database,
+  tenantId: string,
+  userId: string,
+): Promise<Employee | null> {
+  return db
+    .prepare(`SELECT ${EMPLOYEE_COLUMNS} FROM employees WHERE tenant_id = ? AND user_id = ?`)
+    .bind(tenantId, userId)
+    .first<Employee>();
+}
+
 export async function listEmployees(
   db: D1Database,
   tenantId: string,

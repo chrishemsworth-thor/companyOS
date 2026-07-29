@@ -8,6 +8,7 @@ import { DetailGrid } from "../../components/DetailGrid";
 import { BackLink } from "../../components/BackLink";
 import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
+import { CanWrite } from "../../components/CanWrite";
 import { DataTable } from "../../components/DataTable";
 import { CustomerFormModal } from "../../components/modals/CustomerFormModal";
 import { ContactFormModal } from "../../components/modals/ContactFormModal";
@@ -66,11 +67,19 @@ export function CustomerDetail() {
     <div>
       <BackLink to="/customers">Customers</BackLink>
       <PageHeader title={customer.name}>
-        <Button onClick={() => setOpenModal("edit")}>Edit</Button>
-        <Button onClick={() => setOpenModal("activity")}>Log activity</Button>
-        <Button onClick={() => setOpenModal("deal")}>New deal</Button>
-        <Button onClick={() => setOpenModal("invoice")}>New invoice</Button>
-        <Button onClick={() => setOpenModal("ticket")}>New ticket</Button>
+        <CanWrite module="crm">
+          <Button onClick={() => setOpenModal("edit")}>Edit</Button>
+          <Button onClick={() => setOpenModal("activity")}>Log activity</Button>
+          <Button onClick={() => setOpenModal("deal")}>New deal</Button>
+        </CanWrite>
+        {/* Cross-module actions need the *target* module's write capability:
+            support raises tickets on a customer but cannot invoice one. */}
+        <CanWrite module="finance">
+          <Button onClick={() => setOpenModal("invoice")}>New invoice</Button>
+        </CanWrite>
+        <CanWrite module="support">
+          <Button onClick={() => setOpenModal("ticket")}>New ticket</Button>
+        </CanWrite>
       </PageHeader>
 
       {openModal === "edit" && (

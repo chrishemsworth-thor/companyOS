@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
-import { requireRole } from "../middleware/session";
+import { requireCapability } from "../middleware/capability";
 import {
   getCompanyProfile,
   getQuoteBranding,
@@ -80,7 +80,7 @@ settings.put("/quote-branding", zValidator("json", quoteBrandingSchema), async (
 // the console stops redirecting into /onboarding. Admin-only: onboarding is
 // the company admin's flow, and this is a tenant-level, one-way switch.
 // Idempotent — completing twice keeps the original timestamp.
-settings.post("/onboarding/complete", requireRole("admin"), async (c) => {
+settings.post("/onboarding/complete", requireCapability("admin:write"), async (c) => {
   const tenant = c.get("tenant");
   await c.env.DB.prepare(
     "UPDATE tenants SET onboarded_at = COALESCE(onboarded_at, ?) WHERE tenant_id = ?",

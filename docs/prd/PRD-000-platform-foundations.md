@@ -101,6 +101,11 @@ dependent module PRDs start.
   strategy: the employee's manager via existing People reporting lines. Fallback
   when no manager is set: any user with role `admin`. Quote/invoice approval uses
   a role-based strategy (`admin` or `finance`).
+  **Already built** by PRD-008: `resolveApprover()` in
+  `src/modules/approvals/resolver.ts` implements both strategies, the admin
+  fallback, and the self-approval rules (tests in
+  `test/approver-resolution.test.ts`). `requestApproval()` should call it rather
+  than re-deriving an approver.
 - Emit `approval.requested.v1`, `approval.approved.v1`, `approval.rejected.v1`
   through the existing event bus (register in the schema registry with Zod schemas).
 - Decisions are **terminal** — a decided approval cannot be re-decided. Return 409
