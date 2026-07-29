@@ -40,7 +40,10 @@ const app = new Hono<AuthedEnv>();
 // surface benefit from clickjacking/MIME-sniffing protection; HSTS is only
 // meaningful (and only emitted) over https, so wrangler dev on http is
 // unaffected. Route-specific headers (e.g. the OAuth callback's CSP) are set
-// on top of these by their handlers.
+// on top of these by their handlers. These survive thrown errors too: Hono's
+// compose converts an error into onError's response inside the chain, so
+// next() resolves and this post-next() code still runs (pinned by the
+// "response headers on every path" tests in test/gateway.test.ts).
 app.use("*", async (c, next) => {
   await next();
   c.header("X-Content-Type-Options", "nosniff");
@@ -116,6 +119,12 @@ app.route("/v1/people", people);
 app.route("/v1/webhook-sources", webhookSources);
 app.route("/v1/google-accounts", googleAccounts);
 
+// 404s and unhandled 500s still carry the CORS and security headers: cors()
+// sets its headers on c.res before next() and Hono preserves them, and the
+// baseline middleware above re-runs after compose converts the error. That
+// matters because a credentialed response missing Access-Control-Allow-Origin
+// is blocked by the browser, which would surface a real server error as an
+// opaque "failed to fetch". Pinned by test/gateway.test.ts.
 app.notFound((c) => c.json({ error: "not found" }, 404));
 app.onError((err, c) => {
   console.error(`[gateway] unhandled error: ${err.stack ?? err.message}`);

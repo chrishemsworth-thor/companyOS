@@ -47,6 +47,89 @@ describe("gateway auth", () => {
   });
 });
 
+describe("response headers on every path", () => {
+  // An allowlisted origin from wrangler.jsonc's ALLOWED_ORIGINS.
+  const ORIGIN = "http://localhost:5173";
+
+  it("echoes CORS headers on a normal /v1 response", async () => {
+    const res = await gatewayFetch("/v1/invoices", {
+      headers: { Authorization: `Bearer ${API_KEY}`, Origin: ORIGIN },
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+    expect(res.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+  });
+
+  it("does not echo an origin that is not allowlisted", async () => {
+    const res = await gatewayFetch("/v1/invoices", {
+      headers: { Authorization: `Bearer ${API_KEY}`, Origin: "https://evil.example" },
+    });
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
+  });
+
+  it("keeps CORS + security headers on a 404", async () => {
+    const res = await gatewayFetch("/v1/nope-does-not-exist", {
+      headers: { Authorization: `Bearer ${API_KEY}`, Origin: ORIGIN },
+    });
+    expect(res.status).toBe(404);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
+  it("keeps CORS + security headers on a 401", async () => {
+    const res = await gatewayFetch("/v1/invoices", { headers: { Origin: ORIGIN } });
+    expect(res.status).toBe(401);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+    expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+  });
+
+  it("answers the CORS preflight for a credentialed write", async () => {
+    const res = await gatewayFetch("/v1/auth/invite/accept", {
+      method: "OPTIONS",
+      headers: {
+        Origin: ORIGIN,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type",
+      },
+    });
+    expect(res.status).toBeLessThan(300);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+    expect(res.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+  });
+
+  /**
+   * The case worth pinning. A credentialed response missing
+   * Access-Control-Allow-Origin is blocked by the browser, so a real server
+   * error would reach the SPA as an opaque "failed to fetch" rather than a
+   * readable 500 — the hardest kind of production bug to diagnose.
+   *
+   * Hono gets this right today (cors() sets headers on c.res before next(),
+   * and compose converts the throw into onError's response inside the chain so
+   * the baseline header middleware still runs). Nothing in the app enforces
+   * that, though — it is a property of Hono's internals. This test is the
+   * guard against a Hono upgrade or a middleware reordering silently breaking
+   * it. Dropping the SESSIONS binding makes the rate limiter throw for real.
+   */
+  it("keeps CORS + security headers on an unhandled 500", async () => {
+    const sessions = env.SESSIONS;
+    // @ts-expect-error — deliberately simulating a missing binding.
+    delete env.SESSIONS;
+    try {
+      const res = await gatewayFetch("/v1/auth/invite/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Origin: ORIGIN },
+        body: JSON.stringify({ token: "f".repeat(64), password: "irrelevant-here" }),
+      });
+      expect(res.status).toBe(500);
+      expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ORIGIN);
+      expect(res.headers.get("Access-Control-Allow-Credentials")).toBe("true");
+      expect(res.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    } finally {
+      env.SESSIONS = sessions;
+    }
+  });
+});
+
 describe("gateway routes (native finance)", () => {
   const auth = { Authorization: `Bearer ${API_KEY}`, "Content-Type": "application/json" };
 
