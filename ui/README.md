@@ -59,3 +59,11 @@ starting from an empty dashboard.
   moves, which apply optimistically and roll back on error. Invoice and
   payment creation send an `Idempotency-Key` so retries can't
   double-issue or double-charge.
+- Installable as a PWA (manifest + icons + meta tags in `index.html`), but
+  intentionally has no service worker / offline caching — this is a live
+  business app and stale offline data (approvals, finance, CRM) is worse
+  than no offline support. The icons under `public/icons/` are placeholders
+  rasterized from the favicon glyph via `npm run icons:generate`
+  (`scripts/generate-icons.mjs`); swap `icon-source*.svg` for real brand
+  artwork and re-run that script before this ships as a polished install
+  experience.

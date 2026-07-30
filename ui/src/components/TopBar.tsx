@@ -25,7 +25,7 @@ export function TopBar({
     // so a full-width bar would paint its background and bottom border straight
     // across the sidebar's brand. Offsetting the bar itself lines its border up
     // with the sidebar's right edge instead.
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur lg:ml-64">
+    <header className="safe-top sticky top-0 z-30 flex min-h-14 items-center gap-3 border-b border-border bg-surface/90 px-4 backdrop-blur lg:ml-64">
       <button
         aria-label="Open menu"
         onClick={onOpenMenu}

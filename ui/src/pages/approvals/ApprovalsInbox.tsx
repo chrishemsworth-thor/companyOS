@@ -180,7 +180,7 @@ export function ApprovalsInbox() {
       <div
         role="tablist"
         aria-label="Approvals"
-        className="mb-4 flex gap-1 overflow-x-auto border-b border-border"
+        className="mb-4 flex snap-x snap-mandatory gap-1 overflow-x-auto border-b border-border"
       >
         {TABS.map((t) => (
           <button
@@ -188,7 +188,7 @@ export function ApprovalsInbox() {
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`-mb-px shrink-0 cursor-pointer border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
+            className={`-mb-px shrink-0 snap-start cursor-pointer border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
               tab === t.id
                 ? "border-accent text-accent"
                 : "border-transparent text-muted hover:text-fg"

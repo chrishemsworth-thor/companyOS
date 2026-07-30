@@ -26,8 +26,30 @@ function resolve(pref: ThemePreference): "light" | "dark" {
   return pref;
 }
 
+const THEME_COLOR = { light: "#ffffff", dark: "#0f1116" } as const;
+
+/**
+ * The static light/dark `<meta name="theme-color" media="...">` tags in
+ * index.html only cover the OS preference at pre-paint. Once resolved (which
+ * can be an explicit user override), this tag drives the actual browser/PWA
+ * chrome color — kept as a single unconditional tag, separate from the
+ * static ones, and updated in place rather than duplicated.
+ */
+function ensureThemeColorMeta(): HTMLMetaElement {
+  let meta = document.getElementById("theme-color-meta") as HTMLMetaElement | null;
+  if (!meta) {
+    meta = document.createElement("meta");
+    meta.id = "theme-color-meta";
+    meta.name = "theme-color";
+    document.head.appendChild(meta);
+  }
+  return meta;
+}
+
 function apply(pref: ThemePreference) {
-  document.documentElement.dataset.theme = resolve(pref);
+  const resolved = resolve(pref);
+  document.documentElement.dataset.theme = resolved;
+  ensureThemeColorMeta().content = THEME_COLOR[resolved];
 }
 
 export function setThemePreference(pref: ThemePreference) {
@@ -44,6 +66,12 @@ export function setThemePreference(pref: ThemePreference) {
  * startup; returns an unsubscribe (unused in the app, handy in tests).
  */
 export function watchSystemTheme(): () => void {
+  // index.html's inline script already stamped data-theme before first paint,
+  // but it doesn't (and can't, being static markup) create the runtime
+  // theme-color meta tag — do that now so the PWA/browser chrome color is
+  // correct from the first render, not just after a later theme change.
+  apply(getThemePreference());
+
   const mq = window.matchMedia(DARK_QUERY);
   const onChange = () => {
     if (getThemePreference() === "system") apply("system");
