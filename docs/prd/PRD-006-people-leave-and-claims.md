@@ -215,8 +215,13 @@ access. See [`../architecture/roles-and-permissions.md`](../architecture/roles-a
 - **(Legal/HR, non-blocking)** Confirm current Employment Act 1955 leave minimums,
   including post-2022-amendment entitlements, before seeding defaults. Seeds are a
   starting point for tenants to edit, not compliance guidance.
-- **(Engineering, non-blocking)** Where do public holidays come from each year —
-  manual seed, or a maintained data file shipped with releases?
+- ~~**(Engineering, non-blocking)** Where do public holidays come from each year —
+  manual seed, or a maintained data file shipped with releases?~~
+  **Answered by S6: a maintained data file shipped with releases, used as an
+  overlay.** `public_holidays` stores tenant deltas only (additions and
+  suppressions) and the shipped calendar is merged in at read time, so the
+  annual update is a deploy with no per-tenant backfill and a tenant's own
+  overrides survive it. See [`../modules/leave.md`](../modules/leave.md).
 
 ## Timeline Considerations
 

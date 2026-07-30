@@ -95,7 +95,7 @@ Recorded so no session re-opens them.
 | S3 | Approvals primitive | 000b | P0 | `claude/approvals-primitive-qygql6`⁴ | S2 | **done** |
 | S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/notifications-inbox-renderer-ud7gu1`⁵ | S3 | **done** |
 | S5 | Expense claims + GL posting | 006a | P0 | `claude/prd-006a-expense-claims` | S1, S2, S4 | not started |
-| S6 | Leave policy, holidays, balances | 006b | P0 | `claude/prd-006b-leave-policy` | S4 | not started |
+| S6 | Leave policy, holidays, balances | 006b | P0 | `claude/leave-policy-holidays-balances-4a0xcb`⁶ | S4 | **done** |
 | S7 | Leave requests + team calendar | 006c | P0 | `claude/prd-006c-leave-requests` | S6 | not started |
 | S8 | Contact roles (then attributes, health) | 003 | P1 | `claude/prd-003-crm-depth` | S1 (loose) | not started |
 | S9 | Quote branding & click-to-sign | 004 | P1 | `claude/prd-004-quote-signing` | S2, S8; S3 for P1 sign-off | not started |
@@ -123,6 +123,13 @@ here. Migration `0022_approvals.sql` is taken, so **S4 takes `0023`** — but ch
 
 ⁵ S4 likewise ran on its given branch. `0023_notifications.sql` is taken, so the
 next session takes **`0024`** — check `main`, per standing rule 5.
+
+⁶ S6 ran on its given branch too. **S5 and S6 were built concurrently**, so S6
+took `0025_leave_policy.sql` and left `0024` to S5 rather than both reaching for
+the next free number. D1 applies migrations in filename order and tolerates a
+gap, so 0025 applies whether or not 0024 has landed. S6 deliberately ALTERs no
+table another session owns — the two branches share no SQL. **The next session
+takes `0026`** if S5 has taken `0024`; check `main`, per standing rule 5.
 
 ### How this differs from the index's build order
 
@@ -338,7 +345,7 @@ these answered before they start.
 | Default escalation threshold in days? Malaysian SME norms run 60–90 days in practice, so 30 may be culturally aggressive. | 002 | S10 guardrails | Needs a design partner's view. Ship it tenant-configurable with a conservative default so the decision is cheap to change. |
 | Should `at_risk` health auto-pause outbound sales activity, or only surface as a signal? | 003 | S8 health | Signal only in v1. Auto-pause is the more impressive behaviour and the more dangerous one; it wants real data first. |
 | ~~Should high-value approvals require re-authentication?~~ | 007 | ~~S4~~ | **Answered by S4: no, not in v1.** Taken deliberately rather than by omission, as PRD-007 asks. Revisit when a tenant actually approves something large enough to care. |
-| Where do public holidays come from each year — manual seed or a maintained data file shipped with releases? | 006 | S6 | Shipped data file. State variation makes manual seeding per tenant an annual support burden. |
+| ~~Where do public holidays come from each year — manual seed or a maintained data file shipped with releases?~~ | 006 | ~~S6~~ | **Answered by S6: a shipped data file, used as an OVERLAY.** State variation makes manual seeding per tenant an annual support burden. S6 went one step further than the recommendation: the shipped calendar is never written to the database. `public_holidays` holds only tenant deltas (additions and suppressions) and the effective set is merged at read time, so the annual update is a deploy with no backfill and a tenant's own edits survive it by construction. See [`../modules/leave.md`](../modules/leave.md). |
 | WhatsApp inbound before or after the public intake form? | 005 | S11 internal order | WhatsApp is how Malaysian SME customers actually complain, but needs a BSP relationship. Do the email path first either way — it is built on integrations that already exist. |
 | Is `credited` a distinct invoice state or derived from credit note totals? | 001 | S13 | — |
 | Confirm ECA 2006 click-accept sufficiency and the agreement text with a Malaysian lawyer. | 004 | **Customer use, not the build** | S9 can build and test the flow; do not rely on it commercially until confirmed. |
@@ -763,6 +770,56 @@ across mid-year joins, carry-forward and state holidays must be covered by tests
 
 **Decide before starting:** the public-holiday data source (see Blocking
 decisions).
+
+**Shipped (S6, `0025_leave_policy.sql`).** All of the above. Details live in
+[`docs/modules/leave.md`](../modules/leave.md); what S7 and later sessions need
+to know:
+
+- **`leave_requests` already exists.** S6 created it — not scope creep, but
+  because two of S6's acceptance criteria (pending reduces the balance, rejected
+  restores it) are *about* it, and a balance defined as
+  `entitlement − taken − pending` cannot be built without the thing being
+  consumed. It carries the balance-relevant columns only: `employee_id`,
+  `leave_type_id`, `start_date`, `end_date`, `start_half_day`, `end_half_day`,
+  `working_days`, `state` (`pending|approved|rejected|cancelled`). **S7 adds
+  `reason`, `attachment_file_id`, the approval linkage and the state machine
+  additively**, and registers the four `leave.*` events. S6 ships no request
+  write path at all; its tests insert rows through `env.DB`.
+- **Call `getBalances()` and `countWorkingDays()`, do not re-derive them.**
+  `src/modules/leave/balances.ts` and `workdays.ts` already answer "how many
+  working days is this range for this employee" and "what is left" — S7's
+  pre-submission preview and its over-balance block are both those two
+  functions. `GET /v1/me/leave/working-days` is the preview endpoint already.
+- **`working_days` is stored at submission, deliberately**, so a later holiday
+  correction cannot restate a request somebody already approved. S7 should
+  compute it once and write it, not recompute on read.
+- **Public holidays are an overlay, not rows.** The shipped calendar lives in
+  `src/modules/leave/holidays/data.ts` and is never written to D1;
+  `public_holidays` holds tenant deltas only. Adding a year is a code change, no
+  migration. S10's "no contact on Malaysian public holidays" guardrail should
+  reuse `effectiveHolidays()` rather than building a second holiday source, as
+  the S10 brief anticipates.
+- **A missing holiday year is reported, never silent.** Responses carry
+  `holiday_data_available` and `holiday_data_provisional`; an unshipped year
+  returns `false` rather than an empty list that reads as "no holidays".
+- **Statutory minimums warn and never block** — no CHECK, no rejection. Policy
+  writes return 201/200 with the value as entered plus a `warnings` array.
+  Do not "fix" this into validation.
+- **Two capability axes, as PRD-008 intended:** HR administration on
+  `/v1/people/leave/*` (`people:read`/`people:write`, so `finance`, `support`
+  and the `employee` tier 403), self-service on `/v1/me/leave/*` (`self`, so the
+  `employee` tier reads its own balance with no business access). Year-close is
+  raised to `admin:write`.
+- **Leave year is the calendar year** (confirmed with Chris/Josh: Malaysian
+  companies refresh annual entitlement yearly). `on_anniversary` policies run on
+  the employee's own year. No fiscal-year cycle — add one only if a design
+  partner needs it.
+- **No console.** Leave configuration is API-only until S7 builds the leave
+  screens; S7 owns the `leave_request` renderer for S4's registry.
+- **Baseline after S6:** clean typecheck, 48 test files / 835 tests in the
+  Workers suite (S6 added 3 files / 86 tests to a `main` measured at 45 / 749,
+  which was already well past the 42 / 476 recorded for S4 — re-measure, per
+  standing rule 5). `ui/` untouched.
 
 ---
 
