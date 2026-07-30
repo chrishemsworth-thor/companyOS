@@ -20,6 +20,15 @@ export interface DashboardSummary {
   open_deals: { count: number; by_currency: CurrencyBucket[] };
   open_tickets: { count: number; by_priority: Record<string, number> };
   active_issues: { count: number; by_status: Record<string, number> };
+  /**
+   * Approved expense claims not yet reimbursed (PRD-006a).
+   *
+   * PRD-006: "Unpaid approved claims appear as a liability and in cash-flow
+   * outlook." The liability itself is already in the books — the balance of
+   * `2100 Employee Reimbursements Payable` — so this is the outlook side: cash
+   * the company is committed to paying its own staff that has not left yet.
+   */
+  unpaid_claims: { count: number; by_currency: CurrencyBucket[] };
 }
 
 async function currencyBuckets(
@@ -47,7 +56,7 @@ async function countByKey(
 }
 
 export async function dashboardSummary(db: D1Database, tenantId: string): Promise<DashboardSummary> {
-  const [overdue, deals, tickets, issues] = await Promise.all([
+  const [overdue, deals, tickets, issues, unpaidClaims] = await Promise.all([
     currencyBuckets(
       db,
       `SELECT currency, COUNT(*) AS count, COALESCE(SUM(amount_due_cents), 0) AS cents
@@ -72,6 +81,12 @@ export async function dashboardSummary(db: D1Database, tenantId: string): Promis
        FROM issues WHERE tenant_id = ? AND status NOT IN ('done', 'cancelled') GROUP BY status`,
       tenantId,
     ),
+    currencyBuckets(
+      db,
+      `SELECT currency, COUNT(*) AS count, COALESCE(SUM(total_cents), 0) AS cents
+       FROM expense_claims WHERE tenant_id = ? AND status = 'approved' GROUP BY currency`,
+      tenantId,
+    ),
   ]);
 
   return {
@@ -79,6 +94,7 @@ export async function dashboardSummary(db: D1Database, tenantId: string): Promis
     open_deals: deals,
     open_tickets: { count: tickets.count, by_priority: tickets.by },
     active_issues: { count: issues.count, by_status: issues.by },
+    unpaid_claims: unpaidClaims,
   };
 }
 

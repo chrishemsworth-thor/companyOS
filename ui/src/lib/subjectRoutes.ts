@@ -23,11 +23,12 @@ type RouteBuilder = (subjectId: string) => string;
 const SUBJECT_ROUTES: Record<string, RouteBuilder> = {
   quote: (id) => `/quotes/${id}`,
   invoice: (id) => `/invoices/${id}`,
-  // `leave_request` and `expense_claim` are deliberately ABSENT. Their screens
-  // ship with S7 and S5 respectively; until then the generic fallback is the
-  // honest answer, and adding a route to a page that does not exist would send
-  // a user to the catch-all redirect instead. Each session adds its own line
-  // here — that plus a renderer is the whole cost of a new approvable type.
+  // Added by S5 together with the read-only claim screen it points at. The rule
+  // this line obeys: a route goes in here only when the page exists, because the
+  // catch-all redirect would otherwise swallow the click and look like a bug.
+  expense_claim: (id) => `/claims/${id}`,
+  // `leave_request` is deliberately still ABSENT — its screen ships with S7, and
+  // until then the generic fallback card is the honest answer.
 };
 
 /** The route for a subject, or null when this build cannot show it. */

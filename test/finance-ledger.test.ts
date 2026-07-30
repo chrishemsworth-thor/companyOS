@@ -7,6 +7,7 @@ import {
   getAccountByCode,
   postEntry,
   reverseEntry,
+  SYSTEM_ACCOUNTS,
 } from "../src/modules/finance/ledger";
 
 const API_KEY = "test_api_key_ledger";
@@ -43,7 +44,12 @@ describe("chart of accounts", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { accounts: { code: string; is_system: boolean }[] };
     const codes = body.accounts.map((a) => a.code);
-    expect(codes).toEqual(["1000", "1100", "2000", "3000", "4000", "5000"]);
+    // 2100 Employee Reimbursements Payable joined the system chart with S5
+    // (PRD-006a): both legs of every expense-claim posting reference it by code,
+    // which is what makes it ledger machinery rather than an ordinary chart line.
+    // The five 5xxx category expense accounts are NOT here — those are seeded by
+    // the claims module with is_system = 0, so a tenant can re-map them.
+    expect(codes).toEqual(["1000", "1100", "2000", "2100", "3000", "4000", "5000"]);
     expect(body.accounts.every((a) => a.is_system)).toBe(true);
   });
 
@@ -55,7 +61,7 @@ describe("chart of accounts", () => {
     )
       .bind(TENANT_ID)
       .all();
-    expect(results).toHaveLength(6);
+    expect(results).toHaveLength(SYSTEM_ACCOUNTS.length);
   });
 });
 

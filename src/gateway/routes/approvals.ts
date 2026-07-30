@@ -10,6 +10,7 @@ import {
   listApprovals,
 } from "../../modules/approvals/service";
 import { nudge, NudgeRateLimited } from "../../modules/approvals/nudge";
+import { isDecisionEffectError } from "../../modules/approvals/decision-effects";
 import { approvalStateSchema, subjectTypeSchema } from "../../modules/approvals/types";
 
 /**
@@ -42,6 +43,14 @@ function approvalsErrorResponse(c: Context<AuthedEnv>, err: unknown) {
       { error: err.message, code: err.code, last_nudged_at: err.lastNudgedAt },
       err.httpStatus,
     );
+  }
+  // A subject module's decision effect refused the decision — S5's claim posting
+  // is the first, e.g. the category's expense account has been archived. The batch
+  // never ran, so nothing was written; what is left is telling the approver what
+  // to fix rather than showing them an opaque 500 on a button that will keep
+  // failing. See src/modules/approvals/decision-effects.ts.
+  if (isDecisionEffectError(err)) {
+    return c.json({ error: err.message, code: err.code }, err.httpStatus);
   }
   throw err;
 }

@@ -56,8 +56,16 @@ function contentDisposition(filename: string): string {
   return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-/** Stream a stored object with its metadata headers, or 404 if the bytes are gone. */
-async function streamFile(
+/**
+ * Stream a stored object with its metadata headers, or 404 if the bytes are gone.
+ *
+ * Exported because two routers legitimately serve the same bytes under different
+ * authorization: this one on `files:read`, and `/v1/claims/:id/lines/:n/receipt`
+ * on "may you see this claim" (the `employee` tier holds no files capability at
+ * all — see the note in routes/claims.ts). Sharing the function keeps the
+ * response headers, the ETag and the hostile-filename handling identical on both.
+ */
+export async function streamFile(
   env: Env,
   row: FileRecord,
   cacheControl: string,

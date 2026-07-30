@@ -59,6 +59,33 @@ export class ApiClient {
     return this.request<T>(path);
   }
 
+  /**
+   * Fetch binary content as a Blob — receipt images on the claim approval card.
+   *
+   * Needed because an `<img src="…/v1/claims/…/receipt">` would send **no
+   * credential**: the session cookie is `SameSite=Lax`, which excludes
+   * cross-origin subresource requests, and the console and API are separate
+   * origins in every deployment. So the bytes come through here with
+   * `credentials: 'include'` and the caller renders an object URL.
+   *
+   * Not routed through `request()` — that always parses JSON — but it keeps the
+   * same 401 handling, so an expired session logs out rather than showing a
+   * silently broken image.
+   */
+  async getBlob(path: string): Promise<Blob> {
+    const res = await fetch(`${this.baseUrl}${path}`, { credentials: "include" });
+    if (!res.ok) {
+      if (res.status === 401) this.opts.onUnauthorized?.();
+      const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+      throw new ApiError(
+        typeof body.error === "string" ? body.error : `request failed (${res.status})`,
+        res.status,
+        typeof body.code === "string" ? body.code : undefined,
+      );
+    }
+    return res.blob();
+  }
+
   post<T>(path: string, body?: unknown, opts?: { idempotencyKey?: string }): Promise<T> {
     return this.request<T>(path, {
       method: "POST",

@@ -31,9 +31,17 @@ const approval = await requestApproval(env, tenantId, {
 await cancelForSubject(env, tenantId, "expense_claim", claimId);
 ```
 
-Then consume `approval.approved` / `approval.rejected` to act on the decision —
-that is where S5 posts an approved claim to the GL and S7 deducts a leave
-balance. Do not poll the table.
+Then act on the decision. There are two ways, and which one you need depends on
+whether the consequence has to be **atomic** with the decision:
+
+- **A side effect that can lag** — a notification, an email, a cache refresh:
+  consume `approval.approved` / `approval.rejected` off the bus. Do not poll the
+  table.
+- **A consequence that must not be able to go missing** — S5's GL posting, S7's
+  leave-balance deduction: register a **decision effect** (see below). An event
+  consumer cannot give you atomicity, because it necessarily runs after the
+  decision has committed, and on the free plan `src/queue/direct.ts` catches and
+  *drops* a throwing consumer.
 
 **Adding a subject type costs no migration.** Add a value to
 `subjectTypeSchema` in `types.ts` and a line to `SUBJECT_STRATEGIES` in
@@ -41,6 +49,43 @@ balance. Do not poll the table.
 metric requires: `approvals.subject_type` is plain `TEXT` with no SQL `CHECK`,
 precisely so a consuming module never has to touch the schema. `state` *does*
 carry a `CHECK` — it is this primitive's own vocabulary and nobody extends it.
+
+## Decision effects (added by S5)
+
+A subject type may contribute D1 statements to the **same batch** that records
+the decision, so the decision and its consequences are one transaction. D1 runs a
+batch as a single transaction, which is the mechanism `createInvoice` and
+`recordPayment` already use.
+
+```ts
+// src/modules/approvals/decision-effects.ts
+export const SUBJECT_DECISION_EFFECTS: Partial<Record<SubjectType, DecisionEffect>> = {
+  expense_claim: applyClaimDecision,   // posts Dr expense / Cr reimbursements payable
+};
+```
+
+An effect returns `{ statements, events }`. `decide()` runs the statements
+alongside its own `approvals` UPDATE and emits the events after the
+`approval.*` one. **An effect that throws writes nothing at all** — not the
+decision, not the subject, not the ledger entry; the approval stays `pending` and
+the approver gets a 4xx naming what to fix. That is PRD-006's "no approved claim
+without its journal entry", in both directions.
+
+Two rules when adding one:
+
+- **The effect file must not import `./service`.** The service imports the effect
+  registry, so anything else is a cycle. Keep the effect's dependencies to the
+  consuming module's own reads and builders.
+- **Errors are matched structurally**, by `isDecisionEffectError` — a `code`, a
+  `message` and an allowlisted `httpStatus`, which every error class in this
+  codebase already has. The primitive deliberately does not import a consuming
+  module's error type.
+
+This is a table in the same shape as `SUBJECT_STRATEGIES`; it is not a second
+approvals mechanism. There is still no module-local approvals table and no
+module-local decision route, and the console still calls
+`POST /v1/approvals/:id/approve`. See
+[`docs/modules/claims.md`](claims.md) for the worked example.
 
 ## Approver resolution
 
