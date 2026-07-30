@@ -1,6 +1,7 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { GenericApprovalCard } from "./GenericApprovalCard";
+import { LeaveRequestCard } from "./LeaveRequestCard";
 import {
   getApprovalRenderer,
   hasApprovalRenderer,
@@ -13,9 +14,10 @@ import type { Approval } from "../../../api/types";
  *
  * The criterion this file exists for: "given a new `subject_type` with no
  * registered renderer, then a generic fallback card renders rather than
- * crashing." That is not a hypothetical — S4 ships zero type-specific renderers,
- * so *every* approval in this release takes the fallback path, and it will keep
- * being taken by any subject type that arrives before its own card does.
+ * crashing." That is not a hypothetical: S4 shipped zero type-specific renderers
+ * and each later session adds one, so the fallback keeps being taken by any
+ * subject type that arrives before its own card does. `expense_claim` (S5) and
+ * `quote` (S9) are in exactly that position today.
  */
 
 afterEach(cleanup);
@@ -44,17 +46,25 @@ describe("getApprovalRenderer", () => {
     expect(getApprovalRenderer("purchase_order")).toBe(GenericApprovalCard);
   });
 
-  it("returns the fallback for every type S4 knows about", () => {
-    // S4 registers nothing: leave and claim cards ship with S7/S5, quote with S9,
-    // and no invoice card is ever built (SESSION-PLAN C5).
-    for (const type of ["leave_request", "expense_claim", "quote", "invoice", "other"]) {
+  it("returns the fallback for every type whose card has not shipped yet", () => {
+    // The claim card ships with S5 and the quote card with S9; no invoice card is
+    // ever built (SESSION-PLAN C5), so the fallback is its permanent answer.
+    for (const type of ["expense_claim", "quote", "invoice", "other"]) {
       expect(getApprovalRenderer(type)).toBe(GenericApprovalCard);
       expect(hasApprovalRenderer(type)).toBe(false);
     }
   });
 
-  it("registers no type-specific renderers in this session", () => {
-    expect(registeredSubjectTypes()).toEqual([]);
+  it("returns the purpose-built card for leave_request (S7)", () => {
+    expect(getApprovalRenderer("leave_request")).toBe(LeaveRequestCard);
+    expect(hasApprovalRenderer("leave_request")).toBe(true);
+  });
+
+  it("registers exactly the subject types whose cards exist", () => {
+    // A guard on the registry, not a restatement of it: a session that registers
+    // a renderer should do so deliberately, and this is where an accidental one
+    // shows up.
+    expect(registeredSubjectTypes().sort()).toEqual(["leave_request"]);
   });
 
   it("never returns undefined, whatever it is handed", () => {

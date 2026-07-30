@@ -1,4 +1,5 @@
 import { GenericApprovalCard } from "./GenericApprovalCard";
+import { LeaveRequestCard } from "./LeaveRequestCard";
 import type { ApprovalRenderer } from "./types";
 
 /**
@@ -12,10 +13,10 @@ import type { ApprovalRenderer } from "./types";
  * changes to the inbox shell", and this map is where that one file gets plugged
  * in.
  *
- * **S4 registers nothing.** The table below is empty on purpose:
+ * S4 registered nothing; each later session adds its own line:
  *
- *  - `leave_request` → S7 (PRD-006c), with dates, working days, remaining balance
- *    after approval, overlapping team leave and the attachment.
+ *  - `leave_request` → **registered by S7** (PRD-006c), with dates, working days,
+ *    remaining balance after approval, overlapping team leave and the attachment.
  *  - `expense_claim` → S5 (PRD-006a), with the receipt image inline and zoomable.
  *  - `quote` → S9 (PRD-004), with total, validity, lines and discount.
  *  - `invoice` → never. It is a reserved subject type nothing creates
@@ -27,7 +28,9 @@ import type { ApprovalRenderer } from "./types";
  * be imported for its type to work, which is a lazy-loading bug waiting to
  * happen — a card that silently falls back because nothing pulled its file in.
  */
-const RENDERERS: Record<string, ApprovalRenderer> = {};
+const RENDERERS: Record<string, ApprovalRenderer> = {
+  leave_request: LeaveRequestCard,
+};
 
 /**
  * The renderer for a subject type, or the generic fallback.
@@ -46,7 +49,7 @@ export function hasApprovalRenderer(subjectType: string): boolean {
   return subjectType in RENDERERS;
 }
 
-/** Subject types with a purpose-built card. Empty in S4 — see above. */
+/** Subject types with a purpose-built card. */
 export function registeredSubjectTypes(): string[] {
   return Object.keys(RENDERERS);
 }
