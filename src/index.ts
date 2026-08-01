@@ -28,6 +28,8 @@ import { leave } from "./gateway/routes/leave";
 import { files, publicFiles } from "./gateway/routes/files";
 import { approvals } from "./gateway/routes/approvals";
 import { notifications } from "./gateway/routes/notifications";
+import { claims } from "./gateway/routes/claims";
+import { claimCategories } from "./gateway/routes/claim-categories";
 import { webhookSources } from "./gateway/routes/webhook-sources";
 import { googleAccounts } from "./gateway/routes/google-accounts";
 import { googleOAuth } from "./gateway/routes/google-oauth";
@@ -151,6 +153,16 @@ export const V1_MOUNTS: ReadonlyArray<readonly [string, CapabilityModule, Hono<A
   ["/v1/events", "agents", events],
   ["/v1/settings", "settings", settings],
   ["/v1/people", "people", people],
+  // Leave configuration and balances (PRD-006b). HR administration over the
+  // whole directory, so it sits on `people` alongside the directory itself —
+  // `finance`, `support` and the `employee` tier get a 403 here, exactly as
+  // they do on /v1/people. An employee reads their OWN balance, holidays and
+  // working-day counts through /v1/me/leave, on the `self` axis.
+  //
+  // A separate row rather than a sub-route of `people` so the mount table stays
+  // the complete list of routers: both rows declare the same module, so the
+  // `/v1/people/*` gate matching first changes nothing.
+  ["/v1/people/leave", "people", leave],
   ["/v1/files", "files", files],
   // Approvals and notifications are on the `self` axis, not a business module.
   // Every role that can log in has an approvals queue and a notification feed,
@@ -174,6 +186,15 @@ export const V1_MOUNTS: ReadonlyArray<readonly [string, CapabilityModule, Hono<A
   // per-row in src/gateway/routes/leave.ts — the subject employee, anyone
   // holding an approval on that one row, a `people:read` holder, or an admin.
   ["/v1/leave", "self", leave],
+  // Claims are on the same `self` axis and for the same reason: the `employee`
+  // tier holds `self` and nothing else, and employees are exactly who files a
+  // claim. Visibility is per row inside the service ("is this yours, are you its
+  // approver, do you hold finance:read"), and the one genuinely financial act —
+  // recording the reimbursement — carries `finance:write` on its own route.
+  // `/v1/claim-categories` reads are the picklist a filer needs; its writes map a
+  // category to a GL account and are likewise held to `finance:write`.
+  ["/v1/claims", "self", claims],
+  ["/v1/claim-categories", "self", claimCategories],
 ];
 
 for (const [path, module, router] of V1_MOUNTS) app.route(path, guardModule(module, router));

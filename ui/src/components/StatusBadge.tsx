@@ -18,6 +18,12 @@ const TONE_BY_STATUS: Record<string, Tone> = {
   converted: "good",
   active: "good",
   invited: "warn",
+  // Expense-claim states (PRD-006a). `draft`, `paid` and `cancelled` are already
+  // above; `rejected` is `bad` rather than neutral because it is the one state
+  // that needs the employee to do something.
+  submitted: "warn",
+  approved: "good",
+  rejected: "bad",
   archived: "neutral",
   todo: "neutral",
   in_progress: "warn",

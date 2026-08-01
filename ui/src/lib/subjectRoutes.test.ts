@@ -31,6 +31,11 @@ describe("subjectRoute", () => {
     // Deliberate: linking to /claims/:id before S5 builds it would send the user
     // to the catch-all redirect, which looks like a broken notification.
     expect(subjectRoute("expense_claim", "clm_1")).toBeNull();
+    expect(subjectRoute("leave_request", "lv_1")).toBeNull();
+  });
+
+  it("routes an expense claim to its read-only screen (S5)", () => {
+    expect(subjectRoute("expense_claim", "clm_1")).toBe("/claims/clm_1");
   });
 
   it("routes a leave request to the detail screen S7 shipped", () => {
@@ -44,6 +49,7 @@ describe("subjectRoute", () => {
     // for a page nobody built. Kept as an explicit expected set so adding a
     // linkable type is a deliberate two-line change (map + this test).
     expect(linkableSubjectTypes().sort()).toEqual(["invoice", "leave_request", "quote"]);
+    expect(linkableSubjectTypes().sort()).toEqual(["expense_claim", "invoice", "quote"]);
   });
 });
 

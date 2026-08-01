@@ -32,7 +32,11 @@ const NOW = new Date("2026-07-29T12:00:00.000Z").getTime();
 function approval(overrides: Partial<Approval> = {}): Approval {
   return {
     approval_id: "apr_1",
-    subject_type: "expense_claim",
+    // A type that still takes the generic fallback card, whose Reference row
+    // prints the subject id — which is how `cardFor` finds a card. Was
+    // `expense_claim` until S5 gave claims a purpose-built card that shows the
+    // claim itself instead of its id.
+    subject_type: "leave_request",
     subject_id: "clm_1",
     requested_by: "usr_aisha",
     approver_user_id: "usr_me",
@@ -83,6 +87,39 @@ beforeEach(() => {
         },
         tenant: { tenant_id: "biz_1", name: "Acme Inc", onboarded_at: "2026-01-01T00:00:00Z" },
         csrf_token: "csrf_1",
+      });
+    }
+    // The expense-claim card (S5) loads its own subject. The shell knows nothing
+    // about this; it is the renderer's own fetch, which is exactly the seam
+    // PRD-007's registry is for.
+    const claim = path.match(/\/v1\/claims\/([^/?]+)$/);
+    if (claim) {
+      return jsonResponse({
+        claim: {
+          claim_id: claim[1],
+          employee_id: "emp_1",
+          claim_date: "2026-07-18",
+          description: null,
+          currency: "MYR",
+          total_cents: 25_000,
+          tax_cents: 0,
+          status: "submitted",
+          project_id: null,
+          department_code: null,
+          submitted_by: "usr_chen",
+          submitted_at: new Date(NOW).toISOString(),
+          approval_id: "apr_2",
+          rejection_comment: null,
+          rejected_at: null,
+          entry_id: null,
+          paid_entry_id: null,
+          payment_reference: null,
+          paid_at: null,
+          created_at: new Date(NOW).toISOString(),
+          updated_at: new Date(NOW).toISOString(),
+        },
+        lines: [],
+        limit_warnings: [],
       });
     }
     if (path.includes("/v1/meta/users")) {
@@ -197,6 +234,9 @@ describe("Awaiting me", () => {
     // purpose-built card while `expense_claim` (S5) and `quote` (S9) still take
     // the generic one. The shell renders all three without knowing which is
     // which, which is the property PRD-007 asks for.
+    // The criterion. `expense_claim` now takes S5's purpose-built card while the
+    // other two still take the generic fallback, so this also pins that the shell
+    // renders a mixed list without caring which renderer each row resolves to.
     awaiting = [
       approval({ approval_id: "apr_1", subject_type: "leave_request", subject_id: "lvr_1" }),
       approval({
@@ -213,7 +253,12 @@ describe("Awaiting me", () => {
     // By heading: the subject label also appears in the generic card's Type row,
     // so a bare getByText would match twice.
     expect(within(cardFor("clm_2")).getByRole("heading").textContent).toBe("Expense claim");
+    expect(within(cardFor("lv_1")).getByRole("heading").textContent).toBe("Leave request");
     expect(within(cardFor("qte_3")).getByRole("heading").textContent).toBe("Quote");
+    // The claim takes S5's card, which shows the claim rather than its id — so it
+    // is located by its heading instead. Three types, three cards, one list.
+    const headings = screen.getAllByRole("heading").map((h) => h.textContent);
+    expect(headings).toContain("Expense claim");
 
     // The leave card carries no reference row, so it is located by its heading
     // rather than by a subject id — the purpose-built cards show real content
@@ -226,6 +271,10 @@ describe("Awaiting me", () => {
 
     // Requesters are resolved to names, not raw usr_ ids.
     expect(within(cardFor("clm_2")).getByText("from Chen Wei")).toBeTruthy();
+    // Requesters are resolved to names, not raw usr_ ids — including on the
+    // claim's own card, which is the shell's doing rather than the renderer's.
+    expect(within(cardFor("lv_1")).getByText("from Aisha Rahman")).toBeTruthy();
+    expect(screen.getByText("from Chen Wei")).toBeTruthy();
   });
 
   it("shows age prominently and preserves the API's oldest-first order", async () => {
@@ -375,6 +424,9 @@ describe("filters", () => {
 
     await waitFor(() => expect(screen.queryByText("qte_1")).toBeNull());
     expect(screen.getByText("clm_2")).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText("lv_1")).toBeNull());
+    // By heading: the claim's own card shows the claim, not its subject id.
+    expect(screen.getByRole("heading", { name: "Expense claim" })).toBeTruthy();
   });
 
   it("searches by requester name", async () => {

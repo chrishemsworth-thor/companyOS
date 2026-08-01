@@ -5,8 +5,15 @@ Employee directory, teams, and reporting lines — the first HR data domain.
 
 **In scope:** employee records (HR-first, optional console-login link),
 first-class teams, manager/reports-to hierarchy.
-**Out of scope (for now):** leave and approval workflows, payroll,
-manager-based authorization, multi-team membership.
+**Out of scope (for now):** payroll, manager-based authorization, multi-team
+membership.
+
+**Leave lives next door.** Leave policy, entitlement, public holidays and
+balances are their own module on the same `source_module` and the same
+capability gate — see [`leave.md`](leave.md), mounted at `/v1/people/leave`
+with self-service at `/v1/me/leave`. It owns an employee's work state and work
+week (`employee_leave_profiles`) rather than adding columns here. Leave
+*requests* and the team calendar ship with PRD-006c.
 
 ## Data model (`migrations/0015_people.sql`)
 

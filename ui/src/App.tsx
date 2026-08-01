@@ -40,6 +40,7 @@ import { ApprovalsInbox } from "./pages/approvals/ApprovalsInbox";
 import { MyLeave } from "./pages/leave/MyLeave";
 import { TeamLeaveCalendar } from "./pages/leave/TeamLeaveCalendar";
 import { LeaveRequestDetail } from "./pages/leave/LeaveRequestDetail";
+import { ClaimDetail } from "./pages/claims/ClaimDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15_000 } },
@@ -90,6 +91,12 @@ function AppRoutes() {
         {/* Cross-module approvals inbox (PRD-007). Not under a department: a
             manager's queue spans leave, claims and quotes. */}
         <Route path="approvals" element={<ApprovalsInbox />} />
+        {/* Read-only, and the destination `subjectRoutes.ts` maps `expense_claim`
+            to — every link here comes from the inbox or the bell. Filing a claim
+            from the console is PRD-006 P1. Sits inside the authenticated layout
+            with no capability guard of its own: the API answers per row (owner,
+            approver, or finance), which is the boundary that actually matters. */}
+        <Route path="claims/:id" element={<ClaimDetail />} />
         <Route path="agent" element={<AgentActivity />} />
         <Route path="invoices" element={<InvoiceList />} />
         <Route path="invoices/:id" element={<InvoiceDetail />} />

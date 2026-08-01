@@ -44,6 +44,10 @@ import { leaveRequestedV1 } from "./leave.requested.v1";
 import { leaveApprovedV1 } from "./leave.approved.v1";
 import { leaveRejectedV1 } from "./leave.rejected.v1";
 import { leaveCancelledV1 } from "./leave.cancelled.v1";
+import { claimSubmittedV1 } from "./claim.submitted.v1";
+import { claimApprovedV1 } from "./claim.approved.v1";
+import { claimRejectedV1 } from "./claim.rejected.v1";
+import { claimPaidV1 } from "./claim.paid.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -114,6 +118,19 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "leave.approved": leaveApprovedV1,
   "leave.rejected": leaveRejectedV1,
   "leave.cancelled": leaveCancelledV1,
+  // Expense claims (PRD-006a). `source_module` is `people`, not `platform`:
+  // claims are a business module's concern, and `platform` is reserved for
+  // primitives that belong to no module.
+  //
+  // None of these four is mapped in the notification consumer, on purpose. The
+  // `approval.*` events above already tell the approver a decision is needed and
+  // the employee what was decided; adding claim.* mappers would put two rows in
+  // the same bell for one submission. These exist for the audit log and for the
+  // PeopleAgent PRD-006 designs for.
+  "claim.submitted": claimSubmittedV1,
+  "claim.approved": claimApprovedV1,
+  "claim.rejected": claimRejectedV1,
+  "claim.paid": claimPaidV1,
 };
 
 export function validatePayload(

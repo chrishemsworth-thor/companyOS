@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
+import { ExpenseClaimCard } from "./ExpenseClaimCard";
 import { GenericApprovalCard } from "./GenericApprovalCard";
 import { LeaveRequestCard } from "./LeaveRequestCard";
 import {
@@ -18,6 +19,9 @@ import type { Approval } from "../../../api/types";
  * and each later session adds one, so the fallback keeps being taken by any
  * subject type that arrives before its own card does. `expense_claim` (S5) and
  * `quote` (S9) are in exactly that position today.
+ * crashing." That is not a hypothetical: S5 registers `expense_claim` and every
+ * other type still takes the fallback, as each will until its own session ships
+ * a card.
  */
 
 afterEach(cleanup);
@@ -50,6 +54,10 @@ describe("getApprovalRenderer", () => {
     // The claim card ships with S5 and the quote card with S9; no invoice card is
     // ever built (SESSION-PLAN C5), so the fallback is its permanent answer.
     for (const type of ["expense_claim", "quote", "invoice", "other"]) {
+  it("returns the fallback for every type that still has no card", () => {
+    // `leave_request` ships with S7 and `quote` with S9; no invoice card is ever
+    // built (SESSION-PLAN C5), and `other` has nothing type-specific to show.
+    for (const type of ["leave_request", "quote", "invoice", "other"]) {
       expect(getApprovalRenderer(type)).toBe(GenericApprovalCard);
       expect(hasApprovalRenderer(type)).toBe(false);
     }
@@ -65,6 +73,12 @@ describe("getApprovalRenderer", () => {
     // a renderer should do so deliberately, and this is where an accidental one
     // shows up.
     expect(registeredSubjectTypes().sort()).toEqual(["leave_request"]);
+  it("registers the expense-claim card (S5) and only that one", () => {
+    expect(getApprovalRenderer("expense_claim")).toBe(ExpenseClaimCard);
+    expect(hasApprovalRenderer("expense_claim")).toBe(true);
+    // Named exhaustively rather than just checking membership: this is the line
+    // that catches a later session registering a card the plan does not expect.
+    expect(registeredSubjectTypes()).toEqual(["expense_claim"]);
   });
 
   it("never returns undefined, whatever it is handed", () => {
@@ -86,7 +100,9 @@ describe("GenericApprovalCard", () => {
   });
 
   it("says the build has no detailed view when the subject has no route", () => {
-    render(<GenericApprovalCard approval={approval({ subject_type: "expense_claim" })} userName={userName} />);
+    // `leave_request` rather than `expense_claim`: S5 gave claims both a card and
+    // a screen, so a claim no longer reaches the fallback OR lacks a route.
+    render(<GenericApprovalCard approval={approval({ subject_type: "leave_request" })} userName={userName} />);
 
     expect(screen.getByText(/no detailed view/i)).toBeTruthy();
   });

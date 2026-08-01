@@ -1,5 +1,6 @@
 import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
+import { decisionEffectFor } from "./decision-effects";
 import { resolveApprover } from "./resolution";
 import {
   subjectTypeSchema,
@@ -25,6 +26,11 @@ import {
  *  - **Decisions are terminal.** A decided approval cannot be re-decided,
  *    re-approved, or cancelled. The audit record PRD-000's auditor story asks
  *    for is only defensible if it is immutable.
+ *  - **A decision and its consequences are one transaction.** A subject type may
+ *    register a decision effect (./decision-effects.ts) whose statements run in
+ *    the same `db.batch()` as the `approvals` UPDATE. PRD-006's "no approved
+ *    claim without its journal entry" is unachievable any other way — an event
+ *    consumer necessarily runs after the decision has committed.
  *
  * A rejected request is not reopened here: resubmission creates a NEW approval
  * and the rejected row stands (SESSION-PLAN C8).
@@ -356,13 +362,28 @@ export async function decide(
   assertTransition(approval, input.decision);
 
   const now = new Date().toISOString();
-  await env.DB.prepare(
+  const decisionUpdate = env.DB.prepare(
     `UPDATE approvals
        SET state = ?, decision_comment = ?, decided_by = ?, decided_at = ?
      WHERE tenant_id = ? AND approval_id = ? AND state = 'pending'`,
-  )
-    .bind(input.decision, input.comment ?? null, input.actor_user_id, now, tenantId, approvalId)
-    .run();
+  ).bind(input.decision, input.comment ?? null, input.actor_user_id, now, tenantId, approvalId);
+
+  // The subject module's share of this decision, if it has one — S5's claim
+  // posting is the first. Built BEFORE the batch and run INSIDE it, so the
+  // decision and its consequences are one D1 transaction. An effect that throws
+  // writes nothing: the approval stays pending and the caller sees the reason.
+  // See ./decision-effects.ts.
+  const effect = decisionEffectFor(approval.subject_type);
+  const outcome = effect
+    ? await effect(env, tenantId, approval, {
+        decision: input.decision,
+        comment: input.comment ?? null,
+        decided_by: input.actor_user_id,
+        decided_at: now,
+      })
+    : { statements: [], events: [] };
+
+  await env.DB.batch([decisionUpdate, ...outcome.statements]);
 
   await env.EVENTS.send(
     makeEnvelope({
@@ -384,6 +405,12 @@ export async function decide(
       },
     }),
   );
+
+  // The subject's own events, after the approval's. Order matters on the free
+  // plan, where dispatch is inline and synchronous: the requester's
+  // "approved"/"rejected" notification comes from `approval.*`, so it is written
+  // before any consumer of the subject event can act on the same decision.
+  for (const event of outcome.events) await env.EVENTS.send(event);
 
   return (await getApproval(env.DB, tenantId, approvalId))!;
 }

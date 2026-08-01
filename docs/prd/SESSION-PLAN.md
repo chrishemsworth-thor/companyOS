@@ -58,6 +58,12 @@ The generic shape, if you need it:
    (S7 measured `main` at 45 / 749 before its own work — note S4 *recorded*
    42 / 476, which was already stale, so the recorded number is a floor and not a
    target. S3 recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at
+   session. **Baseline after S5:** clean typecheck, 48 test files / 834 tests in
+   the Workers suite, plus 14 files / 122 tests in `ui/` (`cd ui && npm test`,
+   which root `npm test` does NOT run — see the console note below).
+   (S5 measured `main` at 45 / 749 before starting, against the 42 / 476 recorded
+   here after S4 — the number goes stale exactly as often as this rule says it
+   does. S3 recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at
    38 / 361; S1's was 37 / 321 at `b74a2f5`.) A session finding fewer passing tests than
    that has broken something. Re-check the current count on `main` before
    assuming your own change caused a drop — `main` moves between sessions, and
@@ -68,7 +74,7 @@ The generic shape, if you need it:
    chasing it.
 5. **Take the next free migration number at session start** by checking `main`,
    not this file — session order moves and a hardcoded number here goes stale.
-   As of S2, `0021_files.sql` is the highest, so S3 takes `0022`. Note `0015` is
+   As of S5, `0024_expense_claims.sql` is the highest, so the next session takes `0025`. Note `0015` is
    already duplicated (`0015_google_accounts.sql`, `0015_people.sql`); do not add
    a third collision.
 6. Update the **Status** column below in the closing commit. It is the only
@@ -100,9 +106,9 @@ Recorded so no session re-opens them.
 | S2 | File storage primitive | 000a | P0 | `claude/s2-implementation-plan-nv4e1f`³ | S0 | **done** |
 | S3 | Approvals primitive | 000b | P0 | `claude/approvals-primitive-qygql6`⁴ | S2 | **done** |
 | S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/notifications-inbox-renderer-ud7gu1`⁵ | S3 | **done** |
-| S5 | Expense claims + GL posting | 006a | P0 | `claude/prd-006a-expense-claims` | S1, S2, S4 | not started |
-| S6 | Leave policy, holidays, balances | 006b | P0 | `claude/prd-006b-leave-policy` | S4 | not started |
 | S7 | Leave requests + team calendar | 006c | P0 | `claude/leave-request-approval-15v4bu`⁶ | S6 | **done** |
+| S5 | Expense claims + GL posting | 006a | P0 | `claude/claims-submission-approval-posting-gaa3oz`⁶ | S1, S2, S4 | **done** |
+| S6 | Leave policy, holidays, balances | 006b | P0 | `claude/leave-policy-holidays-balances-4a0xcb`⁶ | S4 | **done** |
 | S8 | Contact roles (then attributes, health) | 003 | P1 | `claude/prd-003-crm-depth` | S1 (loose) | not started |
 | S9 | Quote branding & click-to-sign | 004 | P1 | `claude/prd-004-quote-signing` | S2, S8; S3 for P1 sign-off | not started |
 | S10 | Agent guardrails, eval, observability | 002 | P1 | `claude/prd-002-agent-guardrails` | — | not started |
@@ -137,6 +143,14 @@ The numbers are therefore reserved by session order: **`0024` = S5 claims,
 `0025` = S6 leave policy, `0026` = S7 (taken, `0026_leave_requests.sql`)**. If S5
 or S6 lands on a different number that is harmless; nothing in `0026` references
 either. **S8 onwards: check `main`, do not trust this line.**
+⁶ S6 ran on its given branch too. **S5 and S6 were built concurrently**, so S6
+took `0025_leave_policy.sql` and left `0024` to S5 rather than both reaching for
+the next free number. D1 applies migrations in filename order and tolerates a
+gap, so 0025 applies whether or not 0024 has landed. S6 deliberately ALTERs no
+table another session owns — the two branches share no SQL. **The next session
+takes `0026`** if S5 has taken `0024`; check `main`, per standing rule 5.
+⁶ S5 likewise ran on its given branch. `0024_expense_claims.sql` is taken, so the
+next session takes **`0025`** — check `main`, per standing rule 5.
 
 ### How this differs from the index's build order
 
@@ -352,7 +366,7 @@ these answered before they start.
 | Default escalation threshold in days? Malaysian SME norms run 60–90 days in practice, so 30 may be culturally aggressive. | 002 | S10 guardrails | Needs a design partner's view. Ship it tenant-configurable with a conservative default so the decision is cheap to change. |
 | Should `at_risk` health auto-pause outbound sales activity, or only surface as a signal? | 003 | S8 health | Signal only in v1. Auto-pause is the more impressive behaviour and the more dangerous one; it wants real data first. |
 | ~~Should high-value approvals require re-authentication?~~ | 007 | ~~S4~~ | **Answered by S4: no, not in v1.** Taken deliberately rather than by omission, as PRD-007 asks. Revisit when a tenant actually approves something large enough to care. |
-| Where do public holidays come from each year — manual seed or a maintained data file shipped with releases? | 006 | S6 | Shipped data file. State variation makes manual seeding per tenant an annual support burden. |
+| ~~Where do public holidays come from each year — manual seed or a maintained data file shipped with releases?~~ | 006 | ~~S6~~ | **Answered by S6: a shipped data file, used as an OVERLAY.** State variation makes manual seeding per tenant an annual support burden. S6 went one step further than the recommendation: the shipped calendar is never written to the database. `public_holidays` holds only tenant deltas (additions and suppressions) and the effective set is merged at read time, so the annual update is a deploy with no backfill and a tenant's own edits survive it by construction. See [`../modules/leave.md`](../modules/leave.md). |
 | WhatsApp inbound before or after the public intake form? | 005 | S11 internal order | WhatsApp is how Malaysian SME customers actually complain, but needs a BSP relationship. Do the email path first either way — it is built on integrations that already exist. |
 | Is `credited` a distinct invoice state or derived from credit note totals? | 001 | S13 | — |
 | Confirm ECA 2006 click-accept sufficiency and the agreement text with a Malaysian lawyer. | 004 | **Customer use, not the build** | S9 can build and test the flow; do not rely on it commercially until confirmed. |
@@ -369,8 +383,9 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 |---|---|
 | S3 | `approval.requested.v1`, `approval.approved.v1`, `approval.rejected.v1` — **done** |
 | S4 | `approval.nudged.v1` (see C4) — **done** |
-| S5 | `claim.submitted.v1`, `claim.approved.v1`, `claim.rejected.v1`, `claim.paid.v1` |
 | S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` — **done** |
+| S5 | `claim.submitted.v1`, `claim.approved.v1`, `claim.rejected.v1`, `claim.paid.v1` — **done**. Note none is mapped in the notification consumer: the `approval.*` events already notify both parties, and a `claim.*` mapper would double the badge. |
+| S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` |
 | S8 | `customer.no_contact.v1` (PRD-003 writes it without a version suffix — add one, per the existing convention) |
 | S9 | `quote.viewed.v1`. **`quote.accepted.v1` and `quote.rejected.v1` already exist** in the registry — reuse, do not re-add. |
 | S10 | `guardrail.override.v1`, plus `collections.decision.v2` (PRD-002 extends the payload with provider, model, prompt version, tokens, latency, cost, fallback and override flags — that is a breaking payload change, so it is a v2 file and a registry bump, per the convention documented in `registry.ts`) |
@@ -389,9 +404,11 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 | `files`, `approvals`, `notifications` tables | All three **exist**: `files` (S2, `0021`), `approvals` (S3, `0022`), `notifications` + `approval_nudges` (S4, `0023`). |
 | Notifications | `src/modules/notifications/` — rows written **only** by `fanoutNotifications` in `consumer.ts`, hooked into `processEvent`. A module that wants to notify somebody emits an event and adds one entry to `NOTIFICATION_MAP`; it never inserts. The consumer **never throws** (the free-plan inline path has no retry) and inserts idempotently on a `dedupe_key`. See [`docs/modules/notifications.md`](../modules/notifications.md). |
 | Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. Empty in S4; **S7 registered `leave_request`**. S5 adds `expense_claim` and S9 adds `quote`, both of which still take the generic fallback; no `invoice` card is ever built (C5). Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. `registry.test.tsx` and `subjectRoutes.test.ts` both pin the expected set, so each addition updates two assertions. |
+| Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. **`expense_claim` registered by S5**; everything else still takes the generic fallback. S7 adds `leave_request`, S9 adds `quote`; no `invoice` card is ever built (C5). Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. |
 | Console tests | `ui/` has its **own** vitest (jsdom + Testing Library, `ui/vitest.config.ts`), and root `npm test` does not run it — `vitest.config.ts` includes `test/**/*.test.ts` only. A session touching `ui/` must run `cd ui && npm test` separately or its console tests never execute in CI. `@testing-library/user-event` is **not** a dependency; use `fireEvent`. |
 | Name directory | `GET /v1/meta/users` (S4) — id, display name, email for the tenant, readable by **any** authenticated user. `/v1/users` is admin-only, so a non-admin manager needs this to see "requested by Aisha" instead of `usr_01J...`. |
-| Approvals | `src/modules/approvals/` — `requestApproval`/`decide`/`cancel`/`cancelForSubject`, plus `resolution.ts` (the C1 upward walk) and a per-`subject_type` strategy map. A module wanting a human decision adds a `subjectTypeSchema` value and calls the service; it never inserts into `approvals`. See [`docs/modules/approvals.md`](../modules/approvals.md). |
+| Approvals | `src/modules/approvals/` — `requestApproval`/`decide`/`cancel`/`cancelForSubject`, plus `resolution.ts` (the C1 upward walk) and a per-`subject_type` strategy map. A module wanting a human decision adds a `subjectTypeSchema` value and calls the service; it never inserts into `approvals`. **S5 added `decision-effects.ts`**: a per-`subject_type` hook whose statements run in the same `db.batch()` as the decision, which is the only way to get atomicity (an event consumer runs after the commit, and the free-plan inline bus drops a thrower). S7's leave deduction should use it. See [`docs/modules/approvals.md`](../modules/approvals.md). |
+| Expense claims | `src/modules/claims/` (S5, `0024`) — `claim_categories` / `expense_claims` / `expense_claim_lines`, posting `Dr {category expense} / Cr 2100 Employee Reimbursements Payable`. Mounted on the **`self`** capability axis so the `employee` tier can file; row-level visibility (owner, approver, or `finance:read`). Receipts have their own two purpose-locked routes because `employee` holds no `files` capability. See [`docs/modules/claims.md`](../modules/claims.md). |
 | `source_module` values | `finance`, `people`, `sales`, `support`, `build`, `comms`, and **`platform`** (added by S3 for primitives belonging to no business module). Enforced by Zod in `src/schemas/envelope.ts`, not by SQL. |
 | R2 | **Bound as of S2**: bucket `companyos-files`, binding `FILES`, in *both* `wrangler.jsonc` and `wrangler.free.jsonc`. Create it once with `npx wrangler r2 bucket create companyos-files` — R2 has a free tier, so the free-plan deploy is not blocked. |
 | File storage | `src/modules/files/` — `uploadFile`/`getFile`/`getPublicFile`/`deleteFile`, plus a per-purpose policy table (`policy.ts`). A module wanting to store a binary adds a `purpose` entry there and calls the service; it never touches R2. See [`docs/modules/files.md`](../modules/files.md). |
@@ -743,6 +760,60 @@ posting criteria. The load-bearing one is **atomicity** — no approved claim
 without its journal entry. Also: an approved claim is immutable (409), because
 it has hit the ledger.
 
+**Shipped (S5, `0024_expense_claims.sql`).** All of the above, as specified,
+including the SST leg being left out per C2. Details live in
+[`docs/modules/claims.md`](../modules/claims.md); what later sessions need to
+know:
+
+- **The primitive gained a decision-effect hook, and S7 should use it.**
+  PRD-006's atomicity criterion cannot be met by consuming `approval.approved`:
+  that consumer runs after the decision has committed, and the free-plan inline
+  bus catches and *drops* a thrower. So `src/modules/approvals/decision-effects.ts`
+  lets a subject type contribute statements to the **same `db.batch()`** as the
+  `approvals` UPDATE. An effect that throws writes nothing at all. Adding one is
+  a line in that map plus one function in the consuming module — and that
+  function must not import `approvals/service`, or it is a cycle.
+- **Four things S2/S3/S4 had already provided were not re-added:**
+  `expense_claim` was already in `subjectTypeSchema` and already mapped to
+  `manager_chain`; `claim_receipt` was already a file purpose; the `approval.*`
+  notification mappers already satisfy "the manager has a notification" and "the
+  employee is notified". **No `claim.*` entry was added to `NOTIFICATION_MAP`** —
+  it would put two rows in one bell for one submission.
+- **Claims are on the `self` capability axis**, like approvals and notifications,
+  because the `employee` tier holds `self` + `meta` and nothing else and is
+  exactly who files a claim. Visibility is per row: owner, *or* the approver on
+  one of its approvals, *or* `finance:read`. Anything else is a **404, not a
+  403**. `POST /v1/claims/:id/reimburse` and the category writes carry
+  `finance:write` on the route.
+- **Receipts needed two purpose-locked routes** — `POST /v1/claims/receipts` and
+  `GET /v1/claims/:id/lines/:n/receipt` — because `/v1/files` is gated on the
+  `files` module and the `employee` tier holds none of it. Both go through the
+  files primitive, never R2; the upload forces `purpose = claim_receipt` and the
+  read authorises on the claim. S7's leave attachments will hit this same wall.
+- **`2100 Employee Reimbursements Payable` joined `SYSTEM_ACCOUNTS`.** That
+  changed the seeded chart, so `test/finance-ledger.test.ts` has two updated
+  assertions — the only change to a regression-net file. The five `5xxx` category
+  expense accounts are seeded by the claims module with `is_system = 0` instead.
+- **Postings are `source_type = 'manual'` with `source_id = clm_…`.** Adding a
+  `'claim'` source type needs a CHECK rebuild of `journal_entries`, which
+  `journal_lines`' FK plus its append-only `RAISE(ABORT)` trigger make
+  unavailable (0022's migration documents all four failed pragmas). **S12/S13
+  should spend one reviewed rebuild on the whole vocabulary** rather than each
+  smuggling a trigger drop into an unrelated session.
+- **`subjectRoutes.ts` now maps `expense_claim`**, because S5 shipped a read-only
+  `/claims/:id` screen alongside the card. Filing from the console stays P1.
+- **Console receipts are fetched, not `<img src>`-ed.** The session cookie is
+  `SameSite=Lax`, so a cross-origin subresource request carries no credential.
+  `ApiClient.getBlob()` was added for this; S7's attachment preview wants it too.
+- **Test-harness trap, new and worth knowing:** the Workers test env has a real
+  EVENTS queue binding and the runtime delivers those messages *after* the
+  request that sent them — i.e. after the `it`. The consumer touches D1, which
+  breaks isolated-storage teardown with "Failed to pop isolated storage stack
+  frame". `test/claims-fixture.ts` hands the Worker an env whose EVENTS is a
+  recording sink. Any suite whose last test ends on an approval needs the same.
+- **Baseline after S5:** clean typecheck, 48 test files / 834 tests in the
+  Workers suite; 14 files / 122 tests in `ui/`.
+
 ---
 
 ### S6 — PRD-006b: Leave policy, holidays, balances
@@ -779,6 +850,56 @@ across mid-year joins, carry-forward and state holidays must be covered by tests
 
 **Decide before starting:** the public-holiday data source (see Blocking
 decisions).
+
+**Shipped (S6, `0025_leave_policy.sql`).** All of the above. Details live in
+[`docs/modules/leave.md`](../modules/leave.md); what S7 and later sessions need
+to know:
+
+- **`leave_requests` already exists.** S6 created it — not scope creep, but
+  because two of S6's acceptance criteria (pending reduces the balance, rejected
+  restores it) are *about* it, and a balance defined as
+  `entitlement − taken − pending` cannot be built without the thing being
+  consumed. It carries the balance-relevant columns only: `employee_id`,
+  `leave_type_id`, `start_date`, `end_date`, `start_half_day`, `end_half_day`,
+  `working_days`, `state` (`pending|approved|rejected|cancelled`). **S7 adds
+  `reason`, `attachment_file_id`, the approval linkage and the state machine
+  additively**, and registers the four `leave.*` events. S6 ships no request
+  write path at all; its tests insert rows through `env.DB`.
+- **Call `getBalances()` and `countWorkingDays()`, do not re-derive them.**
+  `src/modules/leave/balances.ts` and `workdays.ts` already answer "how many
+  working days is this range for this employee" and "what is left" — S7's
+  pre-submission preview and its over-balance block are both those two
+  functions. `GET /v1/me/leave/working-days` is the preview endpoint already.
+- **`working_days` is stored at submission, deliberately**, so a later holiday
+  correction cannot restate a request somebody already approved. S7 should
+  compute it once and write it, not recompute on read.
+- **Public holidays are an overlay, not rows.** The shipped calendar lives in
+  `src/modules/leave/holidays/data.ts` and is never written to D1;
+  `public_holidays` holds tenant deltas only. Adding a year is a code change, no
+  migration. S10's "no contact on Malaysian public holidays" guardrail should
+  reuse `effectiveHolidays()` rather than building a second holiday source, as
+  the S10 brief anticipates.
+- **A missing holiday year is reported, never silent.** Responses carry
+  `holiday_data_available` and `holiday_data_provisional`; an unshipped year
+  returns `false` rather than an empty list that reads as "no holidays".
+- **Statutory minimums warn and never block** — no CHECK, no rejection. Policy
+  writes return 201/200 with the value as entered plus a `warnings` array.
+  Do not "fix" this into validation.
+- **Two capability axes, as PRD-008 intended:** HR administration on
+  `/v1/people/leave/*` (`people:read`/`people:write`, so `finance`, `support`
+  and the `employee` tier 403), self-service on `/v1/me/leave/*` (`self`, so the
+  `employee` tier reads its own balance with no business access). Year-close is
+  raised to `admin:write`.
+- **Leave year is the calendar year** (confirmed with Chris/Josh: Malaysian
+  companies refresh annual entitlement yearly). `on_anniversary` policies run on
+  the employee's own year. No fiscal-year cycle — add one only if a design
+  partner needs it.
+- **No console.** Leave configuration is API-only until S7 builds the leave
+  screens; S7 owns the `leave_request` renderer for S4's registry.
+- **Baseline after S6:** clean typecheck, 48 test files / 835 tests in the
+  Workers suite (S6 added 3 files / 86 tests to a `main` measured at 45 / 749,
+  which was already well past the 42 / 476 recorded for S4 — re-measure, per
+  standing rule 5). `ui/` untouched.
 
 ---
 
