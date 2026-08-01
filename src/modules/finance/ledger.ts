@@ -25,6 +25,13 @@ export const SYSTEM_ACCOUNTS = [
   { code: "1000", name: "Cash", type: "asset" },
   { code: "1100", name: "Accounts Receivable", type: "asset" },
   { code: "2000", name: "Accounts Payable", type: "liability" },
+  // What the company owes its own staff for approved expense claims (PRD-006a).
+  // Distinct from 2000 Accounts Payable on purpose: money owed to an employee is
+  // a different question from money owed to a supplier, and "what do we owe our
+  // people" is a figure an office manager is asked for by name. Both legs of a
+  // claim posting reference it, so it belongs in the system chart rather than
+  // being seeded by the claims module like the category expense accounts are.
+  { code: "2100", name: "Employee Reimbursements Payable", type: "liability" },
   { code: "3000", name: "Owner's Equity", type: "equity" },
   { code: "4000", name: "Revenue", type: "revenue" },
   { code: "5000", name: "General Expenses", type: "expense" },

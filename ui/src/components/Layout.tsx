@@ -1,11 +1,18 @@
-import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { LayoutGrid, Shield, X, LogOut, UserCircle, CheckSquare } from "lucide-react";
+import { useDrag } from "@use-gesture/react";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
 import { departmentsForRole } from "../lib/departments";
 import { ThemeToggle } from "./ThemeToggle";
 import { TopBar } from "./TopBar";
+
+/** Falls back to this until the panel has actually been measured (matches `w-72`). */
+const DEFAULT_DRAWER_WIDTH = 288;
+/** px/ms; a flick past this speed decides open/close by direction alone,
+ * regardless of how far the drag travelled. */
+const FLICK_VELOCITY = 0.5;
 
 type Icon = ComponentType<{ className?: string }>;
 
@@ -154,7 +161,7 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
         )}
       </nav>
 
-      <div className="shrink-0 border-t border-border p-3">
+      <div className="safe-bottom-3 shrink-0 border-t border-border p-3">
         {tenant && (
           <div className="mb-2 min-w-0 px-1.5" title={tenant.name}>
             <div className="text-[0.68rem] font-semibold uppercase tracking-wider text-subtle">
@@ -189,6 +196,11 @@ export function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
 
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+  const panelWidthRef = useRef(DEFAULT_DRAWER_WIDTH);
+
   // Close the drawer whenever the route changes.
   useEffect(() => {
     setDrawerOpen(false);
@@ -209,6 +221,79 @@ export function Layout() {
     };
   }, [drawerOpen]);
 
+  // The drawer stays mounted at all times (needed so it can be dragged open
+  // from the closed state) but is fully translated off-screen and `inert`
+  // while closed, so it can't be tabbed/hit-tested — set via the DOM
+  // property directly since @types/react doesn't expose `inert` as a prop.
+  useEffect(() => {
+    if (wrapperRef.current) wrapperRef.current.inert = !drawerOpen;
+  }, [drawerOpen]);
+
+  /** Live-updates the panel/backdrop from a drag offset, bypassing React
+   * state so every pointermove doesn't trigger a re-render. */
+  function trackDrag(offsetX: number, width: number) {
+    if (panelRef.current) panelRef.current.style.transform = `translateX(${offsetX}px)`;
+    if (backdropRef.current) {
+      backdropRef.current.style.opacity = String(Math.min(1, Math.max(0, (offsetX + width) / width)));
+    }
+  }
+
+  /** Ends a drag: hands the panel back to its CSS transition (which already
+   * respects prefers-reduced-motion, unlike a hand-rolled rAF tween) and
+   * commits the resulting open/closed state — a fast-enough flick decides by
+   * direction alone, even if the drag didn't travel far. */
+  function settleDrag(offsetX: number, width: number, velocityX: number, directionX: number) {
+    if (panelRef.current) {
+      panelRef.current.style.transitionProperty = "";
+      panelRef.current.style.transform = "";
+    }
+    if (backdropRef.current) backdropRef.current.style.opacity = "";
+    setDrawerOpen(velocityX > FLICK_VELOCITY ? directionX > 0 : offsetX > -width / 2);
+  }
+
+  function onDragFrame({
+    first,
+    last,
+    offset: [ox],
+    velocity: [vx],
+    direction: [dx],
+  }: {
+    first: boolean;
+    last: boolean;
+    offset: [number, number];
+    velocity: [number, number];
+    direction: [number, number];
+  }) {
+    const width = panelRef.current?.offsetWidth || panelWidthRef.current;
+    panelWidthRef.current = width;
+    if (first && panelRef.current) panelRef.current.style.transitionProperty = "none";
+    if (last) {
+      settleDrag(ox, width, vx, dx);
+    } else {
+      trackDrag(ox, width);
+    }
+  }
+
+  // Drag-to-close, starting from the panel's fully-open position.
+  const bindPanelDrag = useDrag(onDragFrame, {
+    axis: "x",
+    from: () => [0, 0],
+    bounds: () => ({ left: -panelWidthRef.current, right: 0 }),
+    rubberband: true,
+    filterTaps: true,
+    preventDefault: true,
+  });
+
+  // Edge-swipe-to-open, starting from the panel's fully-closed position.
+  const bindEdgeDrag = useDrag(onDragFrame, {
+    axis: "x",
+    from: () => [-panelWidthRef.current, 0],
+    bounds: () => ({ left: -panelWidthRef.current, right: 0 }),
+    rubberband: true,
+    filterTaps: true,
+    preventDefault: true,
+  });
+
   return (
     <div className="min-h-screen bg-bg">
       {/* Desktop sidebar */}
@@ -220,18 +305,37 @@ export function Layout() {
           PRD-007 requires on every page. */}
       <TopBar onOpenMenu={() => setDrawerOpen(true)} brand={<Brand />} />
 
-      {/* Mobile drawer */}
-      {drawerOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div
-            className="absolute inset-0 bg-overlay backdrop-blur-sm animate-[overlay-in_150ms_ease-out]"
-            onClick={() => setDrawerOpen(false)}
-          />
-          <aside className="absolute inset-y-0 left-0 w-72 max-w-[85%] border-r border-border bg-surface shadow-lg animate-[drawer-in_200ms_ease-out]">
-            <SidebarContent onClose={() => setDrawerOpen(false)} />
-          </aside>
-        </div>
-      )}
+      {/* Edge-swipe-to-open hit strip. Lives outside the drawer wrapper so it
+          stays reachable while that wrapper is `inert` (drawer closed); once
+          open, the backdrop/panel paint over it and take over drag duty. */}
+      <div
+        {...bindEdgeDrag()}
+        aria-hidden="true"
+        className="fixed inset-y-0 left-0 z-40 w-5 touch-none lg:hidden"
+      />
+
+      {/* Mobile drawer — always mounted (see the `inert` effect above) so it
+          can be edge-swiped open and drag-tracked closed, not just tapped. */}
+      <div ref={wrapperRef} aria-hidden={!drawerOpen} className="fixed inset-0 z-40 lg:hidden">
+        <div
+          ref={backdropRef}
+          className={cn(
+            "absolute inset-0 bg-overlay backdrop-blur-sm transition-opacity duration-150 ease-out",
+            drawerOpen ? "opacity-100" : "opacity-0",
+          )}
+          onClick={() => setDrawerOpen(false)}
+        />
+        <aside
+          ref={panelRef}
+          {...bindPanelDrag()}
+          className={cn(
+            "absolute inset-y-0 left-0 w-72 max-w-[85%] touch-pan-y border-r border-border bg-surface shadow-lg transition-transform duration-200 ease-out",
+            drawerOpen ? "translate-x-0" : "-translate-x-full",
+          )}
+        >
+          <SidebarContent onClose={() => setDrawerOpen(false)} />
+        </aside>
+      </div>
 
       {/* Main content */}
       <main className="lg:pl-64">

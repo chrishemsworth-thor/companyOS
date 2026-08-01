@@ -28,6 +28,8 @@ import { leave } from "./gateway/routes/leave";
 import { files, publicFiles } from "./gateway/routes/files";
 import { approvals } from "./gateway/routes/approvals";
 import { notifications } from "./gateway/routes/notifications";
+import { claims } from "./gateway/routes/claims";
+import { claimCategories } from "./gateway/routes/claim-categories";
 import { webhookSources } from "./gateway/routes/webhook-sources";
 import { googleAccounts } from "./gateway/routes/google-accounts";
 import { googleOAuth } from "./gateway/routes/google-oauth";
@@ -171,6 +173,15 @@ export const V1_MOUNTS: ReadonlyArray<readonly [string, CapabilityModule, Hono<A
   // per-role, which is why gating them on any business module would be wrong.
   ["/v1/approvals", "self", approvals],
   ["/v1/notifications", "self", notifications],
+  // Claims are on the same `self` axis and for the same reason: the `employee`
+  // tier holds `self` and nothing else, and employees are exactly who files a
+  // claim. Visibility is per row inside the service ("is this yours, are you its
+  // approver, do you hold finance:read"), and the one genuinely financial act —
+  // recording the reimbursement — carries `finance:write` on its own route.
+  // `/v1/claim-categories` reads are the picklist a filer needs; its writes map a
+  // category to a GL account and are likewise held to `finance:write`.
+  ["/v1/claims", "self", claims],
+  ["/v1/claim-categories", "self", claimCategories],
 ];
 
 for (const [path, module, router] of V1_MOUNTS) app.route(path, guardModule(module, router));

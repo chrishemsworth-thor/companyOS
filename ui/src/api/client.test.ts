@@ -76,4 +76,36 @@ describe("ApiClient", () => {
     await c.get("/v1/customers").catch(() => {});
     expect(onUnauthorized).toHaveBeenCalledOnce();
   });
+  it("getBlob sends credentials and returns the body as a Blob", async () => {
+    // The receipt path on the claim approval card. It exists because an
+    // `<img src="…/receipt">` would send no cookie: the session cookie is
+    // SameSite=Lax, which excludes cross-origin subresource requests.
+    const blob = new Blob(["bytes"], { type: "image/jpeg" });
+    fetchMock.mockResolvedValue({ ok: true, status: 200, blob: async () => blob });
+
+    const result = await client.getBlob("/v1/claims/clm_1/lines/1/receipt");
+    expect(result).toBe(blob);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.test/v1/claims/clm_1/lines/1/receipt");
+    expect(init.credentials).toBe("include");
+  });
+
+  it("getBlob turns a failure into ApiError and reports a 401", async () => {
+    const onUnauthorized = vi.fn();
+    const c = new ApiClient("https://api.test", { onUnauthorized });
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ error: "receipt not found", code: "not_found" }), {
+        status: 404,
+      }),
+    );
+    const err = (await c.getBlob("/v1/claims/clm_1/lines/9/receipt").catch((e) => e)) as ApiError;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(404);
+    expect(err.code).toBe("not_found");
+
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ error: "nope" }), { status: 401 }));
+    await c.getBlob("/v1/claims/clm_1/lines/1/receipt").catch(() => {});
+    // An expired session logs out rather than showing a silently broken image.
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+  });
 });
