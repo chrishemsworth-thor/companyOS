@@ -1,18 +1,106 @@
-<<<<<<< HEAD
 # Leave
 
-Leave policy, entitlement, public holidays and balances (PRD-006b, S6).
-`source_module: people`.
+The whole of PRD-006's leave story, built across two sessions and reconciled
+into one module. `source_module: people`.
 
-**In scope:** leave types, entitlement policies with tenure bands and three
-accrual methods, per-employee assignment and overrides, Malaysian public
-holidays with state variation and tenant overrides, configurable work weeks,
-working-day counting, and derived balances with carry-forward.
+| Half | Session | Migration | Owns |
+|---|---|---|---|
+| **Policy** | S6 (PRD-006b) | `0025_leave_policy.sql` | leave types, entitlement policies, tenure bands, accrual, pro-rating, carry-forward, public holidays, work weeks |
+| **Requests** | S7 (PRD-006c) | `0026_leave_requests.sql` | submission, approval routing, cancellation, the team calendar, `leave.*` events, the approvals-inbox renderer |
 
-**Out of scope, shipping with PRD-006c (S7):** leave *requests* — submission,
-approval routing, cancellation, the team calendar, the `leave.*` events, and the
-approvals-inbox renderer. There is no console UI for leave configuration yet
-either; S7 builds the leave screens.
+**Depends on:** the approvals primitive ([`approvals.md`](approvals.md)),
+notifications ([`notifications.md`](notifications.md)), files
+([`files.md`](files.md)), People ([`people.md`](people.md)).
+
+The seam between the two halves is PRD-006's own balance formula:
+
+```
+available = entitlement + carry_forward − taken − pending
+            └────── S6 owns ──────────┘   └── S7 owns ──┘
+```
+
+Both halves are now merged and wired to each other. If you are here because
+something about entitlement looks wrong, read
+[Where the two halves meet](#where-the-two-halves-meet) first — it is the only
+place either half knows the other exists.
+
+---
+
+# Where the two halves meet
+
+S6 and S7 were built concurrently from the same `main`, so S7 was written
+against a branch where none of S6's tables existed. It shipped a deliberate
+seam — `src/modules/people/leave/policy-port.ts` — as
+`try { read S6 } catch { provisional default }`, with a header saying its
+queries were "a best guess at PRD-006's wording, not a contract S6 agreed to"
+and that they were to be corrected on merge.
+
+They have been. **The port now calls S6's own functions rather than querying its
+tables**, and the fallbacks are reached only on a database that has not run
+`0025`. Every guess it shipped with turned out to be wrong, which is worth
+recording because each one failed in a way that still typechecked:
+
+| The port guessed | S6 actually has | Why the guess was silent |
+|---|---|---|
+| `leave_types.paid`, `.allows_negative_balance` | `is_paid`, `allow_negative_balance` | D1 raises at runtime, and the catch turned it into a fallback |
+| a `leave_balances` table with a computed row per employee/type/year | no such table — entitlement is derived by `getBalances()` | same |
+| a `leave_work_weeks` table holding `"1,2,3,4,5"` | `leave_settings.work_week`, a seven-fraction JSON array, overridable per employee | same |
+| `public_holidays` filtered on `employees.location` | `employee_leave_profiles.work_state`, plus an `observed` flag for suppressions | a query that returns the wrong rows raises nothing at all |
+
+Calling S6's functions rather than re-querying its tables is what gets the
+module the things a raw `SELECT` would have quietly skipped: lazily seeded
+defaults for a tenant that has never opened a leave screen, the merge of the
+shipped national holiday calendar with tenant additions, `observed = 0`
+suppressions, and the flag marking a year whose lunar and Islamic dates are
+still projections.
+
+**The suite logs no `[leave/policy-port]` warnings.** That is the check —
+if one appears, a query has drifted back out of sync, and the fix is the
+query, never a wider catch.
+
+## `unconfigured` is not zero
+
+The one piece of semantics that needed a deliberate decision rather than a
+column rename. S6 distinguishes "configured, and the answer is zero" from
+"nothing is configured for this type", in its own words:
+
+> the balance is zero because nothing is configured, which is a different thing
+> from a zero balance
+
+Taken at face value, the second case blocks every request as over-balance —
+a freshly seeded tenant has the seven leave types but no policies attached to
+them yet, so every employee reads as having zero days of everything. So a
+balance S6 marks `unconfigured` routes to the provisional entitlement and is
+flagged `source: "default"`, which carries out through the API to the console
+as "leave policy is not configured". A tenant with real policy gets
+`source: "policy"` and the real number.
+
+## One table, two type columns
+
+`leave_requests` carries both `leave_type_code` and `leave_type_id`, and this is
+load-bearing rather than redundant.
+
+S6's `0025` created the table keyed on `leave_type_id` — it needed the
+consumption side to test "a pending request reduces available balance
+immediately" — and said S7 would add its columns additively. S7, unable to
+reference a table that did not exist on its branch, keyed on the tenant-scoped
+`leave_type_code` so the two migrations could land in either order.
+
+Both survive. `leave_type_code` is the write path; `leave_type_id` is resolved
+against `leave_types` at submission and stored alongside, because **S6's balance
+engine groups consumption by `leave_type_id`**. Drop it and every entitlement
+reads as fully available no matter how much leave has been booked. It is
+nullable for the one honest case: a tenant with no configured types, where there
+is no row to point at.
+
+`0026` is therefore a table *rebuild* rather than a series of `ALTER TABLE ADD
+COLUMN`. SQLite cannot widen a `CHECK` in place and `state` had to grow
+`cancellation_pending`. The rebuild carries every existing row across and is
+safe on a populated database.
+
+---
+
+# Part one — policy, entitlement and holidays (S6)
 
 ## The two decisions that shape this module
 
@@ -297,39 +385,12 @@ the session, so there is no id to tamper with.
 `LeaveError` maps to 400 (`invalid_request`), 404 (`not_found`), 409
 (`code_taken`, `archived`) and 422 (`invalid_work_week`, `invalid_employee`,
 `invalid_leave_type`, `invalid_policy`).
-=======
-# Leave requests
-
-**Shipped:** S7 (PRD-006c) · **Migration:** `0026_leave_requests.sql`
-**Depends on:** the approvals primitive ([`approvals.md`](approvals.md)), notifications
-([`notifications.md`](notifications.md)), files ([`files.md`](files.md)), People
-([`people.md`](people.md))
-**Incomplete without:** S6 (leave policy, entitlement, public holidays) — see
-[The S6 seam](#the-s6-seam)
-
-An employee requests leave, it routes to their manager through the approvals
-primitive, and a team calendar shows who is off. One table, `leave_requests`.
 
 ---
 
-## The split with S6
+# Part two — requests, approval and the team calendar (S7)
 
-PRD-006 splits leave across two sessions and the seam is PRD-006's own balance
-formula:
-
-```
-available = entitlement + carry_forward − taken − pending
-            └────── S6 owns ──────────┘   └── S7 owns ──┘
-```
-
-**S6 owns entitlement:** `leave_types`, `leave_policies`, tenure bands, accrual
-methods, pro-rating for mid-year joiners, carry-forward caps, `public_holidays`
-with state variation, and the configurable work week.
-
-**S7 owns consumption:** `leave_requests`, which is where `taken` and `pending`
-come from. That is the whole of this module.
-
-### Balance is derived, and approval does not mutate it
+## Balance is derived, and approval does not mutate it
 
 Nothing stores a balance and nothing decrements a counter.
 `getBalances()` computes it on read. Three of PRD-006's acceptance criteria fall
@@ -350,55 +411,12 @@ S5's claims have the opposite shape — a journal entry is a real side effect, a
 PRD-006 demands it be atomic with the decision. Do not copy this module's
 consumer pattern into claims posting without reading that requirement first.
 
-### Known simplification
+## Known simplification
 
 Days are attributed to the calendar year of `start_date`, so leave spanning New
 Year counts entirely against the year it starts in. Splitting a span across two
 entitlement years needs a per-day accrual model, which is S6 territory, and
 PRD-006 has no criterion for it.
-
----
-
-## The S6 seam
-
-S6 was being built concurrently with S7 and its tables are not guaranteed to
-exist. Everything S7 needs from S6 goes through **one file**:
-`src/modules/people/leave/policy-port.ts`, with three read functions:
-
-- `getLeaveTypes(env, tenantId)`
-- `getEntitlement(env, tenantId, employee, leaveTypeCode, year)`
-- `getWorkCalendar(env, tenantId, employee, year)`
-
-Each is `try { S6 query } catch { provisional fallback }`, warning once per
-tenant per concern with a `[leave/policy-port]` prefix. The catch covers two
-expected cases: the table not existing yet, and **the table existing with
-different column names than the port guesses** — S6's schema was not settled when
-this was written, so those queries are a reading of PRD-006's wording, not a
-contract S6 agreed to.
-
-### Reconciling when S6 lands
-
-1. Run `npx vitest run test/leave-requests.test.ts` and look for
-   `[leave/policy-port]` warnings.
-2. Correct the queries in `policy-port.ts` to match S6's actual columns.
-3. Delete the fallbacks. Nothing else in the module references them.
-
-**Do not widen the catch to silence the warning.** The warning is the signal that
-reconciliation is outstanding, and `Entitlement.source` / `WorkCalendar.source`
-carry `"default"` all the way out to the API and into the console, so both the
-employee's balance page and the approval card say "leave policy is not
-configured" rather than presenting a guess as policy.
-
-### What the fallbacks deliberately are not
-
-PRD-006's seven named Malaysian leave types with a flat entitlement each,
-Mon–Fri, and **no public holidays**. No tenure bands, no accrual methods, no
-pro-rating, no carry-forward, no state variation, no configurable work week, no
-statutory-minimum warnings. Every one of those is an S6 deliverable with its own
-acceptance criteria; half-implementing them here would give S6 two places to fix.
-
-`leave_requests.leave_type_code` is a **code, not a foreign key** to
-`leave_types`, precisely so the two migrations are order-independent.
 
 ---
 
@@ -620,28 +638,26 @@ padding it with requests that may yet be refused would make it useless for
 planning cover.
 
 ---
->>>>>>> 91f7887
 
-## Tests
+---
+
+# Tests
 
 | File | Covers |
 |---|---|
-<<<<<<< HEAD
 | `test/leave-policy.test.ts` | seeded defaults and seed-once, type/policy CRUD, **statutory warnings that never block**, default-policy uniqueness, work-week validation, capability gating |
 | `test/leave-holidays.test.ts` | shipped-dataset integrity, the three holiday acceptance criteria, tenant additions/suppressions/renames, tenant isolation, unshipped and provisional years, self-service holidays |
 | `test/leave-balances.test.ts` | the five entitlement acceptance criteria, all three accrual methods, band selection, overrides, year-spanning requests, carry-forward cap/expiry/idempotency, self-service balance |
+| `test/leave-requests.test.ts` | working-day counting (weekends, state holidays, Sun–Thu weeks, half days), the reconciled S6 seam, preview, submission, the over-balance / attachment / overlap criteria, balance maths, tenant isolation |
+| `test/leave-approval.test.ts` | approval routing (manager, C1 upward walk, admin fallback), the decision consumer and its idempotency, **PRD-000's cancelled-subject criterion**, all three cancellation branches, per-row read access |
+| `test/leave-calendar.test.ts` | the overlap warning, the calendar read and its window, visibility by role |
+| `ui/src/features/approvals/renderers/LeaveRequestCard.test.tsx` | every field PRD-006c names on the card, plus the unavailable-subject fallback |
 
-Every statutory test asserts **both** that the warning appears and that the
-value saved as entered — a test that only checked for the warning would pass
-against an implementation that rejected the write.
-=======
-| `test/leave-requests.test.ts` | Working-day counting (weekends, state holidays, Sun–Thu weeks, half days), the S6 seam, preview, submission, the over-balance / attachment / overlap criteria, balance maths, tenant isolation |
-| `test/leave-approval.test.ts` | Approval routing (manager, C1 upward walk, admin fallback), the decision consumer and its idempotency, **PRD-000's cancelled-subject criterion**, all three cancellation branches, per-row read access |
-| `test/leave-calendar.test.ts` | The overlap warning, the calendar read and its window, visibility by role |
-| `ui/src/features/approvals/renderers/LeaveRequestCard.test.tsx` | Every field PRD-006c names on the card, plus the unavailable-subject fallback |
+Harness notes worth knowing before adding a test here:
 
-Two harness notes worth knowing before adding a test here:
-
+- **Every statutory test asserts both** that the warning appears and that the
+  value saved as entered. A test that only checked for the warning would pass
+  against an implementation that rejected the write.
 - **Decisions must go through the inline bus, not HTTP.** `worker.fetch` gets the
   test env, which has a real EVENTS queue binding — nothing drains it inside a
   test, so `processEvent` never runs and no downstream effect is observable. Use
@@ -650,4 +666,8 @@ Two harness notes worth knowing before adding a test here:
 - **Dates are pinned to a hardcoded 2027**, with weekday-named constants
   (`MON`, `TUE`, …). Deriving them from `now` would break the weekday assertions
   every January.
->>>>>>> 91f7887
+- **Balance expectations name `ANNUAL_ENTITLEMENT_DAYS`, not a literal.** Since
+  the halves were reconciled these tests read S6's real tenure band (12 days for
+  the fixtures), not the port's flat provisional 8. Anything asserting 8 is
+  asserting the fallback, which now means the test is pointed at the wrong
+  thing.

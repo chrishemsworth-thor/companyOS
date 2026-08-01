@@ -52,21 +52,14 @@ The generic shape, if you need it:
 3. **One session, one branch, one shippable increment.** Do not start the next
    session's scope because there is context left over.
 4. `npm run typecheck && npm test` must pass before the push that closes a
-<<<<<<< HEAD
-   session. **Baseline after S5:** clean typecheck, 48 test files / 834 tests in
-   the Workers suite, plus 14 files / 122 tests in `ui/` (`cd ui && npm test`,
+   session. **Baseline after S5, S6, S7 and the mobile-PWA session were merged
+   and reconciled:** clean typecheck both sides, 54 test files / 1015 tests in
+   the Workers suite, plus 15 files / 142 tests in `ui/` (`cd ui && npm test`,
    which root `npm test` does NOT run — see the console note below).
-   (S5 measured `main` at 45 / 749 before starting, against the 42 / 476 recorded
-   here after S4 — the number goes stale exactly as often as this rule says it
-   does. S3 recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at
-=======
-   session. **Baseline after S7:** clean typecheck, 48 test files / 844 tests in
-   the Workers suite, plus 13 files / 110 tests in `ui/` (`cd ui && npm test`,
-   which root `npm test` does NOT run — see the console note below).
-   (S7 measured `main` at 45 / 749 before its own work — note S4 *recorded*
-   42 / 476, which was already stale, so the recorded number is a floor and not a
-   target. S3 recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at
->>>>>>> 91f7887
+   (Each of those sessions measured `main` at 45 / 749 before starting, against
+   the 42 / 476 recorded here after S4 — the number goes stale exactly as often
+   as this rule says it does, so treat it as a floor and not a target. S3
+   recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at
    38 / 361; S1's was 37 / 321 at `b74a2f5`.) A session finding fewer passing tests than
    that has broken something. Re-check the current count on `main` before
    assuming your own change caused a drop — `main` moves between sessions, and
@@ -109,15 +102,9 @@ Recorded so no session re-opens them.
 | S2 | File storage primitive | 000a | P0 | `claude/s2-implementation-plan-nv4e1f`³ | S0 | **done** |
 | S3 | Approvals primitive | 000b | P0 | `claude/approvals-primitive-qygql6`⁴ | S2 | **done** |
 | S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/notifications-inbox-renderer-ud7gu1`⁵ | S3 | **done** |
-<<<<<<< HEAD
 | S5 | Expense claims + GL posting | 006a | P0 | `claude/claims-submission-approval-posting-gaa3oz`⁶ | S1, S2, S4 | **done** |
 | S6 | Leave policy, holidays, balances | 006b | P0 | `claude/leave-policy-holidays-balances-4a0xcb`⁶ | S4 | **done** |
-| S7 | Leave requests + team calendar | 006c | P0 | `claude/prd-006c-leave-requests` | S6 | not started |
-=======
-| S5 | Expense claims + GL posting | 006a | P0 | `claude/prd-006a-expense-claims` | S1, S2, S4 | not started |
-| S6 | Leave policy, holidays, balances | 006b | P0 | `claude/prd-006b-leave-policy` | S4 | not started |
 | S7 | Leave requests + team calendar | 006c | P0 | `claude/leave-request-approval-15v4bu`⁶ | S6 | **done** |
->>>>>>> 91f7887
 | S8 | Contact roles (then attributes, health) | 003 | P1 | `claude/prd-003-crm-depth` | S1 (loose) | not started |
 | S9 | Quote branding & click-to-sign | 004 | P1 | `claude/prd-004-quote-signing` | S2, S8; S3 for P1 sign-off | not started |
 | S10 | Agent guardrails, eval, observability | 002 | P1 | `claude/prd-002-agent-guardrails` | — | not started |
@@ -145,24 +132,23 @@ here. Migration `0022_approvals.sql` is taken, so **S4 takes `0023`** — but ch
 ⁵ S4 likewise ran on its given branch. `0023_notifications.sql` is taken, so the
 next session takes **`0024`** — check `main`, per standing rule 5.
 
-<<<<<<< HEAD
-⁶ S6 ran on its given branch too. **S5 and S6 were built concurrently**, so S6
-took `0025_leave_policy.sql` and left `0024` to S5 rather than both reaching for
-the next free number. D1 applies migrations in filename order and tolerates a
-gap, so 0025 applies whether or not 0024 has landed. S6 deliberately ALTERs no
-table another session owns — the two branches share no SQL. **The next session
-takes `0026`** if S5 has taken `0024`; check `main`, per standing rule 5.
-⁶ S5 likewise ran on its given branch. `0024_expense_claims.sql` is taken, so the
-next session takes **`0025`** — check `main`, per standing rule 5.
-=======
-⁶ S7 also ran on its given branch. **S5, S6 and S7 were built concurrently from
-the same `main`** (highest migration `0023`), so all three would have taken `0024`
-— and `0015` is already duplicated once, which standing rule 5 says not to repeat.
-The numbers are therefore reserved by session order: **`0024` = S5 claims,
-`0025` = S6 leave policy, `0026` = S7 (taken, `0026_leave_requests.sql`)**. If S5
-or S6 lands on a different number that is harmless; nothing in `0026` references
-either. **S8 onwards: check `main`, do not trust this line.**
->>>>>>> 91f7887
+⁶ All three ran on their given branches. **S5, S6 and S7 were built concurrently
+from the same `main`** (highest migration `0023`), so all three would otherwise
+have reached for `0024` — and `0015` is already duplicated once, which standing
+rule 5 says not to repeat. The numbers were reserved by session order and all
+three are now taken: **`0024` = S5 claims, `0025` = S6 leave policy,
+`0026` = S7 leave requests. The next session takes `0027`** — but check `main`,
+per standing rule 5.
+
+Reserving the numbers avoided a filename collision; it did not avoid a *content*
+collision, and that is the lesson worth carrying into S8. S6 and S7 both defined
+`leave_requests`, for defensible reasons on each side — S6 could not test a
+balance without something consuming it, and S7 could not reference a table that
+did not exist on its branch. Applying both migrations simply failed. `0026` is
+now a rebuild that reconciles the two definitions; see
+[`docs/modules/leave.md`](../modules/leave.md#one-table-two-type-columns).
+**Two concurrent sessions touching one PRD should agree on table ownership
+before either writes SQL, not after both have.**
 
 ### How this differs from the index's build order
 
@@ -395,13 +381,8 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 |---|---|
 | S3 | `approval.requested.v1`, `approval.approved.v1`, `approval.rejected.v1` — **done** |
 | S4 | `approval.nudged.v1` (see C4) — **done** |
-<<<<<<< HEAD
 | S5 | `claim.submitted.v1`, `claim.approved.v1`, `claim.rejected.v1`, `claim.paid.v1` — **done**. Note none is mapped in the notification consumer: the `approval.*` events already notify both parties, and a `claim.*` mapper would double the badge. |
-| S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` |
-=======
-| S5 | `claim.submitted.v1`, `claim.approved.v1`, `claim.rejected.v1`, `claim.paid.v1` |
-| S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` — **done** |
->>>>>>> 91f7887
+| S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` — **done**. One mapper only, for the admin cancellation: it is the sole leave decision with no approval behind it to notify off. |
 | S8 | `customer.no_contact.v1` (PRD-003 writes it without a version suffix — add one, per the existing convention) |
 | S9 | `quote.viewed.v1`. **`quote.accepted.v1` and `quote.rejected.v1` already exist** in the registry — reuse, do not re-add. |
 | S10 | `guardrail.override.v1`, plus `collections.decision.v2` (PRD-002 extends the payload with provider, model, prompt version, tokens, latency, cost, fallback and override flags — that is a breaking payload change, so it is a v2 file and a registry bump, per the convention documented in `registry.ts`) |
@@ -419,11 +400,7 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 |---|---|
 | `files`, `approvals`, `notifications` tables | All three **exist**: `files` (S2, `0021`), `approvals` (S3, `0022`), `notifications` + `approval_nudges` (S4, `0023`). |
 | Notifications | `src/modules/notifications/` — rows written **only** by `fanoutNotifications` in `consumer.ts`, hooked into `processEvent`. A module that wants to notify somebody emits an event and adds one entry to `NOTIFICATION_MAP`; it never inserts. The consumer **never throws** (the free-plan inline path has no retry) and inserts idempotently on a `dedupe_key`. See [`docs/modules/notifications.md`](../modules/notifications.md). |
-<<<<<<< HEAD
-| Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. **`expense_claim` registered by S5**; everything else still takes the generic fallback. S7 adds `leave_request`, S9 adds `quote`; no `invoice` card is ever built (C5). Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. |
-=======
-| Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. Empty in S4; **S7 registered `leave_request`**. S5 adds `expense_claim` and S9 adds `quote`, both of which still take the generic fallback; no `invoice` card is ever built (C5). Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. `registry.test.tsx` and `subjectRoutes.test.ts` both pin the expected set, so each addition updates two assertions. |
->>>>>>> 91f7887
+| Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. Empty in S4; **`expense_claim` registered by S5 and `leave_request` by S7**. S9 adds `quote`; no `invoice` card is ever built (C5), and `other` never gets one either. Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. `registry.test.tsx` and `subjectRoutes.test.ts` both pin the expected set, so each addition updates two assertions — and any shell test using a card-less `subject_type` as a stand-in has to move to one that is still card-less (`quote`, until S9). |
 | Console tests | `ui/` has its **own** vitest (jsdom + Testing Library, `ui/vitest.config.ts`), and root `npm test` does not run it — `vitest.config.ts` includes `test/**/*.test.ts` only. A session touching `ui/` must run `cd ui && npm test` separately or its console tests never execute in CI. `@testing-library/user-event` is **not** a dependency; use `fireEvent`. |
 | Name directory | `GET /v1/meta/users` (S4) — id, display name, email for the tenant, readable by **any** authenticated user. `/v1/users` is admin-only, so a non-admin manager needs this to see "requested by Aisha" instead of `usr_01J...`. |
 | Approvals | `src/modules/approvals/` — `requestApproval`/`decide`/`cancel`/`cancelForSubject`, plus `resolution.ts` (the C1 upward walk) and a per-`subject_type` strategy map. A module wanting a human decision adds a `subjectTypeSchema` value and calls the service; it never inserts into `approvals`. **S5 added `decision-effects.ts`**: a per-`subject_type` hook whose statements run in the same `db.batch()` as the decision, which is the only way to get atomicity (an event consumer runs after the commit, and the free-plan inline bus drops a thrower). S7's leave deduction should use it. See [`docs/modules/approvals.md`](../modules/approvals.md). |
