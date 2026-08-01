@@ -38,6 +38,9 @@ import { TeamList } from "./pages/people/TeamList";
 import { Onboarding } from "./pages/onboarding/Onboarding";
 import { ApprovalsInbox } from "./pages/approvals/ApprovalsInbox";
 import { ClaimDetail } from "./pages/claims/ClaimDetail";
+import { MyLeave } from "./pages/leave/MyLeave";
+import { TeamLeaveCalendar } from "./pages/leave/TeamLeaveCalendar";
+import { LeaveRequestDetail } from "./pages/leave/LeaveRequestDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15_000 } },
@@ -119,6 +122,14 @@ function AppRoutes() {
         <Route path="teams" element={<TeamList />} />
         <Route path="users" element={<Users />} />
         <Route path="me" element={<MyProfile />} />
+        {/* Leave (PRD-006c). Like /approvals these are not under a department:
+            the request/balance screens are on the `self` axis and must be
+            reachable by the self-service tier, which sees no departments at all.
+            The calendar IS a People tool and is listed in the department
+            registry, but it shares this route prefix. */}
+        <Route path="leave" element={<MyLeave />} />
+        <Route path="leave/calendar" element={<TeamLeaveCalendar />} />
+        <Route path="leave/requests/:id" element={<LeaveRequestDetail />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

@@ -2,6 +2,7 @@ import type { Env } from "../env";
 import { eventEnvelopeSchema, type EventEnvelope } from "../schemas/envelope";
 import { validatePayload } from "../schemas/events/registry";
 import { fanoutNotifications } from "../modules/notifications/consumer";
+import { applyLeaveDecision } from "../modules/people/leave/consumer";
 import type { CollectionsAgent } from "../agents/collections";
 
 /**
@@ -33,10 +34,20 @@ export async function handleEventBatch(batch: MessageBatch<unknown>, env: Env): 
  * inline with the request that emitted the event. `fanoutNotifications` never
  * throws (see src/modules/notifications/consumer.ts), so it cannot break either
  * neighbour.
+ *
+ * `applyLeaveDecision` (S7) is the second such step: it turns a decided
+ * `approval.*` into the leave request's own state, and emits the module's
+ * `leave.*` domain event. It runs BEFORE fanout so that the `leave.cancelled` it
+ * emits — the one path where an admin cancels somebody's approved leave and no
+ * approval event exists to notify them — reaches this same pipeline, and it never
+ * throws for the same reason fanout never does. Subject modules claim their own
+ * subject types here; S5's claims equivalent is another line beside it, and
+ * neither touches the approvals primitive (standing rule 2).
  */
 export async function processEvent(env: Env, body: unknown): Promise<void> {
   const envelope = parseEnvelope(body);
   await logEvent(env, envelope);
+  await applyLeaveDecision(env, envelope);
   await fanoutNotifications(env, envelope);
   await routeToAgent(env, envelope);
 }

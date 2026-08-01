@@ -26,6 +26,7 @@ import {
   FileText,
   Building2,
   Palette,
+  CalendarDays,
 } from "lucide-react";
 
 /**
@@ -155,12 +156,16 @@ export const DEPARTMENTS: Department[] = [
     id: "people",
     label: "People",
     status: "live",
-    summary: "Employee directory, teams, and reporting lines.",
+    summary: "Employee directory, teams, reporting lines, and leave.",
     modules: ["people"],
     icon: UserRound,
     tools: [
       { label: "Employees", route: "/employees", icon: UsersRound },
       { label: "Teams", route: "/teams", icon: Network },
+      // The manager-facing half of leave (PRD-006c). "My leave" is under "You"
+      // in the sidebar instead — the self-service tier sees no departments, and
+      // those are exactly the people filing leave.
+      { label: "Leave calendar", route: "/leave/calendar", icon: CalendarDays },
     ],
   },
   {

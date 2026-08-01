@@ -27,21 +27,34 @@ describe("subjectRoute", () => {
     expect(subjectRoute("purchase_order", "po_1")).toBeNull();
   });
 
-  it("returns null for types whose screens have not shipped yet", () => {
-    // Deliberate: linking to /leave/:id before S7 builds it would send the user
-    // to the catch-all redirect, which looks like a broken notification.
-    expect(subjectRoute("leave_request", "lv_1")).toBeNull();
+  it("returns null for a labelled type with no screen behind it", () => {
+    // `other` is the generic approval — it has a label so a card can name it,
+    // but nothing to navigate to. Linking a type before its page exists would
+    // send the user to the catch-all redirect, which looks like a broken
+    // notification, so a label must never imply a route.
+    expect(subjectRoute("other", "oth_1")).toBeNull();
   });
 
   it("routes an expense claim to its read-only screen (S5)", () => {
     expect(subjectRoute("expense_claim", "clm_1")).toBe("/claims/clm_1");
   });
 
+  it("routes a leave request to the detail screen S7 shipped", () => {
+    // Not for the approvals card, which is self-sufficient — this is what the
+    // "your leave was cancelled" notification needs somewhere to point at.
+    expect(subjectRoute("leave_request", "lvr_1")).toBe("/leave/requests/lvr_1");
+  });
+
   it("only claims routes that the router actually serves", () => {
     // A guard against the failure this map exists to prevent: a route added here
     // for a page nobody built. Kept as an explicit expected set so adding a
     // linkable type is a deliberate two-line change (map + this test).
-    expect(linkableSubjectTypes().sort()).toEqual(["expense_claim", "invoice", "quote"]);
+    expect(linkableSubjectTypes().sort()).toEqual([
+      "expense_claim",
+      "invoice",
+      "leave_request",
+      "quote",
+    ]);
   });
 });
 

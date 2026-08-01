@@ -44,6 +44,10 @@ import { claimSubmittedV1 } from "./claim.submitted.v1";
 import { claimApprovedV1 } from "./claim.approved.v1";
 import { claimRejectedV1 } from "./claim.rejected.v1";
 import { claimPaidV1 } from "./claim.paid.v1";
+import { leaveRequestedV1 } from "./leave.requested.v1";
+import { leaveApprovedV1 } from "./leave.approved.v1";
+import { leaveRejectedV1 } from "./leave.rejected.v1";
+import { leaveCancelledV1 } from "./leave.cancelled.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -117,6 +121,17 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "claim.approved": claimApprovedV1,
   "claim.rejected": claimRejectedV1,
   "claim.paid": claimPaidV1,
+
+  // Leave requests (PRD-006c, S7). These are the DOMAIN facts and sit alongside
+  // the primitive's `approval.*` audit facts rather than replacing them: one
+  // decision emits both, because `approval.approved` is what notifies the
+  // requester while `leave.approved` is what a PeopleAgent or a calendar feed
+  // subscribes to. Unlike approvals, there IS a `leave.cancelled` — the subject
+  // going away is exactly the fact this module owns.
+  "leave.requested": leaveRequestedV1,
+  "leave.approved": leaveApprovedV1,
+  "leave.rejected": leaveRejectedV1,
+  "leave.cancelled": leaveCancelledV1,
 };
 
 export function validatePayload(

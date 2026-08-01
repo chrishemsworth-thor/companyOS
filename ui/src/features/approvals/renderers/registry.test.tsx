@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/react";
 import { ExpenseClaimCard } from "./ExpenseClaimCard";
 import { GenericApprovalCard } from "./GenericApprovalCard";
+import { LeaveRequestCard } from "./LeaveRequestCard";
 import {
   getApprovalRenderer,
   hasApprovalRenderer,
@@ -14,9 +15,11 @@ import type { Approval } from "../../../api/types";
  *
  * The criterion this file exists for: "given a new `subject_type` with no
  * registered renderer, then a generic fallback card renders rather than
- * crashing." That is not a hypothetical: S5 registers `expense_claim` and every
- * other type still takes the fallback, as each will until its own session ships
- * a card.
+ * crashing." That is not a hypothetical: S4 shipped zero type-specific renderers
+ * and each later session adds one, so the fallback keeps being taken by any
+ * subject type that arrives before its own card does. `expense_claim` (S5) and
+ * `leave_request` (S7) have since landed theirs; `quote` (S9) is still in that
+ * position today.
  */
 
 afterEach(cleanup);
@@ -46,20 +49,29 @@ describe("getApprovalRenderer", () => {
   });
 
   it("returns the fallback for every type that still has no card", () => {
-    // `leave_request` ships with S7 and `quote` with S9; no invoice card is ever
-    // built (SESSION-PLAN C5), and `other` has nothing type-specific to show.
-    for (const type of ["leave_request", "quote", "invoice", "other"]) {
+    // The quote card ships with S9; no invoice card is ever built
+    // (SESSION-PLAN C5), and `other` has nothing type-specific to show, so for
+    // those two the fallback is the permanent answer.
+    for (const type of ["quote", "invoice", "other"]) {
       expect(getApprovalRenderer(type)).toBe(GenericApprovalCard);
       expect(hasApprovalRenderer(type)).toBe(false);
     }
   });
 
-  it("registers the expense-claim card (S5) and only that one", () => {
+  it("returns the purpose-built card for expense_claim (S5)", () => {
     expect(getApprovalRenderer("expense_claim")).toBe(ExpenseClaimCard);
     expect(hasApprovalRenderer("expense_claim")).toBe(true);
+  });
+
+  it("returns the purpose-built card for leave_request (S7)", () => {
+    expect(getApprovalRenderer("leave_request")).toBe(LeaveRequestCard);
+    expect(hasApprovalRenderer("leave_request")).toBe(true);
+  });
+
+  it("registers exactly the subject types whose cards exist", () => {
     // Named exhaustively rather than just checking membership: this is the line
     // that catches a later session registering a card the plan does not expect.
-    expect(registeredSubjectTypes()).toEqual(["expense_claim"]);
+    expect(registeredSubjectTypes().sort()).toEqual(["expense_claim", "leave_request"]);
   });
 
   it("never returns undefined, whatever it is handed", () => {

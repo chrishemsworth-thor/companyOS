@@ -16,7 +16,14 @@
  * migration, because `files.purpose` is unconstrained TEXT by design.
  */
 
-export const FILE_PURPOSES = ["quote_logo", "claim_receipt", "signature", "other"] as const;
+export const FILE_PURPOSES = [
+  "quote_logo",
+  "claim_receipt",
+  /** Medical certificates and the like, on a leave request (PRD-006c, S7). */
+  "leave_attachment",
+  "signature",
+  "other",
+] as const;
 export type FilePurpose = (typeof FILE_PURPOSES)[number];
 
 export interface FilePolicy {
@@ -52,6 +59,10 @@ export const FILE_POLICIES: Record<FilePurpose, FilePolicy> = {
     publiclyReadable: true,
   },
   claim_receipt: DEFAULT_POLICY,
+  // A photographed medical certificate, same shape as a receipt. Never publicly
+  // readable — it is health information about a named employee, which is the
+  // most sensitive thing this system stores.
+  leave_attachment: DEFAULT_POLICY,
   signature: DEFAULT_POLICY,
   other: DEFAULT_POLICY,
 };
