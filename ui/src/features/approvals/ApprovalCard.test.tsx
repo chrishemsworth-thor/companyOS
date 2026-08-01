@@ -33,7 +33,10 @@ function approval(overrides: Partial<Approval> = {}): Approval {
     decision_comment: null,
     decided_by: null,
     decided_at: null,
-    created_at: new Date("2026-07-27T12:00:00.000Z").toISOString(),
+    // Relative, not a fixed date: the card ages against the real `Date.now()`,
+    // so a hard-coded timestamp silently drifts past the staleness threshold and
+    // the suite starts failing on a calendar, not on a code change.
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     idempotency_key: null,
     ...overrides,
   };
