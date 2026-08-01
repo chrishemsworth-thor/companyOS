@@ -14,7 +14,8 @@ earlier OSS-wrapping approach it replaced).
 
 Per-module references: [Finance](docs/modules/finance.md) ·
 [CRM](docs/modules/crm.md) · [Support](docs/modules/support.md) ·
-[Build](docs/modules/build.md) ·
+[Build](docs/modules/build.md) · [People](docs/modules/people.md) ·
+[Leave](docs/modules/leave.md) ·
 [Webhook ingestion (JIRA/GitHub/Bitbucket)](docs/modules/webhooks.md).
 Platform layers:
 [Multi-company identity](docs/architecture/multi-company-identity.md) ·
