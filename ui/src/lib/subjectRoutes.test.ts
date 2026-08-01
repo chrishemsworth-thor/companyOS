@@ -31,14 +31,17 @@ describe("subjectRoute", () => {
     // Deliberate: linking to /leave/:id before S7 builds it would send the user
     // to the catch-all redirect, which looks like a broken notification.
     expect(subjectRoute("leave_request", "lv_1")).toBeNull();
-    expect(subjectRoute("expense_claim", "clm_1")).toBeNull();
+  });
+
+  it("routes an expense claim to its read-only screen (S5)", () => {
+    expect(subjectRoute("expense_claim", "clm_1")).toBe("/claims/clm_1");
   });
 
   it("only claims routes that the router actually serves", () => {
     // A guard against the failure this map exists to prevent: a route added here
     // for a page nobody built. Kept as an explicit expected set so adding a
     // linkable type is a deliberate two-line change (map + this test).
-    expect(linkableSubjectTypes().sort()).toEqual(["invoice", "quote"]);
+    expect(linkableSubjectTypes().sort()).toEqual(["expense_claim", "invoice", "quote"]);
   });
 });
 

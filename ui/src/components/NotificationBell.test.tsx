@@ -220,22 +220,23 @@ describe("a subject this build cannot show", () => {
   it("renders as unavailable and falls back to the inbox instead of erroring", async () => {
     // PRD-007: "given a notification whose subject was deleted or cancelled, then
     // the item renders as unavailable rather than erroring." Same code path as a
-    // subject_type whose screen has not shipped — `expense_claim` until S5.
+    // subject_type whose screen has not shipped — `leave_request` until S7.
+    // (`expense_claim` was the example until S5 gave claims a screen and a route.)
     feed = [
       notification({
-        subject_type: "expense_claim",
-        subject_id: "clm_gone",
-        title: "Approval needed: expense claim",
+        subject_type: "leave_request",
+        subject_id: "lv_gone",
+        title: "Approval needed: leave request",
       }),
     ];
     renderBell();
 
     fireEvent.click(await screen.findByRole("button", { name: /Notifications/ }));
 
-    expect(await screen.findByText("Approval needed: expense claim")).toBeTruthy();
+    expect(await screen.findByText("Approval needed: leave request")).toBeTruthy();
     expect(screen.getByText(/opens in the approvals inbox/i)).toBeTruthy();
 
-    fireEvent.click(screen.getByText("Approval needed: expense claim"));
+    fireEvent.click(screen.getByText("Approval needed: leave request"));
     await screen.findByText("Approvals inbox page");
   });
 });

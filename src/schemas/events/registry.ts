@@ -40,6 +40,10 @@ import { approvalRequestedV1 } from "./approval.requested.v1";
 import { approvalApprovedV1 } from "./approval.approved.v1";
 import { approvalRejectedV1 } from "./approval.rejected.v1";
 import { approvalNudgedV1 } from "./approval.nudged.v1";
+import { claimSubmittedV1 } from "./claim.submitted.v1";
+import { claimApprovedV1 } from "./claim.approved.v1";
+import { claimRejectedV1 } from "./claim.rejected.v1";
+import { claimPaidV1 } from "./claim.paid.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -100,6 +104,19 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   // directly, so the notifications table keeps exactly one writer — see
   // SESSION-PLAN conflict C4 and src/schemas/events/approval.nudged.v1.ts.
   "approval.nudged": approvalNudgedV1,
+  // Expense claims (PRD-006a). `source_module` is `people`, not `platform`:
+  // claims are a business module's concern, and `platform` is reserved for
+  // primitives that belong to no module.
+  //
+  // None of these four is mapped in the notification consumer, on purpose. The
+  // `approval.*` events above already tell the approver a decision is needed and
+  // the employee what was decided; adding claim.* mappers would put two rows in
+  // the same bell for one submission. These exist for the audit log and for the
+  // PeopleAgent PRD-006 designs for.
+  "claim.submitted": claimSubmittedV1,
+  "claim.approved": claimApprovedV1,
+  "claim.rejected": claimRejectedV1,
+  "claim.paid": claimPaidV1,
 };
 
 export function validatePayload(
