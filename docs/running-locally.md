@@ -102,12 +102,17 @@ Open **http://localhost:5173** and sign in with the seeded operator
 `POST /v1/approvals`** — the approvals primitive is an internal service that
 consuming modules call, because an approval must point at a real subject (a claim,
 a leave request) and letting a client conjure one would create approvals pointing
-at nothing. And the modules that *would* create them — expense claims (S5), leave
-requests (S7), quote sign-off (S9) — are not built yet.
+at nothing.
 
-So on a fresh local database `/approvals` is legitimately empty and the bell shows
-zero. That is correct behaviour, not a broken build. To see the screens with data,
-insert an approval directly and then drive the rest through the real API.
+On a fresh local database `/approvals` is empty and the bell shows zero. That is
+correct, not a broken build: nothing has been filed yet. Two modules now raise
+real approvals — **expense claims** (S5) and **leave requests** (S7); quote
+sign-off (S9) is still to come — so the honest way to fill the screen is to file
+something. [Filing real leave](#file-a-real-leave-request) below does that in
+three curl calls and is the better demo, because it exercises the whole chain
+including the purpose-built approval card. The hand-inserted row further down
+still has its place: it is how you see the *generic fallback* card, which no
+real subject takes any more.
 
 ### Expect a ~5 second delay on the badge
 
@@ -151,13 +156,67 @@ Insert a pending approval that *you* raised, assigned to *you*:
 npx wrangler d1 execute companyos-db --local --command "
   INSERT INTO approvals (approval_id, tenant_id, subject_type, subject_id,
                          requested_by, approver_user_id, state)
-  VALUES ('apr_local_1', '<tenant_id>', 'expense_claim', 'clm_demo',
+  VALUES ('apr_local_1', '<tenant_id>', 'quote', 'qte_demo',
           '<user_id>', '<user_id>', 'pending');"
 ```
 
 Reload the console. `/approvals` now shows it under **Awaiting me** *and* **My
-requests**, rendered by the generic fallback card — which is the only renderer
-that ships today, so every subject type takes it.
+requests**. Note the `subject_type` above is `quote` rather than `expense_claim`
+on purpose: claims and leave requests both have purpose-built cards now, and a
+card fetches its subject — point one at `clm_demo`, which does not exist, and you
+get the card's unavailable state instead of the fallback you were trying to see.
+`quote` has no renderer until S9, so it is what still exercises the generic card.
+
+### File a real leave request
+
+The better demo, and the one that exercises the two halves of the leave module
+against each other. Everything below uses the tenant API key printed by
+`npm run seed:local`.
+
+```sh
+K=<api_key>
+
+# An employee. Leave is always ABOUT an employee, never about a user.
+EID=$(curl -s -X POST -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+  -d '{"name":"Aisha Rahman","department_id":"operations","start_date":"2022-01-01"}' \
+  http://localhost:8787/v1/people/employees \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['employee_id'])")
+
+# What the employee is entitled to. Nothing was configured — S6 seeds the
+# Malaysian defaults on first read, so this is real policy, not a placeholder.
+curl -s -H "Authorization: Bearer $K" \
+  "http://localhost:8787/v1/people/leave/balances?employee_id=$EID&as_of=2026-12-31"
+
+# The working-day cost, BEFORE submitting. `entitlement_source` should read
+# "policy"; "default" means the policy port fell back and something is wrong.
+curl -s -X POST -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+  -d "{\"employee_id\":\"$EID\",\"leave_type_code\":\"annual\",
+       \"start_date\":\"2026-09-07\",\"end_date\":\"2026-09-09\"}" \
+  http://localhost:8787/v1/leave/preview
+
+# File it. This raises an approval and routes it up the reporting line.
+curl -s -X POST -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+  -d "{\"employee_id\":\"$EID\",\"leave_type_code\":\"annual\",
+       \"start_date\":\"2026-09-07\",\"end_date\":\"2026-09-09\",
+       \"reason\":\"Family trip\"}" \
+  http://localhost:8787/v1/leave/requests
+```
+
+Now re-read the balance. `available_days` has dropped by three and
+`pending_days` is three — **without anything decrementing a counter**. The
+balance is derived on read, which is why a rejection restores it with no
+compensating write.
+
+That drop is also the load-bearing check on the S6/S7 merge. The two halves were
+built concurrently and each keeps its own key for a leave type; the submit path
+resolves and stores both, and this balance moving is the proof they are joined.
+If `pending_days` stays at zero while the request exists, that link is broken —
+see [`docs/modules/leave.md`](modules/leave.md#one-table-two-type-columns).
+
+The employee has no manager here, so the approval falls back to a tenant admin —
+you. Reload `/approvals` and the request is in **Awaiting me**, rendered by S7's
+card with its dates, working days, the balance left after approval and any
+overlapping team leave.
 
 ### Then drive the real chain
 
@@ -173,9 +232,10 @@ validation → consumer → D1 → API → bell.
    the cooldown ledger is written synchronously by the request rather than by the
    consumer — which is exactly why it is its own table.
 3. Open the bell → the reminder is grouped under **Reminders** and deep-links.
-   Because `expense_claim` has no console screen until S5, it renders as
-   "Opens in the approvals inbox" rather than linking nowhere — that is the
-   designed fallback, not a dead link.
+   Claims and leave requests link to their own detail screens; a subject type
+   with no screen (`quote` until S9, or the generic `other`) renders as "Opens in
+   the approvals inbox" rather than linking nowhere — the designed fallback, not
+   a dead link.
 4. Click it → marked read, badge clears, and it stays cleared on refresh.
 5. Back on **Awaiting me**, **Reject** with an empty comment → blocked inline.
    Add a comment and reject → the item leaves the list, and **History** shows it
