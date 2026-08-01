@@ -80,7 +80,7 @@ export function Modal({
             <X className="size-5" />
           </button>
         </div>
-        <div className="modal-content px-5 pb-6 sm:px-6">{children}</div>
+        <div className="safe-bottom-6 modal-content px-5 pb-6 sm:px-6">{children}</div>
       </div>
     </div>
   );

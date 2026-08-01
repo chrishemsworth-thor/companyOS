@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, waitFor, cleanup } from "@testing-library/react";
+import { render, screen, waitFor, within, fireEvent, cleanup } from "@testing-library/react";
 import { MemoryRouter, Routes, Route } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AuthProvider } from "../auth/AuthContext";
@@ -83,10 +83,16 @@ describe("Layout (authenticated shell)", () => {
 
     // Sidebar paints its department lens once the session resolves: the
     // Overview link, a couple of live department groups, and the active company.
-    await waitFor(() => expect(screen.getByText("Departments")).toBeDefined());
-    expect(screen.getByText("Finance")).toBeDefined();
-    expect(screen.getByText("Sales & Business Development")).toBeDefined();
-    expect(screen.getByText("Acme Inc")).toBeDefined();
+    // Scoped to the complementary landmark: the mobile drawer renders the
+    // same content a second time (always mounted so it can be
+    // swipe-gestured), but stays aria-hidden while closed, so the role query
+    // still resolves to the one visible <aside>.
+    await waitFor(() => expect(screen.getByRole("complementary")).toBeDefined());
+    const sidebar = within(screen.getByRole("complementary"));
+    expect(sidebar.getByText("Departments")).toBeDefined();
+    expect(sidebar.getByText("Finance")).toBeDefined();
+    expect(sidebar.getByText("Sales & Business Development")).toBeDefined();
+    expect(sidebar.getByText("Acme Inc")).toBeDefined();
   });
 
   it("keeps Approvals in the sidebar, outside the department lens", async () => {
@@ -110,5 +116,25 @@ describe("Layout (authenticated shell)", () => {
     await waitFor(() => expect(screen.getByRole("link", { name: "Approvals" })).toBeDefined());
     const section = screen.getByRole("link", { name: "Approvals" }).closest("div")?.parentElement;
     expect(section?.textContent).toContain("You");
+  });
+
+  it("opens the mobile drawer from the hamburger and closes it from its own close button", async () => {
+    // The drawer is now always mounted (rather than only while open) so it can
+    // be edge-swiped/dragged, not just tapped — this guards the plain tap-open/
+    // tap-close path still works after that rewrite. The gesture-drag path
+    // itself isn't covered here: jsdom has no real pointer/touch physics, so
+    // that needs a manual or real-device check instead.
+    renderShell();
+    await waitFor(() => expect(screen.getByRole("complementary")).toBeDefined());
+
+    fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    await waitFor(() =>
+      expect(screen.getAllByRole("link", { name: "Approvals" })).toHaveLength(2),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Close menu" }));
+    await waitFor(() =>
+      expect(screen.getAllByRole("link", { name: "Approvals" })).toHaveLength(1),
+    );
   });
 });

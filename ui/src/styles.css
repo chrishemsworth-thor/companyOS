@@ -227,15 +227,6 @@
   }
 }
 
-@keyframes drawer-in {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(0);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -243,6 +234,33 @@
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+/* ------------------------------------------------------------------ *
+ * Safe-area padding (notch / Dynamic Island / home-indicator), only
+ * nonzero once index.html's viewport has `viewport-fit=cover`.
+ *
+ * These live outside any `@layer`, so — per Tailwind v4's cascade-layer
+ * setup — they always win over the Tailwind utilities already on the same
+ * elements (p-3, pb-6, …) regardless of source order. Each variant below
+ * therefore hardcodes `max(<that utility's own px value>, env(...))` so it
+ * reproduces the existing padding on non-notched devices and only grows it
+ * where the OS reports an inset, instead of silently zeroing it out.
+ * ------------------------------------------------------------------ */
+.safe-top {
+  /* No pre-existing padding-top at its one call site (TopBar's header uses
+     a fixed height, not padding) — env() alone is correct there. */
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-bottom-3 {
+  /* Matches the sidebar footer's own `p-3` (0.75rem). */
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom, 0px));
+}
+
+.safe-bottom-6 {
+  /* Matches the modal content wrapper's own `pb-6` (1.5rem). */
+  padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px));
 }
 
 /* ------------------------------------------------------------------ *
