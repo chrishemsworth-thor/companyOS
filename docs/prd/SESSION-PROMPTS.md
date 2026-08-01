@@ -339,12 +339,16 @@ profitability figures are unchanged by this migration.
 
 ---
 
-## Unslotted: PRD-008 (roles & permissions)
+## PRD-008 (roles & permissions) — built, no prompt needed
 
-PRD-008 is in `docs/prd/` but has no session number yet — see "Unslotted work" in
-the plan. It is P0, it blocks PRD-006 self-service, and the suggested position is
-**immediately after S4, before S5**. Once that is decided it needs a session row,
-a brief, and a prompt here.
+Implemented 2026-07-29, outside this numbering. It needs no session, but every
+prompt above now runs against its constraints: each `/v1` router is
+capability-gated through the mount table in `src/index.ts`, there is a sixth
+`employee` role that is the identity axis rather than a weaker `readonly`,
+`DEFAULT_ROLE` is `employee`, and self-service belongs on `/v1/me`. **A session
+adding a new router must add it to the capability mount table**, or the route
+ships ungated or unreachable. See "Built outside the session numbering" in the
+plan.
 
 ---
 
