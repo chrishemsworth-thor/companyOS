@@ -1066,9 +1066,11 @@ sessions need to know:
 - **Health is a signal, not a gate** — the blocking decision, now answered in
   the table above. It is in the CollectionsAgent's context for tone, and nothing
   reads the band before a send. **S10 owns pausing.**
-- **Baseline after S8:** clean typecheck both sides, 59 test files / 1113 tests
-  in the Workers suite; 18 files / 165 tests in `ui/`. `main` measured
-  54 / 1015 and 15 / 142 before this work.
+- **Baseline after S8:** clean typecheck both sides, 58 test files / 1087 tests
+  in the Workers suite; 18 files / 172 tests in `ui/`. `main` measured
+  54 / 1015 and 15 / 142 when this session started; two merges (PR #66 leave
+  accrual + leave-policy console, PR #67 brand assets) landed mid-session and
+  are merged into this branch, which accounts for part of the `ui/` growth.
 
 ---
 
