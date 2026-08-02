@@ -339,6 +339,46 @@ profitability figures are unchanged by this migration.
 
 ---
 
+## S15 — Sequences & the SalesAgent (PRD-010)
+
+```
+Read docs/prd/SESSION-PLAN.md and the brief for S15, plus
+docs/prd/PRD-010-sales-agent.md and
+docs/architecture/sales-module-design.md (phases B and C).
+
+Read conflict C9 first. S10 must already be merged: this session's guardrails are
+defined as extensions of the ones S10 builds, and a second guard layer means two
+places decide whether a message may leave and neither is authoritative. If S10's
+guard is still collections-shaped, generalising it is YOUR job this session — do
+not fork it. Same for the eval runner: write scenarios, not a second runner.
+
+One decision is needed before building the agent: whether outbound to a lead who
+is not yet a customer needs its own opt-in beyond `agents.enabled`. The plan
+recommends yes — a separate `agents.outbound_sales_enabled` defaulting off, so a
+tenant who turned collections on does not silently find themselves prospecting.
+
+This session animates a pipeline that has been inert since Phase 1, so the order
+matters: sequences, then the agent, then the guardrail wiring, then eval. Do NOT
+merge the cadence model on its own. If you cannot reach the agent, ship nothing
+and tell me — four sessions have already deepened the sales record without
+animating it, and that is the pattern this PRD exists to break.
+
+Reuse rather than rebuild: src/agents/collections.ts is the DO shape, the
+delivery/ port is the sender, resolveContact (PRD-003) picks the person, and
+effectiveHolidays() from S6 is the holiday source. Log guardrail interventions as
+guardrail.override.v1 — S10's event — not a new one.
+
+Before writing code, produce an implementation plan covering D1 migrations,
+new/changed endpoints, event types to register in the schema registry, how the
+guard and the eval runner get generalised, and the test files you will add.
+Confirm the plan before implementing. Every acceptance criterion must have a
+corresponding test in the Workers runtime suite — including that a lead who
+replies receives no further step (assert on the absence of a send, not just on
+the enrolment state) and that nothing sends outside the tenant's window.
+```
+
+---
+
 ## PRD-008 (roles & permissions) — built, no prompt needed
 
 Implemented 2026-07-29, outside this numbering. It needs no session, but every

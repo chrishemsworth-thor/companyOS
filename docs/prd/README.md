@@ -2,7 +2,10 @@
 
 Eight PRDs covering the seven gaps identified on 2026-07-24, plus the platform
 foundation they all depend on. PRD-008 was added on 2026-07-28 from a gap found
-while building user invites: roles exist but are not enforced.
+while building user invites: roles exist but are not enforced. PRD-010 was added
+on 2026-08-02 once PRD-003 removed the last reason to keep deferring the
+SalesAgent — see [`../architecture/sales-module-design.md`](../architecture/sales-module-design.md)
+Phases B and C.
 
 | # | PRD | Priority | Depends on |
 |---|---|---|---|
@@ -15,6 +18,7 @@ while building user invites: roles exist but are not enforced.
 | 006 | People — leave & expense claims | P0 | 000, 001 |
 | 007 | Console — approvals inbox & notifications | P0 | 000 |
 | 008 | Roles, permissions & employee self-service | P0 | — (design against 000, 006) |
+| 010 | Sales — sequences & the SalesAgent | P1 | 003, **002** |
 
 ## Dependency graph
 
@@ -27,7 +31,9 @@ while building user invites: roles exist but are not enforced.
 001 (ledger dims) ──┬──> 006 (claims → GL with project tags)
                     └──> profitability rollups
 
-003 (contact roles) ──> 004 (signatory) , 002 (better targeting)
+003 (contact roles) ──> 004 (signatory) , 002 (better targeting) , 010 (who to address)
+
+002 (guardrails) ──> 010 (SalesAgent — hard dependency; one guard layer, see C9)
 
 002, 005 (email path) — independent, parallelisable
 ```
@@ -48,6 +54,9 @@ while building user invites: roles exist but are not enforced.
    switch) should land before an agent messages a stranger.
 8. **005 support intake** — after the wedge is proven.
 9. **001 tax + credit notes** — when a design partner hits them.
+10. **010 sequences + SalesAgent** — after 002. The pipeline has been inert since
+    Phase 1 and this is the step that animates it, but it puts an agent in front
+    of strangers, so the guardrails and the kill switch come first.
 
 ## Handing these to Claude Code
 
@@ -69,7 +78,9 @@ Two standing instructions worth repeating in every session:
 
 Named so they do not get built by accident:
 
-- **SalesAgent** (designed, not built) — its own PRD once the CRM substrate settles.
+- ~~**SalesAgent**~~ — **now [PRD-010](PRD-010-sales-agent.md)**, written 2026-08-02.
+  The condition stated here ("its own PRD once the CRM substrate settles") was met
+  by PRD-003: contact roles give an outreach agent someone to address.
 - **SupportAgent** — PRD-005 builds the substrate only.
 - **Payroll and statutory submissions** — assessed and rejected as a defensible moat.
 - **Apollo-style contact database** — cannot be won; enrichment stays a pluggable port.
