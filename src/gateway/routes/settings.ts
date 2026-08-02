@@ -40,6 +40,9 @@ const companyProfileSchema = z.object({
     .regex(/^[A-Za-z]{3}$/, "must be a 3-letter ISO 4217 code")
     .transform((v) => v.toUpperCase())
     .default("MYR"),
+  // PRD-003's tenant-level default behind a customer's payment_terms_days.
+  // 0 is legitimate (due on issue); the upper bound is a typo guard.
+  default_payment_terms_days: z.number().int().min(0).max(365).optional(),
 });
 
 const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;

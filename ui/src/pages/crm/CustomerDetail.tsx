@@ -18,8 +18,17 @@ import { InvoiceCreateModal } from "../../components/modals/InvoiceCreateModal";
 import { TicketCreateModal } from "../../components/modals/TicketCreateModal";
 import { AgentEventFeed } from "../../components/AgentEventFeed";
 import { StatusBadge } from "../../components/StatusBadge";
+import { Badge } from "../../components/Badge";
+import { HealthBadge } from "../../components/HealthBadge";
 import { formatMoney, formatDate } from "../../lib/format";
-import type { AgentSnapshot, Contact, Customer, PaymentHistoryEntry, Activity } from "../../api/types";
+import {
+  CONTACT_ROLE_LABELS,
+  type AgentSnapshot,
+  type Contact,
+  type Customer,
+  type PaymentHistoryEntry,
+  type Activity,
+} from "../../api/types";
 
 type OpenModal = "edit" | "contact" | "activity" | "deal" | "invoice" | "ticket" | null;
 
@@ -126,7 +135,55 @@ export function CustomerDetail() {
         </Field>
         <Field label="Email">{customer.email ?? "—"}</Field>
         <Field label="Phone">{customer.phone ?? "—"}</Field>
+        <Field label="Industry">{customer.industry ?? "—"}</Field>
+        <Field label="Website">{customer.website ?? "—"}</Field>
+        <Field label="Payment terms">
+          {customer.payment_terms_days === null
+            ? "Tenant default"
+            : `${customer.payment_terms_days} days`}
+        </Field>
+        <Field label="Preferred channel">{customer.preferred_channel ?? "—"}</Field>
+        <Field label="Registration no.">{customer.reg_no ?? "—"}</Field>
+        <Field label="Tax / SST no.">{customer.tax_no ?? "—"}</Field>
       </DetailGrid>
+
+      {/* PRD-003: "a reasons panel on the detail page". The reasons are the
+          product here — the band alone is not actionable. */}
+      {customer.health && (
+        <section className="mt-4 rounded-lg border border-border bg-surface p-4">
+          <div className="flex items-center gap-2">
+            <h2 className="m-0 text-base">Account health</h2>
+            <HealthBadge band={customer.health.band} />
+          </div>
+          <ul className="mt-2 flex list-none flex-col gap-1 p-0 text-sm">
+            {customer.health.reasons.map((reason) => (
+              <li key={reason.code} className="flex items-baseline gap-2">
+                <span className="text-muted">{reason.detail}</span>
+                {reason.invoice_ids?.map((invoiceId) => (
+                  <Link key={invoiceId} to={`/invoices/${invoiceId}`} className="font-mono text-xs">
+                    {invoiceId}
+                  </Link>
+                ))}
+              </li>
+            ))}
+          </ul>
+          {customer.credit?.limit_cents !== null && customer.credit !== undefined && (
+            <p className="mt-2 text-sm text-muted">
+              Credit limit {formatMoney(customer.credit.limit_cents ?? 0, "MYR")} ·{" "}
+              {formatMoney(customer.credit.outstanding_ar_cents, "MYR")} outstanding ·{" "}
+              {formatMoney(customer.credit.available_cents ?? 0, "MYR")} available
+              {(customer.credit.available_cents ?? 0) < 0 && " — over limit"}
+            </p>
+          )}
+        </section>
+      )}
+
+      {customer.notes && (
+        <section className="mt-4">
+          <h2>Notes</h2>
+          <p className="whitespace-pre-wrap text-sm text-muted">{customer.notes}</p>
+        </section>
+      )}
 
       <div className="flex items-center justify-between">
         <h2>Contacts</h2>
@@ -146,16 +203,24 @@ export function CustomerDetail() {
           rowKey={(c) => c.contact_id}
           emptyLabel="No contacts yet."
           columns={[
+            { header: "Name", render: (c) => c.name },
             {
-              header: "Name",
+              // PRD-003: role badges in the contact list. The primary badge
+              // comes out of the same list rather than being rendered from
+              // `is_primary` separately — one fact, one badge.
+              header: "Roles",
               render: (c) => (
-                <span>
-                  {c.name}
-                  {c.is_primary && (
-                    <span className="ml-2">
-                      <StatusBadge status="primary" />
-                    </span>
-                  )}
+                <span className="flex flex-wrap gap-1">
+                  {c.roles.length === 0
+                    ? "—"
+                    : c.roles.map((role) => (
+                        // `primary` is the one role with a tone: it is the
+                        // fallback every unmatched lookup lands on, so it is
+                        // worth spotting at a glance.
+                        <Badge key={role} tone={role === "primary" ? "good" : "neutral"}>
+                          {CONTACT_ROLE_LABELS[role]}
+                        </Badge>
+                      ))}
                 </span>
               ),
             },

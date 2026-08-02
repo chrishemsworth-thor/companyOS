@@ -7,6 +7,7 @@ import {
   getAccountByCode,
 } from "./ledger";
 import { resolveBaseCurrency } from "../quotes/settings";
+import { resolveDueDate } from "./payment-terms";
 import type { Invoice, InvoiceLine, InvoiceStatus } from "./types";
 
 /**
@@ -42,7 +43,12 @@ export interface CreateInvoiceInput {
   customer_id: string;
   /** ISO 4217; omitted => the company's base currency. */
   currency?: string;
-  due_date: string; // ISO date
+  /**
+   * ISO date. **Optional since S8 (PRD-003):** omitted => issue date plus the
+   * customer's `payment_terms_days`, falling back to the tenant default and
+   * then to 30. See `payment-terms.ts` and SESSION-PLAN conflict C7.
+   */
+  due_date?: string;
   /** Optional project this invoice bills for; stamped onto its ledger lines. */
   project_id?: string;
   lines: { description: string; quantity: number; unit_cents: number }[];
@@ -147,6 +153,16 @@ export async function createInvoice(
 
   const invoiceId = `inv_${ulid()}`;
   const issuedAt = new Date().toISOString();
+  // PRD-003: the due date computes itself from the customer's payment terms
+  // when the caller does not state one. An explicit due_date always wins, so
+  // every pre-S8 caller is unaffected.
+  const dueDate = await resolveDueDate(
+    env.DB,
+    tenantId,
+    input.customer_id,
+    issuedAt.slice(0, 10),
+    input.due_date,
+  );
   // Both legs carry the dimensions, not just the revenue leg: the AR side is
   // what per-customer receivable analysis groups on, and PRD-001's acceptance
   // criterion names both lines explicitly.
@@ -175,7 +191,7 @@ export async function createInvoice(
       totalCents,
       totalCents,
       currency,
-      input.due_date,
+      dueDate,
       issuedAt,
       input.project_id ?? null,
     ),
@@ -198,7 +214,7 @@ export async function createInvoice(
         customer_id: input.customer_id,
         total_cents: totalCents,
         currency,
-        due_date: input.due_date,
+        due_date: dueDate,
       },
     }),
   );

@@ -62,4 +62,9 @@ export interface CompanyProfile {
   default_prepared_by: string | null;
   /** Company-wide default currency for new documents (ISO 4217). */
   base_currency: string;
+  /**
+   * Company-wide invoice payment terms in days (PRD-003). A customer's own
+   * `payment_terms_days` overrides it; NOT NULL, defaulting to 30.
+   */
+  default_payment_terms_days: number;
 }

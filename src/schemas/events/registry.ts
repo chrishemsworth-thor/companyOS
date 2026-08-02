@@ -6,6 +6,7 @@ import { paymentReceivedV2 } from "./payment.received.v2";
 import { paymentPartialV1 } from "./payment.partial.v1";
 import { customerCreatedV1 } from "./customer.created.v1";
 import { customerRiskFlaggedV1 } from "./customer.risk_flagged.v1";
+import { customerNoContactV1 } from "./customer.no_contact.v1";
 import { collectionsDecisionV1 } from "./collections.decision.v1";
 import { dealCreatedV1 } from "./deal.created.v1";
 import { dealStageChangedV1 } from "./deal.stage_changed.v1";
@@ -66,6 +67,7 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "payment.partial": paymentPartialV1,
   "customer.created": customerCreatedV1,
   "customer.risk_flagged": customerRiskFlaggedV1,
+  "customer.no_contact": customerNoContactV1,
   "collections.decision": collectionsDecisionV1,
   "deal.created": dealCreatedV1,
   "deal.stage_changed": dealStageChangedV1,

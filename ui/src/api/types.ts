@@ -69,13 +69,37 @@ export interface JournalEntry {
   lines: JournalLine[];
 }
 
+export type HealthBand = "good" | "watch" | "at_risk";
+
+export interface HealthReason {
+  code: string;
+  detail: string;
+  band: HealthBand;
+  invoice_ids?: string[];
+}
+
+/** Derived on read, never stored (PRD-003). Reasons matter more than the band. */
+export interface CustomerHealth {
+  band: HealthBand;
+  reasons: HealthReason[];
+}
+
+export interface CustomerCredit {
+  /** null means no limit is set — not a limit of zero. */
+  limit_cents: number | null;
+  outstanding_ar_cents: number;
+  available_cents: number | null;
+}
+
 export interface Customer {
   customer_id: string;
   name: string;
   email: string | null;
   phone: string | null;
   legal_name: string | null;
+  /** PRD-003's `registration_no` (SSM). */
   reg_no: string | null;
+  /** PRD-003's `tax_id` (SST). */
   tax_no: string | null;
   address_line1: string | null;
   address_line2: string | null;
@@ -83,7 +107,44 @@ export interface Customer {
   state: string | null;
   postcode: string | null;
   country: string | null;
+  industry: string | null;
+  website: string | null;
+  payment_terms_days: number | null;
+  credit_limit_cents: number | null;
+  preferred_channel: "email" | "whatsapp" | null;
+  notes: string | null;
+  ship_address_line1: string | null;
+  ship_address_line2: string | null;
+  ship_city: string | null;
+  ship_state: string | null;
+  ship_postcode: string | null;
+  ship_country: string | null;
+  /** Detail endpoint only. */
+  health?: CustomerHealth;
+  /** Detail endpoint only. */
+  credit?: CustomerCredit;
+  /** List endpoint only — the band alone, for the table badge. */
+  health_band?: HealthBand | null;
 }
+
+/** PRD-003's contact role vocabulary. Mirrors `contactRoleSchema` on the API. */
+export type ContactRole = "primary" | "billing" | "technical" | "signatory" | "other";
+
+export const CONTACT_ROLES: ContactRole[] = [
+  "primary",
+  "billing",
+  "technical",
+  "signatory",
+  "other",
+];
+
+export const CONTACT_ROLE_LABELS: Record<ContactRole, string> = {
+  primary: "Primary",
+  billing: "Billing",
+  technical: "Technical",
+  signatory: "Signatory",
+  other: "Other",
+};
 
 export interface Contact {
   contact_id: string;
@@ -93,7 +154,9 @@ export interface Contact {
   department: string | null;
   email: string | null;
   phone: string | null;
+  /** Always equal to `roles.includes("primary")` — the API keeps them in step. */
   is_primary: boolean;
+  roles: ContactRole[];
   created_at: string;
 }
 
@@ -175,6 +238,8 @@ export interface CompanyProfile {
   default_prepared_by: string | null;
   /** Company-wide default currency for new documents (ISO 4217). */
   base_currency: string;
+  /** Fallback invoice payment terms when a customer states none (PRD-003). */
+  default_payment_terms_days: number;
 }
 
 export interface QuoteTemplateConfig {

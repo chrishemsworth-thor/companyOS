@@ -6,6 +6,9 @@ import { paymentReceivedV2 } from "../schemas/events/payment.received.v2";
 import { DeliveryError, sendReminder } from "../delivery/dispatch";
 import { getLlmProvider } from "../llm";
 import { insertActivityRow, getCustomer, getPaymentHistory } from "../modules/crm/service";
+import { resolveContact } from "../modules/crm/contact-roles";
+import { getCustomerSignals } from "../modules/crm/signals";
+import { computeHealth } from "../modules/crm/health";
 import { emitEvent } from "../queue/producer";
 import { ensureEventBus } from "../queue/direct";
 import {
@@ -15,6 +18,7 @@ import {
   DECISION_SYSTEM_PROMPT,
   fallbackDecision,
   MAX_MESSAGE_CHARS,
+  type BillingContactContext,
   type CollectionsContext,
   type CollectionsDecision,
   type OverdueInvoiceContext,
@@ -161,7 +165,18 @@ export class CollectionsAgent extends DurableObject<Env> {
         event_type: "collections.decision",
         source_module: "finance",
         tenant_id: state.tenant_id,
-        payload: { customer_id: state.customer_id, ...decision, source, trigger },
+        payload: {
+          customer_id: state.customer_id,
+          ...decision,
+          source,
+          trigger,
+          // PRD-003 P0: "the fallback is recorded on the decision". Optional
+          // additions to a non-strict collections.decision.v1 — no v2 needed.
+          // S10 folds these into collections.decision.v2 along with the
+          // provider/model/cost fields PRD-002 wants.
+          contact_id: context.billing_contact?.contact_id ?? null,
+          contact_match: context.billing_contact?.matched ?? null,
+        },
       }),
     );
 
@@ -274,6 +289,20 @@ export class CollectionsAgent extends DurableObject<Env> {
 
     const customer = await getCustomer(db, tenantId, customerId);
 
+    // Who the reminder will reach (PRD-003). Resolved here as well as inside
+    // sendReminder because the decision is audited BEFORE the send — including
+    // for action=wait, which never sends at all — and the audit has to say who
+    // the agent was targeting.
+    const resolved = await resolveContact(db, tenantId, customerId, "billing");
+    const billing_contact: BillingContactContext | null = resolved && {
+      contact_id: resolved.contact.contact_id,
+      name: resolved.contact.name,
+      title: resolved.contact.title,
+      email: resolved.contact.email,
+      phone: resolved.contact.phone,
+      matched: resolved.matched,
+    };
+
     const { results: invoiceRows } = await db
       .prepare(
         `SELECT invoice_id, amount_due_cents, currency, due_date FROM invoices
@@ -292,6 +321,15 @@ export class CollectionsAgent extends DurableObject<Env> {
 
     const recent_payments = (await getPaymentHistory(db, tenantId, customerId)).slice(-5);
 
+    // Derived health (PRD-003), one query. A signal for the model's tone, never
+    // a gate on whether to send — see modules/crm/health.ts for why.
+    const signals = await getCustomerSignals(db, tenantId, customerId);
+    const computed = computeHealth(signals);
+    const health = {
+      band: computed.band,
+      reasons: computed.reasons.map((r) => r.detail),
+    };
+
     const { results: recent_activities } = await db
       .prepare(
         `SELECT kind, body, occurred_at FROM activities
@@ -309,7 +347,15 @@ export class CollectionsAgent extends DurableObject<Env> {
       .bind(tenantId, customerId)
       .all<{ title: string; value_cents: number; currency: string }>();
 
-    return { customer, overdue_invoices, recent_payments, recent_activities, open_deals };
+    return {
+      customer,
+      billing_contact,
+      health,
+      overdue_invoices,
+      recent_payments,
+      recent_activities,
+      open_deals,
+    };
   }
 
   /** Read-only snapshot for debugging/insights. */

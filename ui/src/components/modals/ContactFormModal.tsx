@@ -5,7 +5,7 @@ import { FormError } from "../FormError";
 import { Button } from "../Button";
 import { ModalActions } from "../ModalActions";
 import { useApiMutation } from "../../hooks/useApiMutation";
-import type { Contact } from "../../api/types";
+import { CONTACT_ROLES, CONTACT_ROLE_LABELS, type Contact, type ContactRole } from "../../api/types";
 
 interface ContactBody {
   name: string;
@@ -13,7 +13,7 @@ interface ContactBody {
   department?: string;
   email?: string;
   phone?: string;
-  is_primary?: boolean;
+  roles: ContactRole[];
 }
 
 /** Create a contact person at a customer, or edit one when `existing` is passed. */
@@ -33,7 +33,17 @@ export function ContactFormModal({
   const [department, setDepartment] = useState(existing?.department ?? "");
   const [email, setEmail] = useState(existing?.email ?? "");
   const [phone, setPhone] = useState(existing?.phone ?? "");
-  const [isPrimary, setIsPrimary] = useState(existing?.is_primary ?? false);
+  // Roles are the single control (PRD-003). The old standalone "primary"
+  // checkbox is gone rather than kept alongside: `is_primary` and the `primary`
+  // role are one fact, and two controls for one fact is how they drift.
+  // A new contact starts with nothing selected — the API then applies its own
+  // default (primary if this is the customer's first contact, otherwise other).
+  const [roles, setRoles] = useState<ContactRole[]>(existing?.roles ?? []);
+
+  const toggleRole = (role: ContactRole) =>
+    setRoles((current) =>
+      current.includes(role) ? current.filter((r) => r !== role) : [...current, role],
+    );
 
   const mutation = useApiMutation({
     mutationFn: (client, body: ContactBody) =>
@@ -59,7 +69,7 @@ export function ContactFormModal({
       department: department.trim() || undefined,
       email: email.trim() || undefined,
       phone: phone.trim() || undefined,
-      is_primary: isPrimary,
+      roles,
     });
   };
 
@@ -90,16 +100,25 @@ export function ContactFormModal({
         <FormRow label="Phone (optional)">
           <input className="input" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </FormRow>
-        <FormRow label="">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={isPrimary}
-              onChange={(e) => setIsPrimary(e.target.checked)}
-            />
-            Primary contact
-          </label>
+        <FormRow label="Roles">
+          <div className="flex flex-wrap gap-x-4 gap-y-2">
+            {CONTACT_ROLES.map((role) => (
+              <label key={role} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={roles.includes(role)}
+                  onChange={() => toggleRole(role)}
+                />
+                {CONTACT_ROLE_LABELS[role]}
+              </label>
+            ))}
+          </div>
         </FormRow>
+        {roles.includes("primary") && !existing?.is_primary && (
+          <p className="text-xs text-muted">
+            Marking this contact primary clears the customer's current primary.
+          </p>
+        )}
         <FormError error={mutation.error} />
         <ModalActions>
           <Button type="button" onClick={onClose}>
