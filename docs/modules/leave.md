@@ -261,6 +261,11 @@ cycle; add one only when a design partner needs it.
 
 ### Carry-forward and the year close
 
+Both halves of the rule — how many days may roll over, and how long the employee
+has to use them — are per policy and set in the console at
+**People → Leave policies**. `carry_forward_max_days` is the cap;
+`carry_forward_expiry_months` is 1–12, or null for days that never lapse.
+
 `POST /v1/people/leave/year-close` computes what each employee carries into the
 next year and writes it as a `carry_forward` adjustment row.
 
@@ -275,6 +280,16 @@ double-crediting everybody; the response reports `written: false` for a
 Unused days are measured **after** pending requests, so days already asked for
 are not carried and then spent twice. Only types with `carry_forward_allowed`
 and a policy cap above zero produce a row.
+
+**Monthly accrual and the final month.** A month accrues once it has fully
+elapsed, and "fully elapsed" includes the month whose last day is the date being
+asked about — an employee who works through 31 March has completed March and
+earned it, rather than earning it on 1 April. That the credit lands on the final
+day rather than the following morning is not cosmetic here: the year close
+measures unused days at 31 December, and while only months *strictly* behind
+that date counted, December could never accrue. A 24-day monthly policy carried
+22 and the employee silently lost two days a year. `test/leave-balances.test.ts`
+pins both the day-boundary case and the year-end one.
 
 `carry_forward_expiry_months` (3 = "use it by 31 March", the common Malaysian
 setting; NULL = never lapses) retires the *unused* portion of the carried days

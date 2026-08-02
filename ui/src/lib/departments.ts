@@ -27,6 +27,7 @@ import {
   Building2,
   Palette,
   CalendarDays,
+  SlidersHorizontal,
 } from "lucide-react";
 
 /**
@@ -166,6 +167,10 @@ export const DEPARTMENTS: Department[] = [
       // in the sidebar instead — the self-service tier sees no departments, and
       // those are exactly the people filing leave.
       { label: "Leave calendar", route: "/leave/calendar", icon: CalendarDays },
+      // Entitlement policies, accrual and carry-forward (PRD-006b). HR-facing,
+      // so it belongs to the department rather than to "You" alongside the
+      // employee's own leave.
+      { label: "Leave policies", route: "/leave/policies", icon: SlidersHorizontal },
     ],
   },
   {

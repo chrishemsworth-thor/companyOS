@@ -39,6 +39,7 @@ import { Onboarding } from "./pages/onboarding/Onboarding";
 import { ApprovalsInbox } from "./pages/approvals/ApprovalsInbox";
 import { ClaimDetail } from "./pages/claims/ClaimDetail";
 import { MyLeave } from "./pages/leave/MyLeave";
+import { LeavePolicies } from "./pages/leave/LeavePolicies";
 import { TeamLeaveCalendar } from "./pages/leave/TeamLeaveCalendar";
 import { LeaveRequestDetail } from "./pages/leave/LeaveRequestDetail";
 
@@ -97,6 +98,10 @@ function AppRoutes() {
             with no capability guard of its own: the API answers per row (owner,
             approver, or finance), which is the boundary that actually matters. */}
         <Route path="claims/:id" element={<ClaimDetail />} />
+        {/* HR-side leave configuration. No capability guard of its own — the
+            API holds /v1/people/leave to `people:read`/`people:write`, and the
+            page hides its write actions behind CanWrite. */}
+        <Route path="leave/policies" element={<LeavePolicies />} />
         <Route path="agent" element={<AgentActivity />} />
         <Route path="invoices" element={<InvoiceList />} />
         <Route path="invoices/:id" element={<InvoiceDetail />} />

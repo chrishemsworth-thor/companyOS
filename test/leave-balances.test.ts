@@ -317,7 +317,38 @@ describe("accrual methods", () => {
     // One day a month, counted once the month is behind us.
     expect((await balanceFor(employee, typeId, "2026-01-15")).entitlement_days).toBe(0);
     expect((await balanceFor(employee, typeId, "2026-04-15")).entitlement_days).toBe(3);
-    expect((await balanceFor(employee, typeId, "2026-12-31")).entitlement_days).toBe(11);
+    // The last day of a month completes it: working through 31 March earns
+    // March, rather than earning it on 1 April.
+    expect((await balanceFor(employee, typeId, "2026-03-31")).entitlement_days).toBe(3);
+    expect((await balanceFor(employee, typeId, "2026-04-01")).entitlement_days).toBe(3);
+    // And the twelfth month is reachable inside its own leave year. This read
+    // 11 until the year-end case below was fixed.
+    expect((await balanceFor(employee, typeId, "2026-12-31")).entitlement_days).toBe(12);
+  });
+
+  it("accrues the final month before the year closes, so it can be carried", async () => {
+    // A regression test with money attached. `closeLeaveYear` measures unused
+    // days at 31 December; while December could not accrue until 1 January, an
+    // employee on a 24-day monthly policy who took no leave carried 22 and
+    // silently lost two days — every year, for every employee on monthly
+    // accrual.
+    const employee = await createEmployee("Year End Yusof", { start_date: "2020-01-01" });
+    const typeId = await annualTypeId();
+    await assign(
+      employee,
+      typeId,
+      await makePolicy(typeId, 24, {
+        accrual_method: "monthly_accrual",
+        carry_forward_allowed: true,
+        carry_forward_max_days: 30,
+      }),
+    );
+
+    expect((await balanceFor(employee, typeId, "2026-12-31")).entitlement_days).toBe(24);
+
+    const [carried] = await yearClose({ leave_year: 2026, employee_id: employee, dry_run: true });
+    expect(carried!.unused_days).toBe(24);
+    expect(carried!.carried_days).toBe(24);
   });
 
   it("accrues monthly from the joining month, not from January", async () => {

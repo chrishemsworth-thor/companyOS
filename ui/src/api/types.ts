@@ -505,6 +505,66 @@ export interface LeaveType {
   allows_negative_balance: boolean;
 }
 
+/**
+ * HR-side leave configuration (PRD-006b), served from `/v1/people/leave/*`.
+ *
+ * Distinct from `LeaveType` above, which is the employee-facing projection on
+ * the `self` axis: it carries no ids and no policy, because a filer needs to
+ * pick a type, not administer one.
+ */
+export type AccrualMethod = "annual_upfront" | "monthly_accrual" | "on_anniversary";
+
+export interface AdminLeaveType {
+  leave_type_id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  is_paid: boolean;
+  requires_attachment: boolean;
+  max_consecutive_days: number | null;
+  allows_half_day: boolean;
+  carry_forward_allowed: boolean;
+  allow_negative_balance: boolean;
+  statutory_basis: string | null;
+  archived_at: string | null;
+}
+
+/**
+ * One tenure band. The window is `[min, max)` in completed months of service,
+ * `max: null` meaning open-ended, and `employment_type: null` meaning the band
+ * applies to everyone — a typed band beats an untyped one at the same tenure.
+ */
+export interface PolicyBand {
+  band_id: string;
+  employment_type: EmploymentType | null;
+  min_months_service: number;
+  max_months_service: number | null;
+  entitlement_days: number;
+}
+
+export interface LeavePolicy {
+  policy_id: string;
+  leave_type_id: string;
+  name: string;
+  accrual_method: AccrualMethod;
+  /** Days that may roll into next year. 0 = none. */
+  carry_forward_max_days: number;
+  /** Months into the new year after which carried days lapse. Null = never. */
+  carry_forward_expiry_months: number | null;
+  /** The policy an employee falls to with no explicit assignment. */
+  is_default: boolean;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+  bands: PolicyBand[];
+}
+
+/** Employment Act 1955 floors, shown beside the entitlement field as guidance. */
+export interface StatutoryMinimum {
+  basis: string;
+  bands: { min_months: number; max_months: number | null; days: number }[];
+}
+
 export interface LeaveBalance {
   leave_type_code: string;
   leave_type_name: string;
