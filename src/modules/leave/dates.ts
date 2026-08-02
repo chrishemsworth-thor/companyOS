@@ -50,6 +50,11 @@ export function monthOf(iso: string): number {
   return Number(iso.slice(5, 7));
 }
 
+/** 1-31. */
+export function dayOf(iso: string): number {
+  return Number(iso.slice(8, 10));
+}
+
 export function startOfYear(year: number): string {
   return `${year}-01-01`;
 }
