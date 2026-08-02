@@ -9,6 +9,7 @@ import { PageHeader } from "../../components/PageHeader";
 import { Button } from "../../components/Button";
 import { CanWrite } from "../../components/CanWrite";
 import { CustomerFormModal } from "../../components/modals/CustomerFormModal";
+import { HealthBadge } from "../../components/HealthBadge";
 import type { Customer } from "../../api/types";
 
 export function CustomerList() {
@@ -45,6 +46,13 @@ export function CustomerList() {
           rowHref={(r) => `/customers/${r.customer_id}`}
           columns={[
             { header: "Customer", render: (r) => r.name },
+            {
+              // PRD-003: health badge on the customer list. The band only —
+              // the reasons live on the detail page, where there is room to
+              // act on them.
+              header: "Health",
+              render: (r) => (r.health_band ? <HealthBadge band={r.health_band} /> : "—"),
+            },
             { header: "Email", render: (r) => r.email ?? "—" },
             { header: "Phone", render: (r) => r.phone ?? "—" },
           ]}

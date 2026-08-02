@@ -3,17 +3,25 @@ import { makeEnvelope } from "../../schemas/envelope";
 import { paginate } from "../../gateway/pagination";
 import { resolveBaseCurrency } from "../quotes/settings";
 import { getEnrichmentProvider } from "../../enrichment";
+import {
+  getContactRoles,
+  listRolesByContact,
+  normalizeRoles,
+  roleWriteStatements,
+} from "./contact-roles";
 import type { Env } from "../../env";
 import type {
   Activity,
   ActivityKind,
   Contact,
+  ContactRole,
   Customer,
   Deal,
   Lead,
   LeadStatus,
   PaymentHistoryEntry,
   PipelineStage,
+  PreferredChannel,
 } from "./types";
 
 /**
@@ -94,7 +102,15 @@ async function getStage(
 
 // ---- Customers ----
 
-/** Organization-level fields settable on create/patch (migration 0013). */
+/**
+ * Organization-level fields settable on create/patch. The first block is the
+ * quote "To" identity (migration 0013); the second is PRD-003's commercial
+ * attributes (migration 0027).
+ *
+ * PRD-003's `registration_no` and `tax_id` are `reg_no` and `tax_no` here, and
+ * its structured billing address is `address_line1..country` — all three
+ * shipped in 0013, so 0027 reused them rather than adding synonyms.
+ */
 export interface CustomerOrgFields {
   legal_name?: string | null;
   reg_no?: string | null;
@@ -105,6 +121,18 @@ export interface CustomerOrgFields {
   state?: string | null;
   postcode?: string | null;
   country?: string | null;
+  industry?: string | null;
+  website?: string | null;
+  payment_terms_days?: number | null;
+  credit_limit_cents?: number | null;
+  preferred_channel?: PreferredChannel | null;
+  notes?: string | null;
+  ship_address_line1?: string | null;
+  ship_address_line2?: string | null;
+  ship_city?: string | null;
+  ship_state?: string | null;
+  ship_postcode?: string | null;
+  ship_country?: string | null;
 }
 
 const ORG_FIELDS = [
@@ -117,6 +145,19 @@ const ORG_FIELDS = [
   "state",
   "postcode",
   "country",
+  // PRD-003 commercial attributes (0027).
+  "industry",
+  "website",
+  "payment_terms_days",
+  "credit_limit_cents",
+  "preferred_channel",
+  "notes",
+  "ship_address_line1",
+  "ship_address_line2",
+  "ship_city",
+  "ship_state",
+  "ship_postcode",
+  "ship_country",
 ] as const;
 
 const CUSTOMER_COLUMNS = `customer_id, name, email, phone, ${ORG_FIELDS.join(", ")}`;
@@ -237,8 +278,8 @@ interface ContactRow {
 const CONTACT_COLUMNS =
   "contact_id, customer_id, name, title, department, email, phone, is_primary, created_at";
 
-function toContact(row: ContactRow): Contact {
-  return { ...row, is_primary: row.is_primary === 1 };
+function toContact(row: ContactRow, roles: ContactRole[]): Contact {
+  return { ...row, is_primary: row.is_primary === 1, roles };
 }
 
 export async function getContact(
@@ -250,7 +291,7 @@ export async function getContact(
     .prepare(`SELECT ${CONTACT_COLUMNS} FROM contacts WHERE tenant_id = ? AND contact_id = ?`)
     .bind(tenantId, contactId)
     .first<ContactRow>();
-  return row ? toContact(row) : null;
+  return row ? toContact(row, await getContactRoles(db, tenantId, row.contact_id)) : null;
 }
 
 export async function listContacts(
@@ -265,13 +306,19 @@ export async function listContacts(
     )
     .bind(tenantId, customerId)
     .all<ContactRow>();
-  return results.map(toContact);
+  // One roles query for the whole customer, not one per contact.
+  const roles = await listRolesByContact(db, tenantId, customerId);
+  return results.map((row) => toContact(row, roles.get(row.contact_id) ?? []));
 }
 
 /**
  * No contact.created event on purpose: nothing consumes one today (no agent
  * route, no insights read-model). Add a versioned schema + registry entry the
  * day something wants to react to new contacts.
+ *
+ * Roles (PRD-003): when the caller states none, the customer's FIRST contact
+ * becomes `primary` and every later one `other` — the same rule migration 0027
+ * backfilled with, so a migrated tenant and a fresh one behave identically.
  */
 export async function createContact(
   db: D1Database,
@@ -284,29 +331,50 @@ export async function createContact(
     email?: string;
     phone?: string;
     is_primary?: boolean;
+    roles?: ContactRole[];
   },
 ): Promise<Contact> {
   const customer = await getCustomer(db, tenantId, input.customer_id);
   if (!customer) throw new CrmError("not_found", `customer ${input.customer_id} not found`, 404);
 
+  const existing = await db
+    .prepare("SELECT COUNT(*) AS n FROM contacts WHERE tenant_id = ? AND customer_id = ?")
+    .bind(tenantId, input.customer_id)
+    .first<{ n: number }>();
+  const isFirst = (existing?.n ?? 0) === 0;
+
+  const { roles, is_primary } = normalizeRoles({
+    roles: input.roles,
+    is_primary: input.is_primary,
+    fallback: isFirst ? ["primary"] : ["other"],
+  });
+
   const contactId = `contact_${ulid()}`;
-  await db
-    .prepare(
-      `INSERT INTO contacts (contact_id, tenant_id, customer_id, name, title, department, email, phone, is_primary)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-    .bind(
-      contactId,
-      tenantId,
-      input.customer_id,
-      input.name,
-      input.title ?? null,
-      input.department ?? null,
-      input.email ?? null,
-      input.phone ?? null,
-      input.is_primary ? 1 : 0,
-    )
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        `INSERT INTO contacts (contact_id, tenant_id, customer_id, name, title, department, email, phone, is_primary)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      )
+      .bind(
+        contactId,
+        tenantId,
+        input.customer_id,
+        input.name,
+        input.title ?? null,
+        input.department ?? null,
+        input.email ?? null,
+        input.phone ?? null,
+      ),
+    // Inserted with is_primary = 0 and set by the role statements, so the
+    // demote-then-promote sequence is the ONLY thing that touches the flag and
+    // the partial unique index never sees two primaries.
+    ...roleWriteStatements(db, tenantId, {
+      customer_id: input.customer_id,
+      contact_id: contactId,
+      roles: is_primary ? roles : roles.filter((r) => r !== "primary"),
+    }),
+  ]);
   return (await getContact(db, tenantId, contactId)) as Contact;
 }
 
@@ -322,6 +390,7 @@ export async function updateContact(
     email?: string | null;
     phone?: string | null;
     is_primary?: boolean;
+    roles?: ContactRole[];
   },
 ): Promise<Contact> {
   const sets: string[] = [];
@@ -332,20 +401,44 @@ export async function updateContact(
       binds.push(patch[field]);
     }
   }
-  if (patch.is_primary !== undefined) {
-    sets.push("is_primary = ?");
-    binds.push(patch.is_primary ? 1 : 0);
-  }
+
+  const touchesRoles = patch.roles !== undefined || patch.is_primary !== undefined;
+
   // Scoped by customer_id too so the nested route can't reach across customers.
-  const result = await db
+  // A patch that ONLY changes roles still needs an existence check, hence the
+  // no-op UPDATE below rather than skipping straight to the role statements.
+  const scalarUpdate = db
     .prepare(
-      `UPDATE contacts SET ${sets.join(", ")} WHERE tenant_id = ? AND customer_id = ? AND contact_id = ?`,
+      sets.length > 0
+        ? `UPDATE contacts SET ${sets.join(", ")} WHERE tenant_id = ? AND customer_id = ? AND contact_id = ?`
+        : `UPDATE contacts SET name = name WHERE tenant_id = ? AND customer_id = ? AND contact_id = ?`,
     )
-    .bind(...binds, tenantId, customerId, contactId)
-    .run();
-  if (result.meta.changes === 0) {
+    .bind(...binds, tenantId, customerId, contactId);
+
+  if (!touchesRoles) {
+    const result = await scalarUpdate.run();
+    if (result.meta.changes === 0) {
+      throw new CrmError("not_found", "contact not found", 404);
+    }
+    return (await getContact(db, tenantId, contactId)) as Contact;
+  }
+
+  // The role set is only knowable against what the contact holds today, so
+  // read before the batch; the write itself is still atomic.
+  const current = await getContact(db, tenantId, contactId);
+  if (!current || current.customer_id !== customerId) {
     throw new CrmError("not_found", "contact not found", 404);
   }
+  const { roles } = normalizeRoles({
+    roles: patch.roles,
+    is_primary: patch.is_primary,
+    fallback: current.roles,
+  });
+
+  await db.batch([
+    scalarUpdate,
+    ...roleWriteStatements(db, tenantId, { customer_id: customerId, contact_id: contactId, roles }),
+  ]);
   return (await getContact(db, tenantId, contactId)) as Contact;
 }
 

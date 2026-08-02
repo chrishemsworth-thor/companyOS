@@ -5,6 +5,7 @@ import {
   type QuoteBranding,
   type QuoteTemplateConfig,
 } from "./branding";
+import { DEFAULT_PAYMENT_TERMS_DAYS } from "../finance/payment-terms";
 import type { CompanyProfile } from "./types";
 
 /**
@@ -15,7 +16,7 @@ import type { CompanyProfile } from "./types";
  */
 
 const PROFILE_COLUMNS =
-  "legal_name, reg_no, tax_no, address_line1, address_line2, city, state, postcode, country, phone, email, website, default_prepared_by, base_currency";
+  "legal_name, reg_no, tax_no, address_line1, address_line2, city, state, postcode, country, phone, email, website, default_prepared_by, base_currency, default_payment_terms_days";
 
 /** Company-wide default currency when no profile row exists yet. */
 export const DEFAULT_BASE_CURRENCY = "MYR";
@@ -45,6 +46,12 @@ export interface CompanyProfileInput {
   website?: string | null;
   default_prepared_by?: string | null;
   base_currency?: string;
+  /**
+   * PRD-003's "(default from tenant settings)" for `payment_terms_days`. The
+   * per-customer value wins; this is the tenant-wide fallback and the column is
+   * NOT NULL DEFAULT 30, so an omitted value keeps 30.
+   */
+  default_payment_terms_days?: number;
 }
 
 const PROFILE_FIELDS = [
@@ -62,6 +69,7 @@ const PROFILE_FIELDS = [
   "website",
   "default_prepared_by",
   "base_currency",
+  "default_payment_terms_days",
 ] as const;
 
 /**
@@ -80,6 +88,9 @@ export async function upsertCompanyProfile(
     if (f === "legal_name") return input.legal_name;
     // NOT NULL column — a blank/omitted value falls back to the default.
     if (f === "base_currency") return input.base_currency ?? DEFAULT_BASE_CURRENCY;
+    // NOT NULL column, same treatment as base_currency.
+    if (f === "default_payment_terms_days")
+      return input.default_payment_terms_days ?? DEFAULT_PAYMENT_TERMS_DAYS;
     return input[f] ?? null;
   });
   await db.batch([

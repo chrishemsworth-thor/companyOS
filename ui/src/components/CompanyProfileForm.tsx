@@ -27,6 +27,7 @@ const EMPTY: Form = {
   website: "",
   default_prepared_by: "",
   base_currency: "MYR",
+  default_payment_terms_days: "30",
 };
 
 /**
@@ -60,7 +61,7 @@ export function CompanyProfileForm({
   }, [query.data]);
 
   const mutation = useApiMutation({
-    mutationFn: (apiClient, body: Record<string, string | null>) =>
+    mutationFn: (apiClient, body: Record<string, string | number | null>) =>
       apiClient.put<CompanyProfileType>("/v1/settings/company-profile", body),
     invalidates: () => [["settings", "company-profile"]],
     successMessage: "Company profile saved",
@@ -78,11 +79,14 @@ export function CompanyProfileForm({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     // Send blanks as null so optional fields clear cleanly.
-    const body = Object.fromEntries(
+    const body: Record<string, string | number | null> = Object.fromEntries(
       Object.entries(form).map(([k, v]) => [k, v.trim() === "" ? null : v.trim()]),
     );
     body.legal_name = form.legal_name.trim();
     body.base_currency = form.base_currency || "MYR";
+    // NOT NULL on the server; a blank field means "keep the 30-day default"
+    // rather than "no terms", and the API expects a number here.
+    body.default_payment_terms_days = Number(form.default_payment_terms_days) || 30;
     mutation.mutate(body);
   };
 
@@ -111,6 +115,20 @@ export function CompanyProfileForm({
       <p className="mb-3 text-sm text-muted">
         New invoices, deals, and quotes default to the base currency — each document can still use
         any currency.
+      </p>
+      <FormRow label="Default payment terms (days)">
+        <input
+          className="input"
+          type="number"
+          min={0}
+          max={365}
+          value={form.default_payment_terms_days}
+          onChange={set("default_payment_terms_days")}
+        />
+      </FormRow>
+      <p className="mb-3 text-sm text-muted">
+        An invoice created without an explicit due date falls due this many days after issue. A
+        customer with its own payment terms overrides this.
       </p>
       <FormRow label="Address line 1">
         <input className="input" value={form.address_line1} onChange={set("address_line1")} />

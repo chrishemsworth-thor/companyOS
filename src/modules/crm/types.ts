@@ -6,6 +6,9 @@ export interface Customer {
   email: string | null;
   phone: string | null;
   // Organization-level fields (migration 0013) — used by the Quotes "To" block.
+  // `reg_no` is PRD-003's `registration_no` (SSM) and `tax_no` its `tax_id`
+  // (SST); `address_line1..country` is its structured BILLING address. All
+  // three predate PRD-003, so 0027 reused them rather than adding synonyms.
   legal_name: string | null;
   reg_no: string | null;
   tax_no: string | null;
@@ -15,7 +18,31 @@ export interface Customer {
   state: string | null;
   postcode: string | null;
   country: string | null;
+  // Commercial attributes (PRD-003, migration 0027).
+  industry: string | null;
+  website: string | null;
+  /**
+   * Days from issue to due. NULL means "use the tenant default"
+   * (`company_profile.default_payment_terms_days`), not "due immediately".
+   * Consumed by `resolveDueDate` in the finance module — this is the field
+   * PRD-003 stores precisely so invoice due dates compute themselves.
+   */
+  payment_terms_days: number | null;
+  credit_limit_cents: number | null;
+  preferred_channel: PreferredChannel | null;
+  notes: string | null;
+  ship_address_line1: string | null;
+  ship_address_line2: string | null;
+  ship_city: string | null;
+  ship_state: string | null;
+  ship_postcode: string | null;
+  ship_country: string | null;
 }
+
+export type PreferredChannel = "email" | "whatsapp";
+
+/** PRD-003's closed role vocabulary. Source of truth: `contactRoleSchema`. */
+export type ContactRole = "primary" | "billing" | "technical" | "signatory" | "other";
 
 /** A contact person at a customer organization. The quote "To" block names one. */
 export interface Contact {
@@ -26,7 +53,9 @@ export interface Contact {
   department: string | null;
   email: string | null;
   phone: string | null;
+  /** Always equal to `roles.includes("primary")` — see contact-roles.ts. */
   is_primary: boolean;
+  roles: ContactRole[];
   created_at: string;
 }
 

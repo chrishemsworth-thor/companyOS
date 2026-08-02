@@ -49,8 +49,31 @@ export interface OverdueInvoiceContext {
   days_overdue: number;
 }
 
+/**
+ * The person this reminder will actually reach (PRD-003). `matched` records
+ * how the resolution chain got there: `role` means a real billing contact,
+ * `primary`/`any` mean it fell back. Null when the customer has no contacts and
+ * the customer-level address will be used.
+ */
+export interface BillingContactContext {
+  contact_id: string;
+  name: string;
+  title: string | null;
+  email: string | null;
+  phone: string | null;
+  matched: "role" | "primary" | "any";
+}
+
 export interface CollectionsContext {
   customer: { customer_id: string; name: string; email: string | null; phone: string | null } | null;
+  billing_contact: BillingContactContext | null;
+  /**
+   * Derived health (PRD-003). Present in the context so the agent can reason
+   * about the whole account rather than one invoice — **it is a signal, not a
+   * gate.** Nothing in the send path reads `band` to decide whether to send;
+   * that stays with PRD-002's guardrail layer. See modules/crm/health.ts.
+   */
+  health: { band: "good" | "watch" | "at_risk"; reasons: string[] } | null;
   overdue_invoices: OverdueInvoiceContext[];
   recent_payments: PaymentHistoryEntry[];
   recent_activities: { kind: string; body: string | null; occurred_at: string }[];
@@ -82,9 +105,35 @@ export function buildDecisionPrompt(
 
   const c = context.customer;
   lines.push(`Customer: ${c ? c.name : "unknown"} (${c?.customer_id ?? "?"})`);
+  // Naming the recipient is the point of PRD-003 contact roles: the message is
+  // addressed to the person who controls payment rather than to the company.
+  // The fallback wording matters — the model should not greet somebody by name
+  // as "the billing contact" when it is really guessing.
+  const contact = context.billing_contact;
+  if (contact) {
+    const who = contact.title ? `${contact.name}, ${contact.title}` : contact.name;
+    lines.push(
+      contact.matched === "role"
+        ? `Recipient: ${who} — the customer's designated billing contact. Address the message to them by name.`
+        : `Recipient: ${who} — NOT a designated billing contact (resolved by fallback: ${contact.matched}). Address them politely and do not assume they control payment.`,
+    );
+  } else {
+    lines.push(
+      `Recipient: no named contact on file; the message goes to the company's general address. Do not greet anybody by name.`,
+    );
+  }
   lines.push(
     `Collection history: escalation stage ${state.escalation_stage}, ${state.reminders_sent} reminder(s) sent, last contact ${state.last_contact ?? "never"}.`,
   );
+
+  if (context.health) {
+    // Tone input, not an instruction. The prompt deliberately does not say
+    // "do not contact an at_risk customer" — auto-pausing on health was
+    // decided against for v1 and the model must not implement it by proxy.
+    lines.push(
+      `\nAccount health: ${context.health.band}. ${context.health.reasons.join(" ")}`.trim(),
+    );
+  }
 
   lines.push(`\nOverdue invoices (${context.overdue_invoices.length}):`);
   for (const inv of context.overdue_invoices) {

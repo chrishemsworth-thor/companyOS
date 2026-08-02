@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Plus, X } from "lucide-react";
 import { Modal } from "../Modal";
 import { FormRow } from "../FormRow";
@@ -7,10 +8,11 @@ import { CustomerSelect } from "../CustomerSelect";
 import { Button } from "../Button";
 import { ModalActions } from "../ModalActions";
 import { CurrencySelect } from "../CurrencySelect";
+import { useAuth } from "../../auth/AuthContext";
 import { useApiMutation } from "../../hooks/useApiMutation";
 import { useBaseCurrency } from "../../hooks/useBaseCurrency";
 import { parseAmountToCents } from "../../lib/money";
-import type { Invoice } from "../../api/types";
+import type { Customer, Invoice } from "../../api/types";
 
 interface LineDraft {
   description: string;
@@ -41,13 +43,22 @@ export function InvoiceCreateModal({
   // original invoice instead of issuing a duplicate.
   const idempotencyKey = useMemo(() => crypto.randomUUID(), []);
 
+  // Credit exposure for the warning below. Only the detail endpoint carries it,
+  // and only once a customer is picked.
+  const { client } = useAuth();
+  const creditQuery = useQuery({
+    queryKey: ["customer", customerId],
+    queryFn: () => client!.get<Customer>(`/v1/customers/${customerId}`),
+    enabled: !!client && !!customerId,
+  });
+
   const mutation = useApiMutation({
     mutationFn: (
       client,
       body: {
         customer_id: string;
         currency: string;
-        due_date: string;
+        due_date?: string;
         lines: { description: string; quantity: number; unit_cents: number }[];
       },
     ) => client.post<Invoice>("/v1/invoices", body, { idempotencyKey }),
@@ -67,6 +78,14 @@ export function InvoiceCreateModal({
     return unit !== null && qty > 0 ? sum + unit * qty : sum;
   }, 0);
 
+  const credit = creditQuery.data?.credit;
+  const creditWarning =
+    credit && credit.limit_cents !== null && credit.outstanding_ar_cents + totalCents > credit.limit_cents
+      ? `This invoice takes ${creditQuery.data!.name} to ${currency} ${(
+          (credit.outstanding_ar_cents + totalCents) / 100
+        ).toFixed(2)} against a ${currency} ${(credit.limit_cents / 100).toFixed(2)} credit limit.`
+      : null;
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
@@ -80,7 +99,15 @@ export function InvoiceCreateModal({
       }
       parsedLines.push({ description: l.description.trim(), quantity, unit_cents });
     }
-    mutation.mutate({ customer_id: customerId, currency, due_date: dueDate, lines: parsedLines });
+    mutation.mutate({
+      customer_id: customerId,
+      currency,
+      // Omitted rather than sent blank: the API then derives the due date from
+      // the customer's payment terms (PRD-003), which is the whole point of
+      // storing them.
+      due_date: dueDate || undefined,
+      lines: parsedLines,
+    });
   };
 
   return (
@@ -156,6 +183,15 @@ export function InvoiceCreateModal({
             Total: {currency} {(totalCents / 100).toFixed(2)}
           </span>
         </div>
+
+        {/* PRD-003: "the console warns (warn only — do not block)". Nothing
+            here disables the submit button, and the API rejects nothing on
+            credit grounds either. */}
+        {creditWarning && (
+          <p role="status" className="mt-2 text-sm text-warn">
+            {creditWarning}
+          </p>
+        )}
 
         <FormError error={validationError ?? mutation.error} />
         <ModalActions>

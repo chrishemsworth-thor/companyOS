@@ -2,6 +2,7 @@ import { ulid } from "../../lib/ulid";
 import { makeEnvelope } from "../../schemas/envelope";
 import { paginate } from "../../gateway/pagination";
 import { createInvoice, type CreateInvoiceInput } from "../finance/service";
+import { resolvePaymentTermsDays } from "../finance/payment-terms";
 import { getQuoteBranding, resolveQuoteDefaultCurrency } from "./settings";
 import type { Quote, QuoteLine, QuoteStatus } from "./types";
 
@@ -411,7 +412,17 @@ export async function convertQuote(
     });
   }
 
-  const dueDate = opts.due_date ?? quote.expiry_date ?? addDays(quote.issue_date, 30);
+  // Only the hardcoded 30-day tail changes with PRD-003: an explicit due date
+  // and the quote's own expiry still take precedence, so an accepted quote
+  // whose expiry the customer agreed to is not silently re-dated by a terms
+  // change. Below that, the customer's payment terms beat a magic number.
+  const dueDate =
+    opts.due_date ??
+    quote.expiry_date ??
+    addDays(
+      quote.issue_date,
+      await resolvePaymentTermsDays(env.DB, tenantId, quote.customer_id),
+    );
   const invoice = await createInvoice(env, tenantId, {
     customer_id: quote.customer_id,
     currency: quote.currency,

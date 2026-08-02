@@ -25,7 +25,9 @@ const createBodySchema = z.object({
   customer_id: z.string().min(1),
   // Optional: when omitted, the company's base currency applies (service-side).
   currency: z.string().length(3).optional(),
-  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "due_date must be YYYY-MM-DD"),
+  // Optional since S8 (PRD-003): omitted => issue date + the customer's
+  // payment_terms_days, then the tenant default, then 30 days.
+  due_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "due_date must be YYYY-MM-DD").optional(),
   // Optional project this invoice bills for. Stamped onto both posting lines so
   // the revenue reaches the project's profitability rollup (PRD-001a).
   project_id: z.string().min(1).optional(),

@@ -13,6 +13,9 @@ import { TwilioDelivery } from "./twilio";
 import { getAccount } from "../integrations/google/accounts";
 import { GmailDeliveryAdapter } from "../integrations/google/delivery";
 import { GMAIL_SEND_SCOPE, hasScope } from "../integrations/google/types";
+import { resolveContact, type ContactMatch } from "../modules/crm/contact-roles";
+import { emitEvent } from "../queue/producer";
+import { makeEnvelope } from "../schemas/envelope";
 
 export class DeliveryError extends Error {
   constructor(
@@ -51,6 +54,14 @@ export interface SendReminderResult {
   /** The channel actually used (may differ from the request after fallback). */
   channel: DeliveryChannel;
   provider: DeliveryProviderName;
+  /** The contact addressed, or null when the customer-level address was used. */
+  contact_id: string | null;
+  /**
+   * How that contact was found — `role` (a real billing contact), `primary` or
+   * `any`. PRD-003 requires the fallback be recorded on the decision, and the
+   * CollectionsAgent puts this on `collections.decision`.
+   */
+  contact_match: ContactMatch | null;
 }
 
 interface DeliveryConfigRow {
@@ -96,6 +107,8 @@ interface DeliveryRefs {
   invoice_id?: string;
   customer_id?: string;
   user_id?: string;
+  /** Which contact was addressed (PRD-003); null for customer-level sends. */
+  contact_id?: string | null;
 }
 
 /** Append one deliveries audit row; shared by sendReminder and sendEmail. */
@@ -114,8 +127,8 @@ function appendDeliveryRow(
   },
 ) {
   return env.DB.prepare(
-    `INSERT INTO deliveries (delivery_id, tenant_id, purpose, invoice_id, customer_id, user_id, subject, channel, provider, to_address, status, delivery_ref)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO deliveries (delivery_id, tenant_id, purpose, invoice_id, customer_id, user_id, contact_id, subject, channel, provider, to_address, status, delivery_ref)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       `dlv_${ulid()}`,
@@ -124,6 +137,7 @@ function appendDeliveryRow(
       row.refs.invoice_id ?? null,
       row.refs.customer_id ?? null,
       row.refs.user_id ?? null,
+      row.refs.contact_id ?? null,
       row.subject,
       row.channel,
       row.provider,
@@ -135,34 +149,102 @@ function appendDeliveryRow(
 }
 
 /**
- * The one path every reminder takes: resolve the recipient address from the
- * customers table (falling back to the other channel when the requested one
- * has no address), gate real providers on the tenant's delivery_config
- * opt-in, send, and append a deliveries row for the audit trail.
+ * Who a reminder is addressed to (PRD-003).
+ *
+ * Before contact roles this read `customers.email/phone` and nothing else,
+ * which is precisely the problem PRD-003 opens with — the CollectionsAgent
+ * "picks a contact without knowing who actually controls payment". The chain
+ * now runs: the customer's `billing` contact, then `resolveContact`'s own
+ * fallback (primary → any contact), then the customer-level address.
+ *
+ * The customer-level rung stays because it is the only address a tenant that
+ * has never created a contact row has, and dropping it would turn a working
+ * reminder into a silent non-send on upgrade.
+ */
+async function resolveRecipient(
+  env: Env,
+  tenantId: string,
+  customerId: string,
+): Promise<{
+  address: Record<DeliveryChannel, string | null>;
+  contact_id: string | null;
+  contact_match: ContactMatch | null;
+  had_contacts: boolean;
+}> {
+  const resolved = await resolveContact(env.DB, tenantId, customerId, "billing");
+  const customer = await env.DB.prepare(
+    "SELECT email, phone FROM customers WHERE tenant_id = ? AND customer_id = ?",
+  )
+    .bind(tenantId, customerId)
+    .first<{ email: string | null; phone: string | null }>();
+
+  const address: Record<DeliveryChannel, string | null> = {
+    email: resolved?.contact.email ?? customer?.email ?? null,
+    whatsapp: resolved?.contact.phone ?? customer?.phone ?? null,
+  };
+
+  // Only claim the contact on the audit row if an address actually came from
+  // it — a contact with no email that fell through to the customer's address
+  // did not receive anything.
+  const usedContact =
+    resolved !== null &&
+    ((resolved.contact.email !== null && address.email === resolved.contact.email) ||
+      (resolved.contact.phone !== null && address.whatsapp === resolved.contact.phone));
+
+  return {
+    address,
+    contact_id: usedContact ? resolved.contact.contact_id : null,
+    contact_match: usedContact ? resolved.matched : null,
+    had_contacts: resolved !== null,
+  };
+}
+
+/**
+ * The one path every reminder takes: resolve the recipient (billing contact →
+ * primary → any contact → the customer record, falling back to the other
+ * channel when the requested one has no address), gate real providers on the
+ * tenant's delivery_config opt-in, send, and append a deliveries row for the
+ * audit trail.
  */
 export async function sendReminder(
   env: Env,
   tenantId: string,
   input: SendReminderInput,
 ): Promise<SendReminderResult> {
-  const customer = await env.DB.prepare(
-    "SELECT email, phone FROM customers WHERE tenant_id = ? AND customer_id = ?",
-  )
-    .bind(tenantId, input.customer_id)
-    .first<{ email: string | null; phone: string | null }>();
-
-  const address: Record<DeliveryChannel, string | null> = {
-    email: customer?.email ?? null,
-    whatsapp: customer?.phone ?? null,
-  };
+  const recipient = await resolveRecipient(env, tenantId, input.customer_id);
+  const { address } = recipient;
 
   let channel = input.channel;
   if (!address[channel]) {
     const other: DeliveryChannel = channel === "email" ? "whatsapp" : "email";
     if (!address[other]) {
+      // PRD-003 P0: dispatch with nobody to address emits customer.no_contact.
+      //
+      // The typed DeliveryError is still thrown afterwards, deliberately. The
+      // acceptance criterion says "fails gracefully ... rather than throwing",
+      // and this is the reading that holds: swallowing the error would make
+      // POST /v1/invoices/:id/reminder answer success for a send that never
+      // happened, and the CollectionsAgent ALREADY treats DeliveryError as a
+      // graceful non-send (it logs, keeps tracking, and does not record a
+      // contact that never occurred). Graceful means no unhandled exception and
+      // an observable event — not a false 2xx.
+      await emitEvent(
+        env,
+        makeEnvelope({
+          event_type: "customer.no_contact",
+          source_module: "finance",
+          tenant_id: tenantId,
+          payload: {
+            customer_id: input.customer_id,
+            invoice_id: input.invoice_id,
+            channel_requested: input.channel,
+            reason: recipient.had_contacts ? "no_address" : "no_contacts",
+          },
+        }),
+      );
       throw new DeliveryError(
         "no_recipient",
-        `customer ${input.customer_id} has no email or phone on file`,
+        `customer ${input.customer_id} has no contact with an email or phone on file`,
       );
     }
     channel = other;
@@ -183,7 +265,11 @@ export async function sendReminder(
     provider = getDeliveryProvider(env, channel);
   }
 
-  const refs: DeliveryRefs = { invoice_id: input.invoice_id, customer_id: input.customer_id };
+  const refs: DeliveryRefs = {
+    invoice_id: input.invoice_id,
+    customer_id: input.customer_id,
+    contact_id: recipient.contact_id,
+  };
 
   try {
     const { delivery_ref } = await provider.send({
@@ -204,7 +290,13 @@ export async function sendReminder(
       status: "sent",
       delivery_ref,
     });
-    return { delivery_ref, channel, provider: provider.name };
+    return {
+      delivery_ref,
+      channel,
+      provider: provider.name,
+      contact_id: recipient.contact_id,
+      contact_match: recipient.contact_match,
+    };
   } catch (err) {
     await appendDeliveryRow(env, tenantId, {
       purpose: "reminder",

@@ -87,6 +87,7 @@ Recorded so no session re-opens them.
 | **Claims before leave** | PRD-006 | PRD-006's own open question answers itself: claims first (sharper demo, proves the architecture), leave immediately after, *"neither is sellable alone."* |
 | **Free-plan event consumer can write rows** | S0 verification | See "Resolved open questions" below. Notifications are not blocked. |
 | **Profitability's "direct cost" is dimensioned expense postings only** | S1, stated assumption | Labour cost via employee rate × logged time is excluded — CompanyOS has no time tracking and PRD-001 puts that in its own PRD. Revenue-side and expense-side rollups only. |
+| **`is_primary` hand-over clears the previous primary; it is not a 409** | S8 | PRD-003 offers either and says "pick one and test it". Clear-atomically, last-write-wins, inside one `db.batch()`, with a partial unique index as the backstop. A 409 would make a routine hand-over a two-step operation for no safety gain. |
 | **Invoices carry an optional `project_id`** | S1 | PRD-001 says "project-linked entries inherit `project_id`" but nothing linked an invoice to a project, so project *revenue* had no derivation source and the flagship agency rollup would have had a cost side only. Added as a nullable column, stamped onto both posting legs. |
 
 ---
@@ -103,7 +104,7 @@ Recorded so no session re-opens them.
 | S5 | Expense claims + GL posting | 006a | P0 | `claude/claims-submission-approval-posting-gaa3oz`⁶ | S1, S2, S4 | **done** |
 | S6 | Leave policy, holidays, balances | 006b | P0 | `claude/leave-policy-holidays-balances-4a0xcb`⁶ | S4 | **done** |
 | S7 | Leave requests + team calendar | 006c | P0 | `claude/leave-request-approval-15v4bu`⁶ | S6 | **done** |
-| S8 | Contact roles (then attributes, health) | 003 | P1 | `claude/prd-003-crm-depth` | S1 (loose) | not started |
+| S8 | Contact roles, attributes, health | 003 | P1 | `claude/contact-roles-crm-depth-hlgw1f`⁷ | S1 (loose) | **done** |
 | S9 | Quote branding & click-to-sign | 004 | P1 | `claude/prd-004-quote-signing` | S2, S8; S3 for P1 sign-off | not started |
 | S10 | Agent guardrails, eval, observability | 002 | P1 | `claude/prd-002-agent-guardrails` | — | not started |
 | S11 | Support intake & tracking | 005 | P1 | `claude/prd-005-support-intake` | S2, **S4** | not started |
@@ -137,6 +138,11 @@ rule 5 says not to repeat. The numbers were reserved by session order and all
 three are now taken: **`0024` = S5 claims, `0025` = S6 leave policy,
 `0026` = S7 leave requests. The next session takes `0027`** — but check `main`,
 per standing rule 5.
+
+⁷ S8 ran on the branch its session was given rather than the `claude/prd-003-crm-depth`
+listed here — the same cosmetic divergence S2, S3 and S4 had. Migration
+`0027_crm_depth.sql` is taken, so **the next session takes `0028`** — check
+`main`, per standing rule 5.
 
 Reserving the numbers avoided a filename collision; it did not avoid a *content*
 collision, and that is the lesson worth carrying into S8. S6 and S7 both defined
@@ -360,7 +366,7 @@ these answered before they start.
 |---|---|---|---|
 | Does profitability's "direct cost" come only from dimensioned expense entries, or also employee cost rate × logged time? There is **no time tracking module**. | 001 | S1's rollup | Ship revenue-side and expense-side rollups only. Time-based cost is a separate PRD, and PRD-001 says as much. |
 | Default escalation threshold in days? Malaysian SME norms run 60–90 days in practice, so 30 may be culturally aggressive. | 002 | S10 guardrails | Needs a design partner's view. Ship it tenant-configurable with a conservative default so the decision is cheap to change. |
-| Should `at_risk` health auto-pause outbound sales activity, or only surface as a signal? | 003 | S8 health | Signal only in v1. Auto-pause is the more impressive behaviour and the more dangerous one; it wants real data first. |
+| ~~Should `at_risk` health auto-pause outbound sales activity, or only surface as a signal?~~ | 003 | ~~S8 health~~ | **Answered by S8: signal only.** Confirmed with Josh, 2026-08-02. Nothing in the send path reads the band. Two reasons beyond "it wants real data first": the thresholds are uncalibrated, and PRD-002 (S10) already owns the kill switch (`agents.enabled`, `agent_paused`) in the guardrail layer — a second derived pause would mean two authorities and no owner. The band is machine-readable so S10 can consume it as a guardrail *input*. |
 | ~~Should high-value approvals require re-authentication?~~ | 007 | ~~S4~~ | **Answered by S4: no, not in v1.** Taken deliberately rather than by omission, as PRD-007 asks. Revisit when a tenant actually approves something large enough to care. |
 | ~~Where do public holidays come from each year — manual seed or a maintained data file shipped with releases?~~ | 006 | ~~S6~~ | **Answered by S6: a shipped data file, used as an OVERLAY.** State variation makes manual seeding per tenant an annual support burden. S6 went one step further than the recommendation: the shipped calendar is never written to the database. `public_holidays` holds only tenant deltas (additions and suppressions) and the effective set is merged at read time, so the annual update is a deploy with no backfill and a tenant's own edits survive it by construction. See [`../modules/leave.md`](../modules/leave.md). |
 | WhatsApp inbound before or after the public intake form? | 005 | S11 internal order | WhatsApp is how Malaysian SME customers actually complain, but needs a BSP relationship. Do the email path first either way — it is built on integrations that already exist. |
@@ -381,7 +387,7 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 | S4 | `approval.nudged.v1` (see C4) — **done** |
 | S5 | `claim.submitted.v1`, `claim.approved.v1`, `claim.rejected.v1`, `claim.paid.v1` — **done**. Note none is mapped in the notification consumer: the `approval.*` events already notify both parties, and a `claim.*` mapper would double the badge. |
 | S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` — **done**. One mapper only, for the admin cancellation: it is the sole leave decision with no approval behind it to notify off. |
-| S8 | `customer.no_contact.v1` (PRD-003 writes it without a version suffix — add one, per the existing convention) |
+| S8 | `customer.no_contact.v1` (PRD-003 writes it without a version suffix — added one, per the existing convention) — **done**. No `NOTIFICATION_MAP` entry: the consumer must not query D1 for a recipient and the payload carries no user id. `collections.decision.v1` also gained optional `contact_id` / `contact_match` — additive to a non-strict schema, so no v2; **S10 must carry both into `collections.decision.v2`.** |
 | S9 | `quote.viewed.v1`. **`quote.accepted.v1` and `quote.rejected.v1` already exist** in the registry — reuse, do not re-add. |
 | S10 | `guardrail.override.v1`, plus `collections.decision.v2` (PRD-002 extends the payload with provider, model, prompt version, tokens, latency, cost, fallback and override flags — that is a breaking payload change, so it is a v2 file and a registry bump, per the convention documented in `registry.ts`) |
 | S11 | `ticket.assigned.v1`, `ticket.sla_breached.v1` |
@@ -1014,6 +1020,55 @@ runs long, attributes and health become S8b rather than being rushed.
 
 **Explicitly not in scope:** custom fields, duplicate detection/merge, email
 sequencing, company hierarchy, Apollo-style enrichment.
+
+**Shipped (S8, `0027_crm_depth.sql`).** All three P0 blocks — roles, attributes
+and health — plus the console PRD-003 specifies and the S8 brief omitted.
+Details live in [`docs/modules/crm.md`](../modules/crm.md); what the next
+sessions need to know:
+
+- **`resolveContact(db, tenantId, customerId, role)`** in
+  `src/modules/crm/contact-roles.ts` is the only sanctioned way to pick a person
+  at a customer. Chain: requested role → primary → any → `null`, and it returns
+  **how** it matched. **S9 asks it for `signatory`** and should pre-fill from
+  `matched === "role"` only; a `primary`/`any` match is a guess and pre-filling a
+  signature field from a guess is exactly the wrong place to do it.
+- **`is_primary = 1` ⟺ the contact holds the `primary` role**, reconciled in
+  `normalizeRoles` and backstopped by a partial unique index. Do not write
+  `contacts.is_primary` directly; go through the service or the invariant breaks.
+- **`contact_roles.role` carries no SQL CHECK**, same call 0022 made for
+  `approvals.subject_type` and for the same reason. A new role is one entry in
+  `CONTACT_ROLES`, no migration.
+- **`sendReminder` now resolves a billing contact first** and keeps the
+  customer-level address as the last rung. `deliveries.contact_id` records who
+  was addressed. `customer.no_contact` is emitted when nothing resolves **and the
+  `DeliveryError` is still thrown** — see the module doc for why "gracefully"
+  does not mean a false 2xx.
+- **The finance write path changed (C7), narrowly.** `CreateInvoiceInput.due_date`
+  and the `POST /v1/invoices` body field are now **optional**; omitted means
+  issue date + `customers.payment_terms_days` →
+  `company_profile.default_payment_terms_days` → 30
+  (`src/modules/finance/payment-terms.ts`). Every pre-S8 caller passes an
+  explicit date, so the four finance suites, `quotes` and `delivery` all pass
+  **unmodified**. `convertQuote` changed only its hardcoded 30-day tail; the
+  explicit-date and quote-expiry branches keep precedence.
+- **`payment_terms_days` is nullable on purpose.** NULL means "use the tenant
+  default", `0` means "due on issue". Collapsing them is a silent 30-day
+  extension for a cash-on-delivery customer. **S12 must not "fix" this.**
+- **No new columns for `registration_no` / `tax_id` / billing address.**
+  `0013_quotes.sql` already shipped `reg_no`, `tax_no` and
+  `address_line1..country`, and the quote "To" block renders them. `ship_*` is
+  the genuinely new half.
+- **Health is derived and costs exactly one query.** `getCustomerSignals`
+  correlates off `customers`, so the *same* SQL serves the detail endpoint (one
+  row) and the customer list (a page of badges). Adding a second read to
+  `GET /v1/customers/:id` is a regression against an acceptance criterion, and
+  `test/customer-health.test.ts` spies on `prepare` to catch it.
+- **Health is a signal, not a gate** — the blocking decision, now answered in
+  the table above. It is in the CollectionsAgent's context for tone, and nothing
+  reads the band before a send. **S10 owns pausing.**
+- **Baseline after S8:** clean typecheck both sides, 59 test files / 1113 tests
+  in the Workers suite; 18 files / 165 tests in `ui/`. `main` measured
+  54 / 1015 and 15 / 142 before this work.
 
 ---
 
