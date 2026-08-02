@@ -13,11 +13,9 @@
 [008](PRD-008-roles-and-permissions.md) ·
 [009](PRD-009-project-scheduling.md)
 
-> **PRD-008 has no session slot yet.** It arrived after the original eight were
-> sequenced, it is marked **P0** ("security gap"), and its own header says it
-> blocks PRD-006 employee self-service — which is S6/S7. It therefore needs a
-> number *and* a position earlier than its number would imply. Not slotted here
-> because that is a sequencing decision, not a clerical one. See "Unslotted work".
+> **PRD-008 was built outside this session numbering** and needs no slot. See
+> "Built outside the session numbering" below before planning any work that
+> touches roles, permissions or employee self-service.
 
 This file exists because the eight PRDs are being built across **separate Claude
 Code sessions**. Each session starts with no memory of the last, so everything a
@@ -70,7 +68,7 @@ The generic shape, if you need it:
    chasing it.
 5. **Take the next free migration number at session start** by checking `main`,
    not this file — session order moves and a hardcoded number here goes stale.
-   As of S5, `0024_expense_claims.sql` is the highest, so the next session takes `0025`. Note `0015` is
+   As of S6, `0025_leave_policy.sql` is the highest, so S7 takes `0026`. Note `0015` is
    already duplicated (`0015_google_accounts.sql`, `0015_people.sql`); do not add
    a third collision.
 6. Update the **Status** column below in the closing commit. It is the only
@@ -1278,32 +1276,36 @@ phase 1 and the filter, then stop and ask if it is still unanswered.
 
 ---
 
-## Unslotted work
+## Built outside the session numbering
 
-**PRD-008 — Roles, Permissions & Employee Self-Service** is in this directory but
-has no session number, because it landed after the original eight were sequenced
-and slotting it is a real decision rather than a formality:
+**PRD-008 — Roles, Permissions & Employee Self-Service. Implemented 2026-07-29.**
+Shipped model: [`docs/architecture/roles-and-permissions.md`](../architecture/roles-and-permissions.md).
 
-- It is marked **P0** and describes itself as a security gap, which argues for
-  running it early — earlier than S8–S14, all of which are P1.
-- Its own header says it **blocks PRD-006 employee self-service**, and PRD-006 is
-  S6 and S7. On that reading it belongs *before* S6.
-- But S3 and S4 are the P0 foundations everything else consumes, and PRD-008 says
-  it "must be designed against PRD-000 (approvals) and PRD-006 (leave & claims) so
-  it serves both" — which argues for running it *after* S3/S4 so the approvals
-  surface it must protect already exists.
+It never took a session number. It was written and built between S4 and S6, while
+this plan was still describing it as unslotted work needing a sequencing decision.
+Recorded here so no session rebuilds it, and because **every later session now
+inherits its constraints**:
 
-**Suggested position: immediately after S4, before S5.** That satisfies the
-design-against-PRD-000 requirement, puts a P0 security gap ahead of all the P1
-work, and lands before the self-service it blocks. It would take the next free
-session number while running out of numeric order — the session numbers are a
-naming convention, not an execution order, and this plan should say so once
-rather than renumber eleven sessions that are already referenced in commits and
-PRs.
+- **Every `/v1` router is capability-gated.** `guardModule()` in `src/index.ts`
+  pairs each router with a capability module, enforced by
+  `src/gateway/middleware/capability.ts` against the matrix in
+  `src/auth/capabilities.ts`. A new router is not reachable until it is added to
+  that mount table — a session that adds routes and skips it will see 403s it
+  cannot explain, or worse, will not notice the route is ungated.
+- **There is a sixth role, `employee`**, and it is the *identity* axis, not a
+  weaker `readonly`. It grants no business access at all.
+- **`DEFAULT_ROLE` is now `employee`.** A new login gets least privilege;
+  business access is granted deliberately. Any session assuming a fresh user can
+  read business data is wrong.
+- **`/v1/me` is the self-service surface.** Anything an employee should see about
+  *themselves* — leave balance, own claims, own profile — belongs there, not on a
+  filtered business route.
+- A **tenant-API-key caller is still a `system` actor and bypasses role checks**
+  by design. Agent paths are unaffected; do not "fix" this.
 
-Not done here because it changes the run order for S5 onward, which is Chris's
-call. Once decided, add the row to the session map, a brief above, and a prompt to
-[`SESSION-PROMPTS.md`](SESSION-PROMPTS.md).
+The practical read for S7 onward: self-service is no longer blocked, and the
+question a session must answer is not *"can this user reach the route"* but
+*"which axis does this belong on — business capability, or self"*.
 
 ---
 
