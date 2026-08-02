@@ -1,6 +1,6 @@
 # CompanyOS: Direction & Department Coverage
 
-*Last updated: 2026-07-14*
+*Last updated: 2026-08-02*
 
 This document captures **where CompanyOS is headed** and maps the product, as it
 stands today, onto the **core departments of a company** — so we can see at a glance
@@ -76,8 +76,15 @@ CompanyOS provides for each today. "Module" names map to `src/modules/*` and the
 | **Engineering / Product** | `build` — projects and issues (board) | ❌ | Basic board. |
 | **Cross-functional / BI** | `insights` — read-only cross-module SQL aggregates for the dashboard | n/a (read-model) | Reporting only; no write path, by design. |
 | **Marketing** | — | — | Not present. Natural neighbor to Sales. |
-| **People / HR** | `people` — employee directory, teams, reporting lines ([docs](./modules/people.md)) | ❌ | Directory + org structure shipped; leave/HR workflows are the remaining gap. |
+| **People / HR** | `people` — directory, teams, reporting lines ([docs](./modules/people.md)); `leave` — policy, entitlement, holidays, derived balances, requests, team calendar ([docs](./modules/leave.md)); `claims` — expense claims posting to the GL ([docs](./modules/claims.md)) | ❌ | Deepest module after finance. Both HR workflows ride the shared approvals primitive. Payroll and an agent are the remaining gaps. |
 | **Operations / Legal / IT** | — | — | Whitespace. |
+
+Platform primitives that belong to no single department — `approvals`,
+`notifications`, `files`, and the capability matrix behind every route — are
+covered in [PRD-000](./prd/PRD-000-platform-foundations.md) and the module docs
+for [approvals](./modules/approvals.md), [notifications](./modules/notifications.md)
+and [files](./modules/files.md). They post-date the matrix above and are the
+reason claims and leave each cost one session rather than three.
 
 Note: `sourceModuleSchema` in `src/schemas/envelope.ts` whitelisted both `"sales"` and
 `"people"` ahead of time as anticipated extension points; People has since cashed that
@@ -102,8 +109,10 @@ rather than being invisible, so the build order stays legible even before the mo
   [Sales Module design doc](./architecture/sales-module-design.md).
 - **Thin — Support & Build.** Good records and (for support) lifecycle, but no agents.
   Obvious future homes for triage/resolution and issue-grooming agents respectively.
-- **Thin — People/HR.** The `people` module ships the directory, teams, and manager
-  hierarchy, but no leave/approval workflows and no agent yet.
+- **Deep but agent-less — People/HR.** Directory, teams and manager hierarchy, plus
+  leave (policy, entitlement, state-varying holidays, derived balances, requests,
+  team calendar) and expense claims that post to the ledger on approval. Two of the
+  three yardstick criteria, twice over — and still no agent.
 - **Whitespace — Marketing, Operations/Legal/IT.** Not yet modeled.
 
 ## 5. Guiding principle for new modules
@@ -118,3 +127,27 @@ is "fully in CompanyOS" when it has all three of:
 
 Most departments today have (1) and (2). Only Finance has (3). Closing that third gap,
 department by department — starting with Sales — is the direction of travel.
+
+The cheapest way to see how wide that gap is: **49 event types are registered and
+exactly two are routed to an agent** — `invoice.overdue` and `payment.received`,
+both to `CollectionsAgent` (`AGENT_ROUTES` in `src/queue/consumer.ts`). Every other
+event is audited into `events_log` and, for some, fanned out as a notification; none
+of them causes autonomous work. The gap has widened rather than closed as modules
+landed: claims and leave added a dozen event types and no consumer that acts.
+
+Two things follow, and they are the honest read of "agent-first" today:
+
+- **The API is agent-*usable*, not agent-*discoverable*.** There is no OpenAPI
+  document, no MCP server, and no `.well-known` descriptor anywhere in `src/`;
+  `GET /v1/meta/departments` is the whole of the platform's self-description. An
+  agent currently learns this API because a human wrote it into a prompt.
+- **The built surface skews human.** One agent and two routed events against a
+  console with a page per module, ~18 modals, a PWA manifest and mobile
+  navigation. That console is good work and PRD-007 required it — but a reader
+  coming to the repo cold would call this API-first software with a strong
+  operator console, not an agent-first OS.
+
+Neither is an argument against what shipped. They are the measurement of what
+"agent-first" still owes, and both are cheaper to close than the modules already
+built: a machine-readable API description is days, and PRD-002's guardrails and
+eval harness are what make it safe to have more agents than one.

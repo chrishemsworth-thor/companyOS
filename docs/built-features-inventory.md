@@ -1,8 +1,14 @@
 # CompanyOS — Built Features Inventory
 
-*Compiled 2026-07-24 from the actual code on `main`. Everything listed here is
-shipped and tested unless explicitly marked otherwise. Intended for
-cross-referencing against the business plan.*
+*Compiled 2026-07-24 from the actual code on `main`; counts re-verified against
+the code 2026-08-02. Everything listed here is shipped and tested unless
+explicitly marked otherwise. Intended for cross-referencing against the business
+plan.*
+
+**By the numbers** (2026-08-02): 12 native modules · 27 gated `/v1` route mounts ·
+28 D1 migration files · 49 registered event types · 11 departments (7 live) ·
+**1 autonomous agent** · 54 backend suites / 1,015 tests + 15 UI suites /
+142 tests, all passing.
 
 CompanyOS is an **agent-first business operating system**: every business
 process is exposed through one normalized `/v1/*` API, designed for AI agents
@@ -37,10 +43,13 @@ It runs as **one Cloudflare Worker + one D1 (SQLite) database** per deployment
   forgot/reset password, and change password. All powered by the
   transactional email layer.
 - **Event bus** — services emit versioned, Zod-validated domain events
-  (**37 registered event types**) through Cloudflare Queues (+ dead-letter
-  queue); the consumer validates against a schema registry, appends every
-  event to an append-only `events_log` (with actor attribution), and routes
-  selected types to agents. A queue-less inline fallback
+  (**49 registered event types**, 51 schema files — `invoice.overdue` and
+  `payment.received` each keep a superseded v1) through Cloudflare Queues
+  (+ dead-letter queue); the consumer validates against a schema registry,
+  appends every event to an append-only `events_log` (with actor attribution),
+  and routes selected types to agents. **Two of the 49 are routed to an
+  agent** (`invoice.overdue`, `payment.received`, both to collections); the
+  rest are audit and notification fan-out only. A queue-less inline fallback
   (`wrangler.free.jsonc`) runs the whole system on Cloudflare's free plan.
 - **API hygiene** — idempotency keys (claim-before-run) on money-touching
   writes, cursor pagination, rate limiting, security headers (nosniff,
@@ -225,18 +234,20 @@ React + Vite + TanStack Query single-page app over the same `/v1` API:
 
 ## 12. Operations & quality
 
-- **Testing** — ~40 backend Vitest suites running in the **real Workers
-  runtime** (`@cloudflare/vitest-pool-workers`) covering every module, auth,
-  multi-company, idempotency, pagination, webhooks per provider, Google
-  OAuth/sync/delivery, the collections agent, and LLM fallback; plus a UI
-  test suite (client, theme, department parity, key components).
+- **Testing** — **54 backend suites / 1,015 tests** running in the **real
+  Workers runtime** (`@cloudflare/vitest-pool-workers`) covering every module,
+  auth, multi-company, idempotency, pagination, webhooks per provider, Google
+  OAuth/sync/delivery, the collections agent, and LLM fallback; plus **15 UI
+  suites / 142 tests** (client, theme, department parity, key components).
+  `ui/` has its own vitest config — root `npm test` does not run it.
 - **Seeding** — `seed:local` (tenant + API key + first operator login) and
   `seed:sample` (realistic data across every module, including an overdue
   invoice to wake the agent).
 - **Deployment** — production deploy documented (custom domain
   `api.companyos.com.my`, secrets runbook); paid config with Queues and a
-  free-plan config without; 19 D1 migrations; cron triggers for the overdue
-  sweep, quote expiry, and Gmail sync.
+  free-plan config without; **28 D1 migration files** (numbered to 0026 —
+  `0015` and `0022` are each used twice, see `docs/prd/SESSION-PLAN.md`); cron
+  triggers for the overdue sweep, quote expiry, and Gmail sync.
 - **Security** — July 2026 security audit doc with applied fixes; security
   headers; encrypted OAuth tokens; hashed API keys and passwords.
 

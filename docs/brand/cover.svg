@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1128 191">
+  <rect width="1128" height="191" fill="#0f1116"/>
+  <!-- Left brand lockup: the "C" logomark + wordmark, mirroring the console sidebar. -->
+  <g transform="translate(72 60)">
+    <rect width="72" height="72" rx="15" fill="#e8eaed"/>
+    <text x="36" y="51" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="43" font-weight="700" fill="#0f1116" text-anchor="middle">C</text>
+  </g>
+  <text x="168" y="93" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="38" font-weight="700" fill="#ffffff" letter-spacing="-0.8">CompanyOS</text>
+  <text x="169" y="126" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="19" font-weight="400" fill="#9aa2b1">The agent-first operating system for running a company</text>
+  <!-- Right rule: the five domains, set quietly so the safe area stays clear on mobile crops. -->
+  <text x="1056" y="102" font-family="Liberation Sans, Helvetica, Arial, sans-serif" font-size="16" font-weight="400" fill="#6b7482" text-anchor="end">Finance · Sales · Support · Build · People</text>
+</svg>

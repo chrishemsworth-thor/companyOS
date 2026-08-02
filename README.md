@@ -24,7 +24,8 @@ Platform layers:
 [Multi-company identity](docs/architecture/multi-company-identity.md) ·
 [Departments as a lens](docs/architecture/department-lens.md). What's next:
 [Phase 2 plan](docs/architecture/phase-2-plan.md) and the
-[PRD 000–007 build plan](docs/prd/SESSION-PLAN.md).
+[PRD 000–009 build plan](docs/prd/SESSION-PLAN.md). Logomark, palette and
+external-profile copy: [docs/brand/](docs/brand/README.md).
 
 ## Stack
 
