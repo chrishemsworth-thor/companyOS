@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutGrid, Shield, X, LogOut, UserCircle, CheckSquare } from "lucide-react";
+import { LayoutGrid, Shield, X, LogOut, UserCircle, CheckSquare, CalendarDays } from "lucide-react";
 import { useDrag } from "@use-gesture/react";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";
@@ -107,6 +107,11 @@ function SidebarContent({ onClose }: { onClose?: () => void }) {
               keeps `lib/departments.test.ts` in parity with the server. Gated on
               `self`, like the route it points at. */}
           <NavItemLink to="/approvals" label="Approvals" icon={CheckSquare} onClose={onClose} />
+          {/* My leave sits under "You" for the same reason Approvals does: it is
+              on the `self` axis, and the self-service tier — the people actually
+              filing leave — sees no department groups at all. The team calendar
+              is the manager-facing half and lives in the People department. */}
+          <NavItemLink to="/leave" label="My leave" icon={CalendarDays} onClose={onClose} />
         </NavSection>
 
         {/* Hidden from the self-service tier, which sees no departments at all. */}

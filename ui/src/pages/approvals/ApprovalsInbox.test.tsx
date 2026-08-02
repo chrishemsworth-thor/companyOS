@@ -147,6 +147,47 @@ beforeEach(() => {
       if (path.endsWith("/nudge")) return jsonResponse({ approval_id: "apr_1" }, 202);
       return jsonResponse({ ok: true });
     }
+    if (path.includes("/v1/leave/requests/")) {
+      // S7's leave card fetches its own subject. The inbox shell knows nothing
+      // about this — which is the property being demonstrated — but the stub has
+      // to answer it, or the card renders its unavailable state.
+      const id = path.split("/v1/leave/requests/")[1]!;
+      return jsonResponse({
+        leave_request_id: id,
+        employee_id: "emp_1",
+        employee_name: "Aisha Rahman",
+        employee_user_id: "usr_aisha",
+        leave_type_code: "annual",
+        start_date: "2027-03-01",
+        end_date: "2027-03-03",
+        start_half_day: false,
+        end_half_day: false,
+        working_days: 3,
+        reason: null,
+        attachment_file_id: null,
+        state: "pending",
+        approval_id: "apr_1",
+        decided_at: null,
+        cancelled_at: null,
+        created_by: "usr_aisha",
+        created_at: "2027-02-20T09:00:00.000Z",
+        updated_at: "2027-02-20T09:00:00.000Z",
+        balance: {
+          leave_type_code: "annual",
+          leave_type_name: "Annual leave",
+          entitlement_days: 14,
+          carry_forward_days: 0,
+          taken_days: 0,
+          pending_days: 3,
+          available_days: 11,
+          entitlement_source: "policy",
+        },
+        balance_after_days: 11,
+        team_overlaps: [],
+        excluded_days: [],
+        approval: null,
+      });
+    }
     if (path.includes("/v1/approvals")) {
       // `requester=me` is the My-requests tab; everything else is the queue.
       const items = path.includes("requester=me") ? mine : awaiting;
@@ -189,11 +230,15 @@ function cardFor(subjectId: string): HTMLElement {
 
 describe("Awaiting me", () => {
   it("lists approvals of three types in one list with type-specific context", async () => {
+    // The criterion, and since S7 it is genuinely mixed: `leave_request` takes a
+    // purpose-built card while `expense_claim` (S5) and `quote` (S9) still take
+    // the generic one. The shell renders all three without knowing which is
+    // which, which is the property PRD-007 asks for.
     // The criterion. `expense_claim` now takes S5's purpose-built card while the
     // other two still take the generic fallback, so this also pins that the shell
     // renders a mixed list without caring which renderer each row resolves to.
     awaiting = [
-      approval({ approval_id: "apr_1", subject_type: "leave_request", subject_id: "lv_1" }),
+      approval({ approval_id: "apr_1", subject_type: "leave_request", subject_id: "lvr_1" }),
       approval({
         approval_id: "apr_2",
         subject_type: "expense_claim",
@@ -204,9 +249,10 @@ describe("Awaiting me", () => {
     ];
     renderInbox();
 
-    await screen.findByText("lv_1");
+    await screen.findByText("clm_2");
     // By heading: the subject label also appears in the generic card's Type row,
     // so a bare getByText would match twice.
+    expect(within(cardFor("clm_2")).getByRole("heading").textContent).toBe("Expense claim");
     expect(within(cardFor("lv_1")).getByRole("heading").textContent).toBe("Leave request");
     expect(within(cardFor("qte_3")).getByRole("heading").textContent).toBe("Quote");
     // The claim takes S5's card, which shows the claim rather than its id — so it
@@ -214,6 +260,17 @@ describe("Awaiting me", () => {
     const headings = screen.getAllByRole("heading").map((h) => h.textContent);
     expect(headings).toContain("Expense claim");
 
+    // The leave card carries no reference row, so it is located by its heading
+    // rather than by a subject id — the purpose-built cards show real content
+    // instead of an opaque id, which is the whole point of registering one.
+    const headings = screen.getAllByRole("heading").map((h) => h.textContent);
+    expect(headings).toContain("Leave request");
+    // And its own fetched content is on the page, from a card the shell knows
+    // nothing about.
+    expect(await screen.findByText("2027-03-01 → 2027-03-03")).toBeTruthy();
+
+    // Requesters are resolved to names, not raw usr_ ids.
+    expect(within(cardFor("clm_2")).getByText("from Chen Wei")).toBeTruthy();
     // Requesters are resolved to names, not raw usr_ ids — including on the
     // claim's own card, which is the shell's doing rather than the renderer's.
     expect(within(cardFor("lv_1")).getByText("from Aisha Rahman")).toBeTruthy();
@@ -352,17 +409,21 @@ describe("Awaiting me", () => {
 
 describe("filters", () => {
   it("filters by type", async () => {
+    // Two types that both take the generic card, so this stays a test of the
+    // filter rather than of any renderer's internals.
     awaiting = [
-      approval({ approval_id: "apr_1", subject_type: "leave_request", subject_id: "lv_1" }),
+      approval({ approval_id: "apr_1", subject_type: "quote", subject_id: "qte_1" }),
       approval({ approval_id: "apr_2", subject_type: "expense_claim", subject_id: "clm_2" }),
     ];
     renderInbox();
-    await screen.findByText("lv_1");
+    await screen.findByText("qte_1");
 
     fireEvent.change(screen.getByLabelText("Filter by type"), {
       target: { value: "expense_claim" },
     });
 
+    await waitFor(() => expect(screen.queryByText("qte_1")).toBeNull());
+    expect(screen.getByText("clm_2")).toBeTruthy();
     await waitFor(() => expect(screen.queryByText("lv_1")).toBeNull());
     // By heading: the claim's own card shows the claim, not its subject id.
     expect(screen.getByRole("heading", { name: "Expense claim" })).toBeTruthy();

@@ -50,17 +50,26 @@ The generic shape, if you need it:
 3. **One session, one branch, one shippable increment.** Do not start the next
    session's scope because there is context left over.
 4. `npm run typecheck && npm test` must pass before the push that closes a
-   session. **Baseline after S6:** clean typecheck, 51 test files / 920 tests in
-   the Workers suite, measured on `main` at `ed46502`, plus the `ui/` suite
-   (`cd ui && npm test`, which root `npm test` does NOT run — see the console
-   note below).
-   (Prior marks, kept only to show the drift rate: S5 recorded 48 / 834 having
-   measured 45 / 749 on entry against the 42 / 476 written here after S4; S3
-   recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at 38 / 361;
-   S1's was 37 / 321.) A session finding fewer passing tests than
+   session. **Baseline after S7:** clean typecheck, 48 test files / 844 tests in
+   the Workers suite, plus 13 files / 110 tests in `ui/` (`cd ui && npm test`,
+   which root `npm test` does NOT run — see the console note below).
+   (S7 measured `main` at 45 / 749 before its own work — note S4 *recorded*
+   42 / 476, which was already stale, so the recorded number is a floor and not a
+   target. S3 recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at
+   session. **Baseline after S5:** clean typecheck, 48 test files / 834 tests in
+   the Workers suite, plus 14 files / 122 tests in `ui/` (`cd ui && npm test`,
+   which root `npm test` does NOT run — see the console note below).
+   (S5 measured `main` at 45 / 749 before starting, against the 42 / 476 recorded
+   here after S4 — the number goes stale exactly as often as this rule says it
+   does. S3 recorded 39 / 406; S2 recorded 38 / 346 when `main` was already at
+   38 / 361; S1's was 37 / 321 at `b74a2f5`.) A session finding fewer passing tests than
    that has broken something. Re-check the current count on `main` before
    assuming your own change caused a drop — `main` moves between sessions, and
    the number written here goes stale exactly as often.
+   **Known flake:** `test/files.test.ts > rejects a 12 MB upload with 413` fails
+   intermittently under full-suite load and passes 25/25 when that file is run
+   alone. It is a timing artefact, not a regression; re-run the file before
+   chasing it.
 5. **Take the next free migration number at session start** by checking `main`,
    not this file — session order moves and a hardcoded number here goes stale.
    As of S6, `0025_leave_policy.sql` is the highest, so S7 takes `0026`. Note `0015` is
@@ -95,9 +104,9 @@ Recorded so no session re-opens them.
 | S2 | File storage primitive | 000a | P0 | `claude/s2-implementation-plan-nv4e1f`³ | S0 | **done** |
 | S3 | Approvals primitive | 000b | P0 | `claude/approvals-primitive-qygql6`⁴ | S2 | **done** |
 | S4 | Notifications + inbox shell | 000c + 007 | P0 | `claude/notifications-inbox-renderer-ud7gu1`⁵ | S3 | **done** |
+| S7 | Leave requests + team calendar | 006c | P0 | `claude/leave-request-approval-15v4bu`⁶ | S6 | **done** |
 | S5 | Expense claims + GL posting | 006a | P0 | `claude/claims-submission-approval-posting-gaa3oz`⁶ | S1, S2, S4 | **done** |
 | S6 | Leave policy, holidays, balances | 006b | P0 | `claude/leave-policy-holidays-balances-4a0xcb`⁶ | S4 | **done** |
-| S7 | Leave requests + team calendar | 006c | P0 | `claude/prd-006c-leave-requests` | S6 | not started |
 | S8 | Contact roles (then attributes, health) | 003 | P1 | `claude/prd-003-crm-depth` | S1 (loose) | not started |
 | S9 | Quote branding & click-to-sign | 004 | P1 | `claude/prd-004-quote-signing` | S2, S8; S3 for P1 sign-off | not started |
 | S10 | Agent guardrails, eval, observability | 002 | P1 | `claude/prd-002-agent-guardrails` | — | not started |
@@ -125,6 +134,13 @@ here. Migration `0022_approvals.sql` is taken, so **S4 takes `0023`** — but ch
 ⁵ S4 likewise ran on its given branch. `0023_notifications.sql` is taken, so the
 next session takes **`0024`** — check `main`, per standing rule 5.
 
+⁶ S7 also ran on its given branch. **S5, S6 and S7 were built concurrently from
+the same `main`** (highest migration `0023`), so all three would have taken `0024`
+— and `0015` is already duplicated once, which standing rule 5 says not to repeat.
+The numbers are therefore reserved by session order: **`0024` = S5 claims,
+`0025` = S6 leave policy, `0026` = S7 (taken, `0026_leave_requests.sql`)**. If S5
+or S6 lands on a different number that is harmless; nothing in `0026` references
+either. **S8 onwards: check `main`, do not trust this line.**
 ⁶ S6 ran on its given branch too. **S5 and S6 were built concurrently**, so S6
 took `0025_leave_policy.sql` and left `0024` to S5 rather than both reaching for
 the next free number. D1 applies migrations in filename order and tolerates a
@@ -365,6 +381,7 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 |---|---|
 | S3 | `approval.requested.v1`, `approval.approved.v1`, `approval.rejected.v1` — **done** |
 | S4 | `approval.nudged.v1` (see C4) — **done** |
+| S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` — **done** |
 | S5 | `claim.submitted.v1`, `claim.approved.v1`, `claim.rejected.v1`, `claim.paid.v1` — **done**. Note none is mapped in the notification consumer: the `approval.*` events already notify both parties, and a `claim.*` mapper would double the badge. |
 | S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` |
 | S8 | `customer.no_contact.v1` (PRD-003 writes it without a version suffix — add one, per the existing convention) |
@@ -384,6 +401,7 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 |---|---|
 | `files`, `approvals`, `notifications` tables | All three **exist**: `files` (S2, `0021`), `approvals` (S3, `0022`), `notifications` + `approval_nudges` (S4, `0023`). |
 | Notifications | `src/modules/notifications/` — rows written **only** by `fanoutNotifications` in `consumer.ts`, hooked into `processEvent`. A module that wants to notify somebody emits an event and adds one entry to `NOTIFICATION_MAP`; it never inserts. The consumer **never throws** (the free-plan inline path has no retry) and inserts idempotently on a `dedupe_key`. See [`docs/modules/notifications.md`](../modules/notifications.md). |
+| Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. Empty in S4; **S7 registered `leave_request`**. S5 adds `expense_claim` and S9 adds `quote`, both of which still take the generic fallback; no `invoice` card is ever built (C5). Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. `registry.test.tsx` and `subjectRoutes.test.ts` both pin the expected set, so each addition updates two assertions. |
 | Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. **`expense_claim` registered by S5**; everything else still takes the generic fallback. S7 adds `leave_request`, S9 adds `quote`; no `invoice` card is ever built (C5). Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. |
 | Console tests | `ui/` has its **own** vitest (jsdom + Testing Library, `ui/vitest.config.ts`), and root `npm test` does not run it — `vitest.config.ts` includes `test/**/*.test.ts` only. A session touching `ui/` must run `cd ui && npm test` separately or its console tests never execute in CI. `@testing-library/user-event` is **not** a dependency; use `fireEvent`. |
 | Name directory | `GET /v1/meta/users` (S4) — id, display name, email for the tenant, readable by **any** authenticated user. `/v1/users` is admin-only, so a non-admin manager needs this to see "requested by Aisha" instead of `usr_01J...`. |
@@ -399,6 +417,8 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 | Event consumer | `processEvent()` in `src/queue/consumer.ts`: validate → append to `events_log` → route to agent. `AGENT_ROUTES` is the per-type routing map. New consumers hook in here. |
 | Roles | `src/auth/roles.ts` — `admin`, `operator`, `finance`, `support`, `readonly`, `employee`. PRD-008 shipped the decision: a **capability matrix** (`src/auth/capabilities.ts`) enforced for every `/v1` route by the mount table in `src/index.ts`, plus the self-service `employee` tier. Adding a role means editing `roles.ts` + the matrix + `ui/src/lib/roles.ts` — **no migration** (0022 dropped the `users.role` CHECK). PRD-000's role-based strategy (`admin` or `finance`) is implemented in `src/modules/approvals/resolver.ts`. See [`docs/architecture/roles-and-permissions.md`](../architecture/roles-and-permissions.md). |
 | Reporting lines | `employees.manager_employee_id`, self-referencing FK, cycles rejected by `assertNoManagerCycle` walking the ancestor chain. `employees.user_id` is **nullable** — see C1. |
+| Leave | `src/modules/people/leave/` (S7, `0026`) — `leave_requests` only. **Balance is derived, never stored**, so approving does not decrement anything. `src/modules/people/leave/policy-port.ts` is the **S6 seam**: it reads S6's `leave_types` / `leave_balances` / `public_holidays` / work week and falls back to provisional defaults when they are unreadable, warning once with a `[leave/policy-port]` prefix. **S6's closing task is to reconcile that one file and delete the fallbacks** — its queries are a reading of PRD-006's wording, not a schema S6 agreed to. See [`docs/modules/leave.md`](../modules/leave.md). |
+| Subject-module reaction to an approval decision | An **event consumer**, not a hook in the approvals primitive. `applyLeaveDecision` (S7) sits beside `fanoutNotifications` in `processEvent` and dispatches on `subject_type`. Safe for leave because a missed transition cannot corrupt a derived balance; **not** safe for S5's ledger posting, which PRD-006 requires be atomic with the decision. S5 needs a different mechanism and should not copy this one. |
 | 409 state-machine convention | `src/modules/support/state-machine.ts` and `SupportError(httpStatus: 404 \| 409)`. Approvals must match this shape; so must PRD-004's immutability 409s and PRD-006's approved-claim 409. |
 | Quote branding | A `quote_branding` table **already exists** (`0013_quotes.sql`). S9 extends it rather than starting fresh. |
 | Gmail client | `src/integrations/google/gmail-client.ts` — `getMessage()` is metadata-only with four headers; `sendMessage()` accepts `threadId`. See the resolved PRD-005 question. |
@@ -908,6 +928,51 @@ approval" · **Branch:** `claude/prd-006c-leave-requests` · **Depends on:** S6
 **Time-box this.** The index flags how leave policies actually work as a *shaped*
 guess rather than a structural certainty — build the minimum that works and let
 the first design partner correct it.
+
+**Shipped (S7, `0026_leave_requests.sql`).** All of the above. Details live in
+[`docs/modules/leave.md`](../modules/leave.md); what the next session needs to
+know is here.
+
+- **Migration `0026`, not `0024`.** See footnote ⁶ — three sessions were live at
+  once and the numbers are reserved by session order.
+- **S6 had not landed, so the dependency is a seam, not an import.**
+  Everything S7 needs from S6 goes through one file,
+  `src/modules/people/leave/policy-port.ts`, which reads S6's tables and falls
+  back to provisional defaults when they are unreadable. **S6's closing task is to
+  reconcile that file and delete the fallbacks** — the reconciliation checklist is
+  in the module doc. `leave_requests.leave_type_code` is a code, not an FK to
+  `leave_types`, so the two migrations are order-independent.
+- **Balance is derived, and approval does not mutate it.** `pending` and
+  `approved` both consume availability, so a pending→approved transition leaves
+  `available` unchanged. That is why the decision arrives via an event consumer
+  (standing rule 2) rather than a synchronous hook into the S3 primitive — there
+  is no decrement to lose. **S5 must not copy this**: a journal entry is a real
+  side effect and PRD-006 requires it be atomic with the decision, so claims need
+  something S7 deliberately did not build. **The approvals primitive was not
+  modified by S7**, which also kept the conflict surface with concurrent S5 at
+  zero.
+- **Mounted at `/v1/leave` on the `self` module, not `/v1/me/leave`.** The module
+  is what PRD-006/PRD-008 actually require (an `employee` login with no business
+  capability can file and track leave). The path diverges because a leave request
+  must be readable by its *approver*, who is not "me", and `me.ts` holds "you can
+  only ever read your own record" as an invariant. Authorization is per-row:
+  the subject employee, anyone holding an approval on that one row, a
+  `people:read` holder, or an admin. The per-row-approval clause is what makes the
+  inbox card work for a team lead on the self-service tier.
+- **One new state, `cancellation_pending`**, to implement PRD-006's "cancelling an
+  approved future leave requires re-approval or admin action" literally. The
+  decision handler distinguishes the two meanings of one `approval.approved` by
+  the state it finds the request in, so no extra column. Cancelling approved leave
+  that has already started is a 409.
+- **Exactly one `NOTIFICATION_MAP` entry** (`leave.cancelled`). S4's `approval.*`
+  mappers already cover submission and decisions; the gap was an admin cancelling
+  somebody's approved leave, which involves no approval decision and so had no
+  event to notify on. `test/notification-consumer.test.ts` pins the expected set —
+  S11 and S14 will each need to update that assertion.
+- **`leave_attachment` is a new `files` purpose** (code only, no migration) and is
+  never publicly readable — it holds medical certificates.
+- **Baseline after S7:** clean typecheck, 48 files / 844 tests (Workers) and
+  13 files / 110 tests (`ui/`). `main` measured 45 / 749 before this work.
 
 ---
 

@@ -109,6 +109,42 @@ const NOTIFICATION_MAP: Record<string, (envelope: EventEnvelope) => Notification
       },
     ];
   },
+
+  /**
+   * Leave withdrawn or handed back → tell the employee, unless they did it.
+   *
+   * The ONLY `leave.*` event registered here, and the omissions are deliberate.
+   * S4's `approval.*` mappers already notify the approver on submission and the
+   * employee on a decision, so adding `leave.requested` / `leave.approved` /
+   * `leave.rejected` would produce two badges for one thing.
+   *
+   * `leave.cancelled` is the genuine gap. When an admin cancels somebody's
+   * approved leave there is no approval decision behind it and therefore no
+   * `approval.*` event — the employee would find their leave gone and never be
+   * told. The `cancelled_by` guard is what keeps this from notifying an employee
+   * about their own withdrawal, which is the common case and not news to them.
+   */
+  "leave.cancelled": (envelope) => {
+    const leaveRequestId = str(envelope.payload, "leave_request_id");
+    const employeeUserId = str(envelope.payload, "employee_user_id");
+    // No login means nobody to tell. Normal for an employee HR files leave for,
+    // and a skip rather than an error — see the file comment.
+    if (!leaveRequestId || !employeeUserId) return [];
+    const cancelledBy = str(envelope.payload, "cancelled_by");
+    if (cancelledBy === employeeUserId) return [];
+    return [
+      {
+        user_id: employeeUserId,
+        subject_type: "leave_request",
+        subject_id: leaveRequestId,
+        title: "Your leave was cancelled",
+        body: str(envelope.payload, "start_date")
+          ? `Leave from ${str(envelope.payload, "start_date")} to ${str(envelope.payload, "end_date")} is no longer booked.`
+          : null,
+        dedupe_key: `leave.cancelled:${leaveRequestId}`,
+      },
+    ];
+  },
 };
 
 /**
