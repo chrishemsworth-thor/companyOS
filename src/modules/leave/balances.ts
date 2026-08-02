@@ -8,6 +8,7 @@ import {
   startOfYear,
   toIso,
   yearOf,
+  dayOf,
 } from "./dates";
 import { effectiveHolidays, getLeaveSettings, getLeaveProfile, listLeaveTypes } from "./service";
 import { countWorkingDays } from "./workdays";
@@ -271,15 +272,36 @@ function totalMonths(period: Period): number {
   return monthIndex(period, period.end) + 1;
 }
 
+/** True when `date` is the final day of its own month. */
+function isMonthEnd(date: string): boolean {
+  const year = yearOf(date);
+  const month = monthOf(date);
+  // Day 0 of the following month is the last day of this one, which is also how
+  // February and leap years take care of themselves.
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return dayOf(date) === lastDay;
+}
+
 /** Months of the active window that have fully elapsed by `asOf`. */
 function elapsedMonths(period: Period, employee: EmployeeRow, asOf: string): number {
   const active = activeMonths(period, employee);
   if (active === 0) return 0;
   const joined = employee.start_date;
   const firstMonth = joined && joined > period.start ? monthIndex(period, joined) : 0;
-  // A month counts once it is behind us: the month containing `asOf` has not
-  // finished accruing yet.
-  const asOfMonth = asOf > period.end ? totalMonths(period) : monthIndex(period, asOf);
+  // A month counts once it is behind us. "Behind us" includes the month whose
+  // LAST day is `asOf` — an employee who works through 31 March has completed
+  // March and earned March's accrual, rather than earning it on 1 April.
+  //
+  // That the credit lands on the final day rather than the following morning is
+  // not cosmetic at the end of a leave year. `closeLeaveYear` measures unused
+  // days at 31 December, and counting only months strictly behind that date made
+  // December unearnable: a 24-day monthly-accrual policy accrued 22 days, and the
+  // employee silently lost the last two every year because the twelfth month's
+  // credit fell after the period it belonged to.
+  const asOfMonth =
+    asOf > period.end
+      ? totalMonths(period)
+      : monthIndex(period, asOf) + (isMonthEnd(asOf) ? 1 : 0);
   return Math.max(0, Math.min(active, asOfMonth - firstMonth));
 }
 

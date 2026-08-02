@@ -33,6 +33,12 @@ Three additions since have taken it past the original slice:
   requests, `/leave/calendar` for who on the team is off, plus read-only detail
   screens for a leave request and an expense claim that notifications and the
   inbox link into.
+- **Leave policy configuration** (`/leave/policies`) — the HR half, and the
+  first screen for anything under `/v1/people/leave`. Entitlement by tenure
+  band, the three accrual methods, and carry-forward as its two independent
+  settings: how many days roll over, and how many months before they lapse.
+  Grouped by leave type so a type with no default policy — which silently leaves
+  every employee unconfigured — reads as a problem rather than as an absence.
 - **Installable PWA** — a manifest, icons and a service worker make the console
   installable to a phone home screen, with the mobile navigation drawer driven
   by real swipe gestures. This is the one place the design commits to a 375px
