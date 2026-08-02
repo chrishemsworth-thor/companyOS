@@ -111,6 +111,7 @@ Recorded so no session re-opens them.
 | S12 | Tax (SST) | 001b | P0¹ | `claude/prd-001b-tax` | S1 | not started |
 | S13 | Credit notes + ledger multi-currency | 001c | P0¹ | `claude/prd-001c-credit-notes` | S1, S12 | not started |
 | S14 | Project scheduling + deadline reminders | 009 | P1 | `claude/prd-009-project-scheduling` | S4 | not started |
+| S15 | Sequences + the SalesAgent | 010 | P1 | `claude/prd-010-sales-agent` | S8, **S10** | not started |
 
 ¹ PRD-001 marks all of these P0, but the index defers tax, credit notes and
 multi-currency until *"a design partner hits them"*. Treat S12/S13 as
@@ -297,6 +298,45 @@ exists without touching the primitive. Only add `supersedes` if S4's inbox needs
 to render "this replaces an earlier rejected request" — decide there, with the
 screen in front of you, not in S3.
 
+### C9 — Two agents, and only one of them may own the guardrails
+
+PRD-010's SalesAgent sends outbound messages to people. So does PRD-002's
+CollectionsAgent. PRD-002 puts the hard guardrails — business-hours window in
+tenant-local time, weekend and public-holiday suppression, contact cooldown, the
+`agents.enabled` kill switch, the per-customer `agent_paused` flag — in code
+after the LLM returns and before any send. It writes all of that against
+collections, because collections is the only agent that exists when S10 runs.
+
+If S15 builds its own version, a tenant has **two** places that decide whether a
+message may leave and neither is authoritative. The concrete failure: somebody
+fixes a 2am send in one guard and the other keeps doing it. PRD-002 calls a
+WhatsApp at 2am *"a product-defining mistake"*, and shipping two chances to make
+it is worse than shipping one.
+
+**Resolution — three parts, all of them S15's job:**
+
+1. **S10 must land first.** This is why S15's dependency on S10 is bold in the
+   session map. It is not a soft ordering preference; S15's guardrail
+   requirements are defined as extensions of S10's.
+2. **S15 generalises S10's guard rather than copying it.** If the guard is still
+   collections-shaped when S15 starts — keyed on an invoice, a customer, a
+   reminder count — making it agent-agnostic is **in scope for S15**, not a
+   reason to fork. S10 should anticipate this and keep the guard's inputs
+   generic where it is free to do so, but S15 owns the outcome.
+3. **No new override event.** A sales guardrail firing is the same concept as a
+   collections one, so both log `guardrail.override.v1`. PRD-002 measures
+   override rate as a quality signal (< 10% on the eval suite); two event names
+   would split that metric across two dashboards and quietly halve both.
+
+The same logic applies to the eval harness. PRD-002 already requires *"a generic
+runner keyed on an agent's decision function so the future SalesAgent and
+SupportAgent reuse it."* S15 writes scenarios, not a second runner — and if S10
+did not actually generalise the runner, generalising it is S15's job too.
+
+**Also true of a third agent.** PRD-005 explicitly builds the support substrate
+without a SupportAgent. Whenever that lands, it inherits this resolution rather
+than re-litigating it: one guard, one override event, one runner.
+
 ---
 
 ## Resolved open questions
@@ -371,6 +411,7 @@ these answered before they start.
 | ~~Where do public holidays come from each year — manual seed or a maintained data file shipped with releases?~~ | 006 | ~~S6~~ | **Answered by S6: a shipped data file, used as an OVERLAY.** State variation makes manual seeding per tenant an annual support burden. S6 went one step further than the recommendation: the shipped calendar is never written to the database. `public_holidays` holds only tenant deltas (additions and suppressions) and the effective set is merged at read time, so the annual update is a deploy with no backfill and a tenant's own edits survive it by construction. See [`../modules/leave.md`](../modules/leave.md). |
 | WhatsApp inbound before or after the public intake form? | 005 | S11 internal order | WhatsApp is how Malaysian SME customers actually complain, but needs a BSP relationship. Do the email path first either way — it is built on integrations that already exist. |
 | Is `credited` a distinct invoice state or derived from credit note totals? | 001 | S13 | — |
+| Does outbound sales to a **non-customer** need its own opt-in beyond `agents.enabled`? | 010 | S15 | **Yes — a separate `agents.outbound_sales_enabled`, defaulting off.** Cold outreach carries different risk and a different PDPA posture from chasing an invoice on an existing relationship, and a tenant who switched collections on did not thereby ask to be put into prospecting. Cheap to add now, awkward to retrofit after the first complaint. |
 | Confirm ECA 2006 click-accept sufficiency and the agreement text with a Malaysian lawyer. | 004 | **Customer use, not the build** | S9 can build and test the flow; do not rely on it commercially until confirmed. |
 
 ---
@@ -393,6 +434,7 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 | S11 | `ticket.assigned.v1`, `ticket.sla_breached.v1` |
 | S13 | `credit_note.issued.v1` |
 | S14 | `project.deadline_approaching.v1`, `project.overdue.v1` |
+| S15 | `sequence.created.v1`, `sequence.enrolled.v1`, `sequence.step_sent.v1`, `sequence.step_skipped.v1`, `sequence.completed.v1`, `sequence.stopped.v1`, `sales.decision.v1`. **Reuse `guardrail.override.v1` from S10** — a sales guardrail firing is the same concept as a collections one, and a second event type for it would split the override-rate metric across two names. |
 
 ---
 
@@ -1127,7 +1169,11 @@ customer reminders.
 `claude/prd-002-agent-guardrails` · **Depends on:** nothing
 
 **Read C6:** this session must add a tenant timezone setting, and one eval
-scenario reaches into S13's credit notes.
+scenario reaches into S13's credit notes. **Read C9 too:** S15's SalesAgent
+extends the guard and the eval runner this session builds. S15 owns that
+generalisation, but keep the guard's inputs agent-agnostic where it costs
+nothing — "this send, to this person, on this channel, for this tenant" rather
+than "this reminder, for this invoice".
 
 Portability is already done. **Guardrails first** — they are the difference
 between an agent that is safe to leave running and one that needs supervision,
@@ -1179,6 +1225,9 @@ Blocking decisions).
 
 **Non-negotiable:** nothing here changes the fallback guarantee — collections
 never silently stops.
+
+**Blocks S15.** PRD-010's guardrail requirements are written as extensions of
+this session's, so autonomous outbound sales cannot ship until this lands.
 
 ---
 
@@ -1333,6 +1382,66 @@ phase 1 and the filter, then stop and ask if it is still unanswered.
 
 ---
 
+### S15 — PRD-010: Sequences & the SalesAgent
+
+**PRD:** [010](PRD-010-sales-agent.md) · **Branch:** `claude/prd-010-sales-agent`
+· **Depends on:** S8 (targeting), **S10 (safety — hard dependency, see C9)**
+
+**Read C9 before planning.** This session must not build a second guardrail
+layer, and it must not ship the cadence model without the agent.
+
+The session that closes the gap `direction.md` has named as primary since it was
+written: *"the pipeline data model already exists, but it's inert."* Four
+sessions have since deepened the record (leads, quotes, contact roles, health)
+and none has animated it. CompanyOS is an agent-first system with exactly one
+agent.
+
+The deferral condition recorded in "Deliberately not in any session" — *"its own
+PRD once the CRM substrate settles"* — was met by S8: `resolveContact` gives an
+outreach agent a person to address, and customer health gives it an account
+signal that S8 deliberately built as an input and did not act on.
+
+**Deliverables**
+
+- **Sequences** (design-doc Phase B): `sequences`, `sequence_steps` (ordered,
+  `delay_days`, channel, body template, **the contact role to address**),
+  `sequence_enrollments` (position, `next_due_at`, state, stop reason). At most
+  one active enrolment per lead — 409, matching
+  `src/modules/support/state-machine.ts`.
+- **The SalesAgent** (Phase C): a Durable Object per `(tenant, enrollment)`,
+  modelled on `src/agents/collections.ts`. Alarm → context → LLM decision with a
+  Zod schema and a **deterministic template fallback** → send through
+  `delivery/` → log an activity → schedule the next step. Wired through
+  `AGENT_ROUTES`, which `docs/modules/crm.md` has pointed at since Phase 1.
+- **Auto-stop on reply, conversion, `lost`, or hard bounce.** Reply detection
+  rides the existing `email.received` stream. A sequence that keeps sending after
+  the prospect answered is the failure mode that kills trust in outbound tooling.
+- **One guardrail layer, extended from S10's** — business hours in tenant-local
+  time, weekends and Malaysian public holidays via `effectiveHolidays()` (S6),
+  cooldown, `agents.enabled`, `agent_paused`, plus a per-tenant **daily outbound
+  cap**. Out-of-hours **defers, never drops**.
+- **Eval scenarios through S10's runner**, which PRD-002 requires be generic
+  *"so the future SalesAgent and SupportAgent reuse it."*
+- Console: sequence list with enrolment counts, and an enrolment timeline showing
+  what was sent, when, and why it stopped.
+
+**Acceptance criteria → tests:** all of PRD-010's. The two that carry the
+session: **a lead who replies receives no further step** (assert on the absence
+of a send, not just on state), and **no send lands outside the tenant's window**.
+Also the no-resolvable-contact path — pause and record, never throw and never
+silently skip.
+
+**Decide before starting:** PRD-010's blocking question — whether cold outbound
+to a non-customer needs its own opt-in beyond `agents.enabled`. Recommendation:
+yes, a separate `agents.outbound_sales_enabled` defaulting **off**, so enabling
+collections never silently enables prospecting.
+
+**Do not ship sequences alone.** If the session cannot reach the agent, ship
+nothing and re-scope. A cadence model with nothing advancing it is another layer
+of inert schema, and that pattern is exactly why this PRD exists.
+
+---
+
 ## Built outside the session numbering
 
 **PRD-008 — Roles, Permissions & Employee Self-Service. Implemented 2026-07-29.**
@@ -1370,7 +1479,10 @@ question a session must answer is not *"can this user reach the route"* but
 
 Named so they do not get built by accident:
 
-- **SalesAgent** — designed, not built. Its own PRD once the CRM substrate settles.
+- ~~**SalesAgent**~~ — **now PRD-010 / S15.** The condition recorded here ("its own
+  PRD once the CRM substrate settles") was met by S8: `resolveContact` gives an
+  outreach agent a person to address and customer health gives it an account
+  signal. Written up 2026-08-02.
 - **SupportAgent** — PRD-005 builds the substrate only.
 - **Payroll, EPF/SOCSO/EIS/PCB, statutory submissions** — assessed and rejected
   as an undefensible moat.

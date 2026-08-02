@@ -71,7 +71,7 @@ CompanyOS provides for each today. "Module" names map to `src/modules/*` and the
 | Department | CompanyOS module today | Autonomous agent? | Maturity / gap |
 |---|---|---|---|
 | **Finance / Accounting** | `finance` — double-entry ledger, invoices, payments, daily `overdue-sweep` | ✅ `CollectionsAgent` | **Strongest.** Append-only journal enforced in SQL, cron, and a working agent. |
-| **Sales / Revenue** | `crm` (`source_module: sales`) — customers, deal pipeline, activity log | ❌ (a `SalesAgent` is reserved, not built) | **Primary gap.** Records & pipeline exist; nothing prospects into it or works it. See [sales design](./architecture/sales-module-design.md). |
+| **Sales / Revenue** | `crm` (`source_module: sales`) — customers, deal pipeline, contact roles, customer health, leads, quotes | ❌ (a `SalesAgent` is reserved, not built) | **Primary gap, now scheduled.** Records & pipeline exist and have deepened; nothing works them. Leads + the enrichment port shipped (design Phase A). Sequences and the agent are [PRD-010](./prd/PRD-010-sales-agent.md) / S15, gated on PRD-002 guardrails. See [sales design](./architecture/sales-module-design.md). |
 | **Customer Support** | `support` — tickets + explicit state machine (open→pending→resolved→closed) | ❌ | Solid records + lifecycle; no agent triaging or resolving yet. |
 | **Engineering / Product** | `build` — projects and issues (board) | ❌ | Basic board. |
 | **Cross-functional / BI** | `insights` — read-only cross-module SQL aggregates for the dashboard | n/a (read-model) | Reporting only; no write path, by design. |
@@ -107,6 +107,15 @@ rather than being invisible, so the build order stays legible even before the mo
   the spine (customers, deals, activities) is already there, this is the cheapest place to
   add real autonomy and the most valuable. This is the subject of the companion
   [Sales Module design doc](./architecture/sales-module-design.md).
+
+  *Update 2026-08-02:* still true, and now scheduled rather than deferred. Design
+  Phase A (leads, lead→customer conversion, the enrichment port) shipped in
+  migration `0018`; PRD-003 then added contact roles and customer health. All
+  three deepened the **record**. Phases B and C — sequences and the SalesAgent —
+  are now [PRD-010](./prd/PRD-010-sales-agent.md), scheduled as S15 and gated on
+  PRD-002's guardrails, because an autonomous outbound sender without a kill
+  switch and a business-hours window is the one version of this worth *not*
+  building.
 - **Thin — Support & Build.** Good records and (for support) lifecycle, but no agents.
   Obvious future homes for triage/resolution and issue-grooming agents respectively.
 - **Deep but agent-less — People/HR.** Directory, teams and manager hierarchy, plus

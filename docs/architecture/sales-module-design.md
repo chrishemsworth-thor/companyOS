@@ -1,6 +1,19 @@
 # Sales Module — Apollo-Inspired Design
 
-*Last updated: 2026-07-14 · Status: design proposal (no code yet)*
+*Last updated: 2026-08-02 · Status: Phase A shipped; Phases B–C specified as
+[PRD-010](../prd/PRD-010-sales-agent.md), scheduled as S15*
+
+> **Status update, 2026-08-02.** This stopped being "no code yet" some time ago.
+> **Phase A shipped** — `leads` (migration `0018_sales_leads.sql`), CRUD and
+> conversion routes, and the `src/enrichment/` port with a no-op default.
+> **Phases B and C** — sequences and the SalesAgent — are now specified in
+> [PRD-010](../prd/PRD-010-sales-agent.md) and scheduled as **S15**, gated on
+> PRD-002's guardrails (see conflict C9 in
+> [`../prd/SESSION-PLAN.md`](../prd/SESSION-PLAN.md)). Phase D remains a design
+> proposal. Sections 4 and 5 below are the original sketch and are preserved as
+> written; where PRD-010 differs, PRD-010 is authoritative — most visibly, it
+> folds Phase B into the same session as Phase C rather than shipping a cadence
+> model with nothing advancing it.
 
 This is a **design document**, not an implementation. It proposes how CompanyOS should
 grow a real sales capability, using [Apollo.io](https://www.apollo.io/) as the reference
