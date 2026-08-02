@@ -1,22 +1,49 @@
 -- PRD-006c (S7) — leave requests, approval and the team calendar.
 --
--- ## Why 0026 and not 0024
+-- ## Why this migration rebuilds a table instead of creating one
 --
--- S5 (expense claims), S6 (leave policy) and S7 (this) are being built
--- concurrently from the same `main`, whose highest migration is 0023. All three
--- would otherwise take 0024, and `0015` is already duplicated once
--- (`0015_google_accounts.sql` / `0015_people.sql`) — SESSION-PLAN standing rule
--- 5 explicitly forbids a third collision. So the numbers are reserved by
--- session order: **0024 = S5 claims, 0025 = S6 leave policy, 0026 = S7 (here)**.
--- If S6 lands on a different number that is harmless; nothing below references
--- it.
+-- S6 (PRD-006b, migration 0025) and S7 (this) were built concurrently from the
+-- same `main` and BOTH defined `leave_requests`. They had to: S6's acceptance
+-- criteria include "a pending request reduces available balance immediately"
+-- and "a rejected request restores it", and a balance defined as
+-- `entitlement + carry_forward − taken − pending` cannot be tested without the
+-- thing being consumed. So 0025 shipped the balance-relevant columns and said
+-- in its own comment that S7 would add "`reason`, `attachment_file_id`, the
+-- approval linkage and the leave.* events additively".
+--
+-- Additively is what this is, with one wrinkle: SQLite cannot widen a CHECK
+-- constraint in place, and `state` has to grow `cancellation_pending`. That
+-- forces the standard rebuild — create, copy, drop, rename — rather than a
+-- series of ALTER TABLE ADD COLUMN. The rebuild is written to be safe on a
+-- populated database (0022_roles_drop_check learned that lesson the hard way):
+-- every existing row is carried across.
+--
+-- ## The two type columns
+--
+-- 0025 keyed a request to `leave_type_id` (an FK into S6's `leave_types`). S7
+-- was written against a branch where `leave_types` did not exist, so it keyed
+-- to `leave_type_code` — the tenant-scoped code — precisely so the two
+-- migrations could land in either order. Both columns survive here, and they
+-- are kept consistent rather than left as alternatives:
+--
+--   * `leave_type_code` is the write path. S7's service takes a code from the
+--     API and stores it; it is NOT NULL because every request has one.
+--   * `leave_type_id` is resolved from that code against `leave_types` at
+--     insert time and stored alongside. It is NULLABLE for exactly one case —
+--     a tenant that has not configured leave types yet, where the policy port
+--     is serving provisional defaults and there is no row to point at.
+--
+-- Carrying both is what actually connects the two halves of the module: S6's
+-- balance engine (src/modules/leave/balances.ts) groups consumption by
+-- `leave_type_id`, and it now sees the requests S7 writes. Dropping either
+-- column would mean one side silently counting nothing.
 --
 -- ## What S7 owns, and what it deliberately does not
 --
 -- S6 owns the *entitlement* side of leave — `leave_types`, `leave_policies`,
 -- tenure bands, accrual, pro-rating, carry-forward, `public_holidays` and the
 -- configurable work week. S7 owns the *consumption* side, which is this one
--- table. The split falls straight out of PRD-006's balance formula:
+-- table:
 --
 --     available = entitlement + carry_forward − taken − pending
 --                 └────── S6 owns ──────────┘   └── S7 owns ──┘
@@ -26,23 +53,8 @@
 -- anything: a pending→approved transition moves days from the "pending" bucket
 -- to the "taken" bucket and leaves `available` unchanged. See
 -- docs/modules/leave.md.
---
--- ## leave_type_code is a CODE, not a foreign key
---
--- The obvious column would be `leave_type_id REFERENCES leave_types(...)`. It
--- is deliberately not, because `leave_types` is S6's table and does not exist on
--- this branch. Storing the tenant-scoped code decouples the two migrations
--- completely, so S6 and S7 can land in either order and neither blocks the
--- other. The code is resolved through src/modules/people/leave/policy-port.ts,
--- which reads S6's tables when they are present and falls back to provisional
--- defaults when they are not.
---
--- This is the same reasoning `approvals.subject_type` and `files.purpose` use
--- for staying unconstrained TEXT: the consumer owns the vocabulary, we own the
--- lifecycle. `state` below therefore DOES carry a CHECK — it is this module's
--- own vocabulary and nothing extends it.
 
-CREATE TABLE leave_requests (
+CREATE TABLE leave_requests_new (
   leave_request_id   TEXT NOT NULL,               -- lvr_01J...
   tenant_id          TEXT NOT NULL REFERENCES tenants(tenant_id),
   -- Leave is always ABOUT an employee, never about a user: an employee with no
@@ -50,16 +62,17 @@ CREATE TABLE leave_requests (
   -- user is `created_by` and is nullable for the same reason `files.uploaded_by`
   -- is — a tenant-API-key caller has no user identity.
   employee_id        TEXT NOT NULL,
-  -- S6's leave_types.code (annual, sick, hospitalisation, ...). Not an FK — see
-  -- the note above.
+  -- S6's leave_types.code (annual, sick, hospitalisation, ...). The write path.
   leave_type_code    TEXT NOT NULL,
+  -- Resolved from the code against leave_types at insert. NULL only where the
+  -- tenant has configured no leave types and the policy port is serving
+  -- provisional defaults. See the header note.
+  leave_type_id      TEXT,
   start_date         TEXT NOT NULL,               -- ISO date YYYY-MM-DD
   end_date           TEXT NOT NULL,               -- inclusive
-  -- Half-day support (PRD-006: "start/end (half-day supported)"). The minimum
-  -- that works is a half day at either end of the span, which covers the real
-  -- cases — a Friday afternoon off, or leave that resumes at midday. A
-  -- half-day-per-arbitrary-day model would need a child table and nobody has
-  -- asked for one.
+  -- Half-day markers on the boundary days only: a leave run is whole days in
+  -- the middle by definition. Both may be set on a single-day request, which is
+  -- how a 0.5-day request is expressed.
   start_half_day     INTEGER NOT NULL DEFAULT 0 CHECK (start_half_day IN (0, 1)),
   end_half_day       INTEGER NOT NULL DEFAULT 0 CHECK (end_half_day IN (0, 1)),
   -- Working days as computed AT SUBMISSION from the applicable work week and
@@ -68,7 +81,7 @@ CREATE TABLE leave_requests (
   -- deducted — a tenant editing its holiday set in March must not silently
   -- change what somebody already had approved in January. REAL because half
   -- days make it fractional.
-  working_days       REAL NOT NULL,
+  working_days       REAL NOT NULL CHECK (working_days >= 0),
   reason             TEXT,
   -- Optional, except on leave types whose policy requires one (medical
   -- certificates). files(file_id) with purpose = 'leave_attachment'; not a
@@ -89,9 +102,9 @@ CREATE TABLE leave_requests (
   state              TEXT NOT NULL DEFAULT 'pending'
     CHECK (state IN ('pending', 'approved', 'rejected', 'cancellation_pending', 'cancelled')),
   -- The approvals row currently driving this request. Repointed when a
-  -- cancellation raises a second approval, so it always names the live one;
-  -- the full decision history lives in `approvals` itself, which is the audit
-  -- record PRD-000 asks for.
+  -- cancellation raises a second approval, so it always names the live one; the
+  -- full decision history lives in `approvals` itself, which is the audit record
+  -- PRD-000 asks for.
   approval_id        TEXT,
   decided_at         TEXT,
   cancelled_at       TEXT,
@@ -99,10 +112,45 @@ CREATE TABLE leave_requests (
   created_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   updated_at         TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
   PRIMARY KEY (tenant_id, leave_request_id),
-  FOREIGN KEY (tenant_id, employee_id) REFERENCES employees(tenant_id, employee_id)
+  FOREIGN KEY (tenant_id, employee_id) REFERENCES employees(tenant_id, employee_id),
+  CHECK (end_date >= start_date)
 );
 
--- The balance query ("what has this employee taken and what is pending this
+-- Carry 0025's rows across. `leave_type_code` is derived from the FK those rows
+-- already carry; the LEFT JOIN keeps a row whose type was hard-deleted rather
+-- than dropping it silently, and '' is a code no leave_types row can hold, so
+-- such a row reads as unresolvable instead of masquerading as a real type.
+INSERT INTO leave_requests_new (
+  leave_request_id, tenant_id, employee_id, leave_type_code, leave_type_id,
+  start_date, end_date, start_half_day, end_half_day, working_days,
+  state, created_at, updated_at
+)
+SELECT
+  r.leave_request_id,
+  r.tenant_id,
+  r.employee_id,
+  COALESCE(t.code, ''),
+  r.leave_type_id,
+  r.start_date,
+  r.end_date,
+  r.start_half_day,
+  r.end_half_day,
+  r.working_days,
+  r.state,
+  r.created_at,
+  r.updated_at
+FROM leave_requests r
+LEFT JOIN leave_types t
+  ON t.tenant_id = r.tenant_id AND t.leave_type_id = r.leave_type_id;
+
+DROP TABLE leave_requests;
+ALTER TABLE leave_requests_new RENAME TO leave_requests;
+
+-- S6's balance query: everything pending or approved for one person and one
+-- leave type.
+CREATE INDEX idx_leave_requests_balance
+  ON leave_requests (tenant_id, employee_id, leave_type_id, state);
+-- S7's balance query ("what has this employee taken and what is pending this
 -- year") and the same-employee overlap check that returns 409 on submit. Both
 -- filter on employee + state and range over start_date, so one index serves
 -- both.

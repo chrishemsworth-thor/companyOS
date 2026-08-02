@@ -94,8 +94,13 @@ async function assign(
 
 /**
  * Insert a leave request directly. S7 owns the write path; this is the balance
- * engine's input, and the columns used here are exactly the ones the migration
- * declares as S6-owned.
+ * engine's input.
+ *
+ * Both type columns are populated because the merged table (0026) carries both
+ * and S7's service writes both: `leave_type_id` is what this engine groups by,
+ * `leave_type_code` is what S7's own reads key on. Seeding only one would make
+ * this helper produce rows the real write path cannot produce, which is the
+ * failure mode a fixture is most likely to hide.
  */
 async function seedRequest(input: {
   employee_id: string;
@@ -105,17 +110,25 @@ async function seedRequest(input: {
   working_days: number;
   state?: "pending" | "approved" | "rejected" | "cancelled";
 }): Promise<void> {
+  const type = await env.DB.prepare(
+    "SELECT code FROM leave_types WHERE tenant_id = ? AND leave_type_id = ?",
+  )
+    .bind(TENANT_ID, input.leave_type_id)
+    .first<{ code: string }>();
+  if (!type) throw new Error(`seedRequest: no leave_type ${input.leave_type_id}`);
+
   await env.DB.prepare(
     `INSERT INTO leave_requests (
-       leave_request_id, tenant_id, employee_id, leave_type_id, start_date, end_date,
-       working_days, state
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+       leave_request_id, tenant_id, employee_id, leave_type_id, leave_type_code,
+       start_date, end_date, working_days, state
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       `lvr_${ulid()}`,
       TENANT_ID,
       input.employee_id,
       input.leave_type_id,
+      type.code,
       input.start,
       input.end,
       input.working_days,

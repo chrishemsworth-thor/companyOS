@@ -37,10 +37,10 @@ import { EmployeeDetail } from "./pages/people/EmployeeDetail";
 import { TeamList } from "./pages/people/TeamList";
 import { Onboarding } from "./pages/onboarding/Onboarding";
 import { ApprovalsInbox } from "./pages/approvals/ApprovalsInbox";
+import { ClaimDetail } from "./pages/claims/ClaimDetail";
 import { MyLeave } from "./pages/leave/MyLeave";
 import { TeamLeaveCalendar } from "./pages/leave/TeamLeaveCalendar";
 import { LeaveRequestDetail } from "./pages/leave/LeaveRequestDetail";
-import { ClaimDetail } from "./pages/claims/ClaimDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, staleTime: 15_000 } },

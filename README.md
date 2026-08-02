@@ -4,18 +4,21 @@ An AI-agent-first operating system for running a company. Every business
 process is exposed through one normalized, machine-readable API so AI agents —
 not humans clicking through dashboards — are the default consumers.
 
-All four business domains are **native modules on Cloudflare**: Finance
+All five business domains are **native modules on Cloudflare**: Finance
 (double-entry ledger, invoices, payments), CRM (customers, deals,
-activities), Support (tickets), and Build (projects, issues). One Worker, one
-D1 database, one event bus, one API key per tenant — no external OSS apps, no
-VPS. See [docs/architecture/phase-1-native.md](docs/architecture/phase-1-native.md)
+activities), Support (tickets), Build (projects, issues), and People
+(directory, leave, expense claims). One Worker, one D1 database, one event bus,
+one API key per tenant — no external OSS apps, no VPS. See [docs/architecture/phase-1-native.md](docs/architecture/phase-1-native.md)
 for the full design ([phase-0.md](docs/architecture/phase-0.md) records the
 earlier OSS-wrapping approach it replaced).
 
 Per-module references: [Finance](docs/modules/finance.md) ·
 [CRM](docs/modules/crm.md) · [Support](docs/modules/support.md) ·
 [Build](docs/modules/build.md) · [People](docs/modules/people.md) ·
-[Leave](docs/modules/leave.md) ·
+[Leave](docs/modules/leave.md) · [Claims](docs/modules/claims.md) ·
+[Approvals](docs/modules/approvals.md) ·
+[Notifications](docs/modules/notifications.md) ·
+[Files](docs/modules/files.md) ·
 [Webhook ingestion (JIRA/GitHub/Bitbucket)](docs/modules/webhooks.md).
 Platform layers:
 [Multi-company identity](docs/architecture/multi-company-identity.md) ·
@@ -214,6 +217,12 @@ stops. Every decision (LLM or fallback) is audited into `events_log` as a
   cursor pagination (✅ Workstream 4); transactional outbox only if a new
   event type needs it (Workstream 3 — not yet triggered).
   Full brief: [docs/architecture/phase-2-plan.md](docs/architecture/phase-2-plan.md).
-- **Phase 3** — People/HR module on the same pattern; cross-module Insights
-  (the payoff of one database: support tickets × overdue invoices × open
-  deals are plain SQL joins).
+- **Phase 3** — People/HR module on the same pattern (✅ directory, teams and
+  reporting lines; ✅ leave policy, entitlement, holidays, balances, requests
+  and the team calendar; ✅ expense claims with GL posting; payroll still to
+  come); cross-module Insights (✅ — the payoff of one database: support
+  tickets × overdue invoices × open deals are plain SQL joins).
+  Human-in-the-loop work rides on the shared approvals primitive, surfaced in
+  the console's approvals inbox with a purpose-built card per subject type, and
+  the console installs as a PWA so an approver can clear the queue from a
+  phone.

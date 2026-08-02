@@ -1,3 +1,10 @@
+import { getBalances as getS6Balances } from "../../leave/balances";
+import {
+  effectiveHolidays,
+  getLeaveProfile as getS6Profile,
+  getLeaveSettings as getS6Settings,
+  listLeaveTypes as listS6LeaveTypes,
+} from "../../leave/service";
 import type { Employee } from "../types";
 import type { Entitlement, LeaveType, WorkCalendar } from "./types";
 
@@ -188,45 +195,32 @@ const FALLBACK_WORK_DAYS: ReadonlySet<number> = new Set([1, 2, 3, 4, 5]);
  */
 export async function getLeaveTypes(env: PortDb, tenantId: string): Promise<LeaveType[]> {
   try {
-    const { results } = await env.DB.prepare(
-      `SELECT code, name, paid, requires_attachment, max_consecutive_days,
-              allows_half_day, allows_negative_balance
-         FROM leave_types
-        WHERE tenant_id = ?
-        ORDER BY code ASC`,
-    )
-      .bind(tenantId)
-      .all<{
-        code: string;
-        name: string;
-        paid: number;
-        requires_attachment: number;
-        max_consecutive_days: number | null;
-        allows_half_day: number;
-        allows_negative_balance: number | null;
-      }>();
+    // S6's own read path, not a raw SELECT. That matters for more than tidiness:
+    // `listLeaveTypes` seeds the Malaysian defaults on first touch for a tenant
+    // that has never opened a leave screen, and reading the table directly
+    // sidesteps that. It did, and the result was worse than either behaviour on
+    // its own — the first call of a request saw an empty table and served
+    // provisional types, a later call in the same request saw the seeded ones,
+    // and the two disagreed about how many days the employee had.
+    const types = await listS6LeaveTypes(env.DB, tenantId);
 
-    // An empty table is not a reason to fall back: a tenant that deleted every
-    // leave type has said something, and inventing seven types over the top of
-    // that would be worse than an empty list. A MISSING table throws instead,
-    // and that is the case the catch handles.
-    return (results ?? []).map((row) => ({
+    // An empty list here is now a real statement rather than an unconfigured
+    // tenant: seeding has run, so the tenant has archived or deleted every type
+    // it was given. Inventing seven over the top of that would be worse than an
+    // empty list.
+    return types.map((row) => ({
       code: row.code,
       name: row.name,
-      paid: row.paid !== 0,
-      requires_attachment: row.requires_attachment !== 0,
+      paid: row.is_paid,
+      requires_attachment: row.requires_attachment,
       max_consecutive_days: row.max_consecutive_days,
-      allows_half_day: row.allows_half_day !== 0,
-      // S6 may not carry this column — PRD-006 lists it only as the exception
-      // clause on the over-balance criterion, not as a `leave_types` field. A
-      // NULL reads as false, which is the safe direction: leave that cannot go
-      // negative is blocked rather than silently allowed.
-      allows_negative_balance: (row.allows_negative_balance ?? 0) !== 0,
+      allows_half_day: row.allows_half_day,
+      allows_negative_balance: row.allow_negative_balance,
     }));
   } catch (err) {
     warnOnce(
       `types:${tenantId}`,
-      `leave_types unreadable, using provisional defaults (S6 not merged, or its columns differ): ${String(err)}`,
+      `leave_types unreadable, using provisional defaults (S6 not migrated): ${String(err)}`,
     );
     return [...FALLBACK_LEAVE_TYPES];
   }
@@ -248,6 +242,14 @@ export async function getLeaveType(
  * S6 owns everything interesting about this number: which policy the employee is
  * assigned to, their tenure band, the accrual method, pro-rating for a mid-year
  * join or leave, and the carry-forward cap. The fallback is flat.
+ *
+ * **Reconciled with S6.** The guess this file shipped with — a pre-computed
+ * `leave_balances` table — was wrong in the way the header predicted: S6 has no
+ * such table, because entitlement is *derived* there too. So this calls S6's
+ * engine directly rather than reading a table, and takes only the entitlement
+ * half of its answer. `taken` and `pending` are deliberately discarded: S6
+ * computes them from `leave_requests` exactly as this module does, and using
+ * both would double-count every day of leave.
  */
 export async function getEntitlement(
   env: PortDb,
@@ -257,35 +259,48 @@ export async function getEntitlement(
   year: number,
 ): Promise<Entitlement> {
   try {
-    // Best guess at PRD-006's wording: a policy carries entitlement by
-    // employment type and tenure band, an employee is assigned to one, and S6
-    // resolves the assignment. Reading a pre-computed `leave_balances` row would
-    // be wrong here — PRD-006 says that table is DERIVED, and deriving it needs
-    // the `taken`/`pending` halves that only S7 has.
-    const row = await env.DB.prepare(
-      `SELECT entitlement_days, carry_forward_days
-         FROM leave_balances
-        WHERE tenant_id = ? AND employee_id = ? AND leave_type_code = ? AND year = ?`,
-    )
-      .bind(tenantId, employee.employee_id, leaveTypeCode, year)
-      .first<{ entitlement_days: number; carry_forward_days: number | null }>();
+    // Accrual is evaluated at a date, not a year: a monthly-accrual policy has
+    // granted less in March than it will in December. For the current year that
+    // date is today (S6's own default); for a past or future year the only
+    // meaningful point is its end, when the year's entitlement is whole.
+    const currentYear = new Date().getUTCFullYear();
+    const asOf = year === currentYear ? undefined : `${year}-12-31`;
 
-    if (row) {
+    const result = await getS6Balances(env.DB, tenantId, employee.employee_id, { as_of: asOf });
+    const balance = result.balances.find((b) => b.leave_type_code === leaveTypeCode);
+
+    // S6 distinguishes "configured, and the answer is zero" from "nothing is
+    // configured for this type" — its own words: *"the balance is zero because
+    // nothing is configured, which is a different thing from a zero balance"*.
+    // That second case is precisely what this port's provisional defaults are
+    // for, so it is routed to them rather than taken at face value. Taking it
+    // literally is what made every leave request fail with "short by 3" against
+    // a freshly seeded tenant that has types but no policies yet.
+    if (balance && !balance.unconfigured) {
       return {
-        days: row.entitlement_days,
-        carry_forward_days: row.carry_forward_days ?? 0,
+        // Adjustments are part of what the employee may take — an HR encashment
+        // or a goodwill day is not carry-forward and not accrual, but leaving it
+        // out would make this module's balance disagree with the one HR sees on
+        // S6's own screen.
+        days: balance.entitlement_days + balance.adjustment_days,
+        carry_forward_days: balance.carried_forward_days,
         source: "policy",
       };
     }
-    // Table readable but no row for this employee/type/year. S6 has landed and
-    // simply has nothing to say here (a type the employee's policy does not
-    // grant), so zero is the honest answer rather than the fallback figure.
-    return { days: 0, carry_forward_days: 0, source: "policy" };
+    // Either S6 has no such type at all, or it has one with no policy behind
+    // it. Both mean the same thing to a filer — nothing has been configured —
+    // and both get the provisional entitlement, flagged `default` so the console
+    // can say "policy not configured" instead of presenting a guess as policy.
+    return {
+      days: FALLBACK_ENTITLEMENT_DAYS[leaveTypeCode] ?? 0,
+      carry_forward_days: 0,
+      source: "default",
+    };
   } catch (err) {
     warnOnce(
       `entitlement:${tenantId}`,
-      `leave_balances unreadable, using flat provisional entitlement with no tenure band, ` +
-        `accrual or pro-rating (S6 not merged, or its columns differ): ${String(err)}`,
+      `S6 leave policy unreadable, using flat provisional entitlement with no tenure band, ` +
+        `accrual or pro-rating: ${String(err)}`,
     );
     return {
       days: FALLBACK_ENTITLEMENT_DAYS[leaveTypeCode] ?? 0,
@@ -300,10 +315,21 @@ export async function getEntitlement(
  *
  * Two S6 concerns in one call because they are always needed together and
  * always for the same employee: the configurable work week, and the public
- * holidays for that employee's state. `employees.location` is the only
- * state-ish field the People module has today, so it is what gets matched
- * against holiday scope — S6 may well introduce a dedicated work-location
- * column, and if so this is the query to update.
+ * holidays for that employee's state.
+ *
+ * **Reconciled with S6.** Both guesses this file shipped with were wrong, in the
+ * way the header predicted. There is no `leave_work_weeks` table — the work week
+ * lives in `leave_settings.work_week` as a seven-fraction JSON array, overridable
+ * per employee in `employee_leave_profiles.work_week`. And matching holiday scope
+ * against `employees.location` was a placeholder: S6 introduced exactly the
+ * dedicated column that note anticipated, `employee_leave_profiles.work_state`.
+ *
+ * Rather than re-query either, this now calls S6's own helpers. That matters
+ * beyond tidiness: S6's holiday engine merges a shipped national calendar with
+ * tenant overrides, honours the `observed = 0` suppression rows, and knows which
+ * years are still lunar projections — none of which a `SELECT holiday_date`
+ * would have picked up, and all of which change how many working days a request
+ * costs.
  */
 export async function getWorkCalendar(
   env: PortDb,
@@ -316,47 +342,32 @@ export async function getWorkCalendar(
   let degraded = false;
 
   try {
-    const row = await env.DB.prepare(
-      `SELECT work_days FROM leave_work_weeks WHERE tenant_id = ?`,
-    )
-      .bind(tenantId)
-      .first<{ work_days: string }>();
-    // Stored as a compact day-number list ("1,2,3,4,5"), which is the shape a
-    // Sun–Thu week ("0,1,2,3,4") needs just as cheaply as Mon–Fri.
-    if (row?.work_days) {
-      const parsed = row.work_days
-        .split(",")
-        .map((part) => Number.parseInt(part.trim(), 10))
-        .filter((n) => Number.isInteger(n) && n >= 0 && n <= 6);
-      if (parsed.length > 0) workDays = new Set(parsed);
-    }
-  } catch {
-    degraded = true;
-  }
+    const [settings, profile] = await Promise.all([
+      getS6Settings(env.DB, tenantId),
+      getS6Profile(env.DB, tenantId, employee.employee_id),
+    ]);
+    // Seven fractions indexed from Sunday: 1 = a full working day, 0 = off, 0.5
+    // = a half day. This module counts whole working days, so anything above
+    // zero counts as a day the employee is expected in — a Saturday half-day
+    // week still has leave taken on Saturday cost a day.
+    const week = profile.work_week ?? settings.work_week;
+    const parsed = new Set<number>();
+    week.forEach((fraction, day) => {
+      if (fraction > 0) parsed.add(day);
+    });
+    if (parsed.size > 0) workDays = parsed;
 
-  try {
-    // National holidays always apply; a state-scoped one applies only when it
-    // matches the employee's location. Tenant overrides are S6's to model — if
-    // it adds an `active`/`deleted` flag, this is where it is filtered.
-    const { results } = await env.DB.prepare(
-      `SELECT holiday_date
-         FROM public_holidays
-        WHERE tenant_id = ?
-          AND holiday_date >= ? AND holiday_date <= ?
-          AND (scope = 'national' OR scope = ?)`,
-    )
-      .bind(tenantId, `${year}-01-01`, `${year}-12-31`, employee.location ?? " ")
-      .all<{ holiday_date: string }>();
-    holidays = new Set((results ?? []).map((r) => r.holiday_date));
-  } catch {
+    // S6's engine, not a raw query: it merges the shipped national calendar with
+    // the tenant's own rows, drops dates the tenant suppressed with
+    // `observed = 0`, and scopes state holidays by `work_state`.
+    const byYear = await effectiveHolidays(env.DB, tenantId, profile.work_state, [year]);
+    holidays = new Set(byYear.get(year)?.byDate.keys() ?? []);
+  } catch (err) {
     degraded = true;
-  }
-
-  if (degraded) {
     warnOnce(
       `calendar:${tenantId}`,
-      `work week and/or public_holidays unreadable, counting Mon–Fri with NO public holidays ` +
-        `(S6 not merged, or its columns differ). State-varying holidays are an S6 deliverable.`,
+      `S6 work week and/or public holidays unreadable, counting Mon–Fri with NO public ` +
+        `holidays: ${String(err)}`,
     );
   }
 

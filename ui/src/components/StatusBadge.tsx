@@ -36,8 +36,6 @@ const TONE_BY_STATUS: Record<string, Tone> = {
   // Leave request states (PRD-006c). `approved`, `rejected` and `cancelled` are
   // already covered above or fall through to neutral; `cancellation_pending` is
   // the one that needs a tone, and it is a warn because it is awaiting somebody.
-  approved: "good",
-  rejected: "bad",
   cancellation_pending: "warn",
 };
 

@@ -221,6 +221,33 @@ export async function listLeaveRequests(
   return (results ?? []).map(toView);
 }
 
+/**
+ * S6's `leave_types.leave_type_id` for a code, or null.
+ *
+ * The one place this module writes S6's key. It tolerates the table being
+ * absent for the same reason policy-port.ts does — a deploy where 0025 has not
+ * run yet is a real state, and leave must stay fileable through it — but unlike
+ * the port it has no fallback to offer: there is no provisional id, so null is
+ * the answer and S6's balance engine simply has nothing to group that row
+ * under until the tenant configures its types.
+ */
+async function resolveLeaveTypeId(
+  env: { DB: D1Database },
+  tenantId: string,
+  code: string,
+): Promise<string | null> {
+  try {
+    const row = await env.DB.prepare(
+      "SELECT leave_type_id FROM leave_types WHERE tenant_id = ? AND code = ?",
+    )
+      .bind(tenantId, code)
+      .first<{ leave_type_id: string }>();
+    return row?.leave_type_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function requireEmployee(
   db: D1Database,
   tenantId: string,
@@ -686,17 +713,31 @@ export async function submitLeaveRequest(
   }
 
   const leaveRequestId = `lvr_${ulid()}`;
+  // Store S6's `leave_type_id` alongside our own `leave_type_code`. This is the
+  // join that makes the two halves of the module one module: S6's balance engine
+  // (src/modules/leave/balances.ts) groups consumption by `leave_type_id`, so a
+  // request written with only a code would be invisible to it and every
+  // entitlement would read as fully available. Resolved here rather than by a
+  // trigger or a view so the value is frozen at submission with everything else
+  // on the row.
+  //
+  // NULL is the honest answer for a tenant that has configured no leave types
+  // yet — the policy port is serving provisional defaults in that case and there
+  // is no row to point at. See migrations/0026_leave_requests.sql.
+  const leaveTypeId = await resolveLeaveTypeId(env, tenantId, input.leave_type_code);
   await env.DB.prepare(
     `INSERT INTO leave_requests
-       (leave_request_id, tenant_id, employee_id, leave_type_code, start_date, end_date,
+       (leave_request_id, tenant_id, employee_id, leave_type_code, leave_type_id,
+        start_date, end_date,
         start_half_day, end_half_day, working_days, reason, attachment_file_id, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       leaveRequestId,
       tenantId,
       input.employee_id,
       input.leave_type_code,
+      leaveTypeId,
       input.start_date,
       input.end_date,
       input.start_half_day === true ? 1 : 0,

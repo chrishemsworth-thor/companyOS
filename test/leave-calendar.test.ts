@@ -14,6 +14,18 @@ import {
 import type { Employee } from "../src/modules/people/types";
 
 /**
+ * S6's annual entitlement for the fixtures below: the middle tenure band of the
+ * Malaysian defaults migration 0025 seeds. Named rather than spelled out at each
+ * use, because every balance assertion here is derived from it.
+ *
+ * Deliberately NOT the leave policy port's provisional figure (8). Since S6
+ * landed, this module reads real policy rather than its own fallback, and these
+ * numbers moving from 8 to 12 is what that reconciliation looks like.
+ */
+const ANNUAL_ENTITLEMENT_DAYS = 12;
+
+
+/**
  * PRD-006c — the team calendar and the overlap warning.
  *
  * PRD-006 calls the calendar "the feature managers actually use" and states the
@@ -569,7 +581,6 @@ describe("the approval card's overlapping-team-leave field", () => {
     };
     expect(body.team_overlaps.map((o) => o.employee_name)).toEqual(["Bob Dev"]);
     expect(body.working_days).toBe(3);
-    // Annual entitlement is 8 in the provisional defaults, so approving leaves 5.
-    expect(body.balance_after_days).toBe(5);
+    expect(body.balance_after_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
   });
 });

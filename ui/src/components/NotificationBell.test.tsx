@@ -220,12 +220,14 @@ describe("a subject this build cannot show", () => {
   it("renders as unavailable and falls back to the inbox instead of erroring", async () => {
     // PRD-007: "given a notification whose subject was deleted or cancelled, then
     // the item renders as unavailable rather than erroring." Same code path as a
-    // subject_type whose screen has not shipped — `leave_request` until S7.
-    // (`expense_claim` was the example until S5 gave claims a screen and a route.)
+    // subject_type whose screen has not shipped. The stand-in keeps moving as
+    // sessions ship screens — `expense_claim` until S5, `leave_request` until
+    // S7 — so this uses `other`, the generic approval, which has a label but is
+    // never routable by design.
     feed = [
       notification({
-        subject_type: "leave_request",
-        subject_id: "lv_gone",
+        subject_type: "other",
+        subject_id: "oth_gone",
         title: "Approval needed: leave request",
       }),
     ];

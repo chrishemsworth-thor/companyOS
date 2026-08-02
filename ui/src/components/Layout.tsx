@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
-import { LayoutGrid, Shield, X, LogOut, UserCircle, CheckSquare, CalendarDays } from "lucide-react";
+import {
+  LayoutGrid,
+  Shield,
+  X,
+  LogOut,
+  UserCircle,
+  CheckSquare,
+  CalendarDays,
+} from "lucide-react";
 import { useDrag } from "@use-gesture/react";
 import { useAuth } from "../auth/AuthContext";
 import { cn } from "../lib/cn";

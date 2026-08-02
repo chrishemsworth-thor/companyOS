@@ -34,9 +34,13 @@ function approval(overrides: Partial<Approval> = {}): Approval {
     approval_id: "apr_1",
     // A type that still takes the generic fallback card, whose Reference row
     // prints the subject id — which is how `cardFor` finds a card. Was
-    // `expense_claim` until S5 gave claims a purpose-built card that shows the
-    // claim itself instead of its id.
-    subject_type: "leave_request",
+    // `expense_claim` until S5 gave claims a purpose-built card, then
+    // `leave_request` until S7 did the same, so `quote` is the last type in the
+    // shell's own tests that still shows an id (its card ships with S9).
+    //
+    // The `clm_`/`lv_` prefixes on subject ids below are historical and mean
+    // nothing to the shell — it treats a subject id as an opaque string.
+    subject_type: "quote",
     subject_id: "clm_1",
     requested_by: "usr_aisha",
     approver_user_id: "usr_me",
@@ -230,13 +234,11 @@ function cardFor(subjectId: string): HTMLElement {
 
 describe("Awaiting me", () => {
   it("lists approvals of three types in one list with type-specific context", async () => {
-    // The criterion, and since S7 it is genuinely mixed: `leave_request` takes a
-    // purpose-built card while `expense_claim` (S5) and `quote` (S9) still take
-    // the generic one. The shell renders all three without knowing which is
-    // which, which is the property PRD-007 asks for.
-    // The criterion. `expense_claim` now takes S5's purpose-built card while the
-    // other two still take the generic fallback, so this also pins that the shell
-    // renders a mixed list without caring which renderer each row resolves to.
+    // The criterion, and it is genuinely mixed: `leave_request` (S7) and
+    // `expense_claim` (S5) each take a purpose-built card that fetches its own
+    // subject, while `quote` still takes the generic one (its card ships with
+    // S9). The shell renders all three without knowing which is which, which is
+    // the property PRD-007 asks for.
     awaiting = [
       approval({ approval_id: "apr_1", subject_type: "leave_request", subject_id: "lvr_1" }),
       approval({
@@ -245,36 +247,36 @@ describe("Awaiting me", () => {
         subject_id: "clm_2",
         requested_by: "usr_chen",
       }),
-      approval({ approval_id: "apr_3", subject_type: "quote", subject_id: "qte_3" }),
+      approval({
+        approval_id: "apr_3",
+        subject_type: "quote",
+        subject_id: "qte_3",
+        requested_by: null,
+      }),
     ];
     renderInbox();
 
-    await screen.findByText("clm_2");
+    await screen.findByText("qte_3");
     // By heading: the subject label also appears in the generic card's Type row,
     // so a bare getByText would match twice.
-    expect(within(cardFor("clm_2")).getByRole("heading").textContent).toBe("Expense claim");
-    expect(within(cardFor("lv_1")).getByRole("heading").textContent).toBe("Leave request");
     expect(within(cardFor("qte_3")).getByRole("heading").textContent).toBe("Quote");
-    // The claim takes S5's card, which shows the claim rather than its id — so it
-    // is located by its heading instead. Three types, three cards, one list.
-    const headings = screen.getAllByRole("heading").map((h) => h.textContent);
-    expect(headings).toContain("Expense claim");
-
-    // The leave card carries no reference row, so it is located by its heading
-    // rather than by a subject id — the purpose-built cards show real content
-    // instead of an opaque id, which is the whole point of registering one.
+    // The other two carry no reference row — a purpose-built card shows real
+    // content instead of an opaque id, which is the whole point of registering
+    // one — so they are located by heading. Three types, three cards, one list.
     const headings = screen.getAllByRole("heading").map((h) => h.textContent);
     expect(headings).toContain("Leave request");
-    // And its own fetched content is on the page, from a card the shell knows
-    // nothing about.
+    expect(headings).toContain("Expense claim");
+    // And each card's own fetched content is on the page, from renderers the
+    // shell knows nothing about.
     expect(await screen.findByText("2027-03-01 → 2027-03-03")).toBeTruthy();
 
-    // Requesters are resolved to names, not raw usr_ ids.
-    expect(within(cardFor("clm_2")).getByText("from Chen Wei")).toBeTruthy();
-    // Requesters are resolved to names, not raw usr_ ids — including on the
-    // claim's own card, which is the shell's doing rather than the renderer's.
-    expect(within(cardFor("lv_1")).getByText("from Aisha Rahman")).toBeTruthy();
+    // Requesters are resolved to names, not raw usr_ ids — that is the shell's
+    // doing rather than any renderer's, so it holds on the purpose-built cards
+    // too.
+    expect(screen.getByText("from Aisha Rahman")).toBeTruthy();
     expect(screen.getByText("from Chen Wei")).toBeTruthy();
+    // And the integration case, which has no requester at all.
+    expect(within(cardFor("qte_3")).getByText("from an integration")).toBeTruthy();
   });
 
   it("shows age prominently and preserves the API's oldest-first order", async () => {
@@ -409,8 +411,9 @@ describe("Awaiting me", () => {
 
 describe("filters", () => {
   it("filters by type", async () => {
-    // Two types that both take the generic card, so this stays a test of the
-    // filter rather than of any renderer's internals.
+    // `quote` takes the generic card and prints its subject id; the claim takes
+    // S5's card and is found by heading. What is under test is the filter, not
+    // either renderer's internals.
     awaiting = [
       approval({ approval_id: "apr_1", subject_type: "quote", subject_id: "qte_1" }),
       approval({ approval_id: "apr_2", subject_type: "expense_claim", subject_id: "clm_2" }),
@@ -423,8 +426,6 @@ describe("filters", () => {
     });
 
     await waitFor(() => expect(screen.queryByText("qte_1")).toBeNull());
-    expect(screen.getByText("clm_2")).toBeTruthy();
-    await waitFor(() => expect(screen.queryByText("lv_1")).toBeNull());
     // By heading: the claim's own card shows the claim, not its subject id.
     expect(screen.getByRole("heading", { name: "Expense claim" })).toBeTruthy();
   });

@@ -20,6 +20,24 @@ collections agent: a tenant-wide **Agent activity** feed (`/agent`,
 backed by `GET /v1/events`), a per-customer agent snapshot
 (`GET /v1/customers/:id/agent`), and invoice-scoped event timelines.
 
+Three additions since have taken it past the original slice:
+
+- **Approvals inbox** (`/approvals`, PRD-007) — one cross-module queue of
+  everything waiting on the signed-in user, plus what they have filed
+  themselves. The shell is generic and each subject type registers its own
+  context card: an expense claim renders its receipt inline and zoomable, a
+  leave request its dates, working days, remaining balance after approval and
+  overlapping team leave. Adding a type costs one component and one line in the
+  registry.
+- **Leave and claims screens** — `/leave` for an employee's own balances and
+  requests, `/leave/calendar` for who on the team is off, plus read-only detail
+  screens for a leave request and an expense claim that notifications and the
+  inbox link into.
+- **Installable PWA** — a manifest, icons and a service worker make the console
+  installable to a phone home screen, with the mobile navigation drawer driven
+  by real swipe gestures. This is the one place the design commits to a 375px
+  viewport, because PRD-007 assumes approvers are on phones.
+
 **Auth is now option 2** (§3): a backend-for-frontend session layer —
 per-tenant `users`, email + password login (`POST /v1/auth/login`), an
 HttpOnly HMAC-signed session cookie, CSRF on cookie writes, a 6-role

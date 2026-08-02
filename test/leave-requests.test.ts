@@ -74,6 +74,17 @@ const SUN = `${YEAR}-03-07`;
 const NEXT_MON = `${YEAR}-03-08`;
 const NEXT_TUE = `${YEAR}-03-09`;
 
+/**
+ * S6's annual entitlement for the staff fixture: the middle tenure band of the
+ * Malaysian defaults 0025 seeds (2–5 years' service). Named rather than spelled
+ * out at each use, because every balance assertion below is derived from it and
+ * a band change should move them together.
+ *
+ * Deliberately NOT the port's provisional figure (8). Since S6 landed, this
+ * module reads real policy, and the two numbers differing is what proves it.
+ */
+const ANNUAL_ENTITLEMENT_DAYS = 12;
+
 async function fetchWorker(path: string, init?: RequestInit): Promise<Response> {
   const ctx = createExecutionContext();
   const res = await worker.fetch(new Request(`https://gateway.test${path}`, init), env, ctx);
@@ -351,22 +362,24 @@ describe("working-day counting (PRD-006 § public holidays)", () => {
 /* ------------------------------------------------------------- the S6 seam */
 
 describe("the S6 policy seam", () => {
-  it("falls back to provisional defaults while S6's tables are absent", async () => {
-    // This test documents the seam rather than blessing it: while S6 is
-    // unmerged, `leave_types` does not exist and the port supplies PRD-006's
-    // seed list. When S6 lands this should start reading its table — and the
-    // `entitlement_source` assertions below are what will fail loudly if the
-    // reconciliation is forgotten.
+  // S6 (PRD-006b) has landed, so this block asserts the RECONCILED behaviour.
+  // It used to assert the opposite — that the port served provisional defaults
+  // while S6's tables were absent — and said in its own comment that the
+  // `entitlement_source` assertions were "what will fail loudly if the
+  // reconciliation is forgotten". They did exactly that. What follows is the
+  // other side of that seam: S6 is now the authority, and the provisional list
+  // survives only for a database that has not run 0025.
+  it("reads S6's leave types rather than the provisional list", async () => {
     const res = await fetchWorker("/v1/leave/types", {
       headers: { Authorization: `Bearer ${API_KEY}` },
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { items: Array<{ code: string }> };
-    expect(body.items.map((t) => t.code)).toEqual(
-      PROVISIONAL_DEFAULTS.leaveTypes.map((t) => t.code),
-    );
-    // PRD-006's seven named Malaysian defaults, all present.
-    expect(body.items.map((t) => t.code).sort()).toEqual([
+    // PRD-006's seven named Malaysian defaults, all present — but now because
+    // S6 seeded them into `leave_types`, not because this module invented them.
+    // Ordered by code, which is S6's `ORDER BY`, not the port's declaration
+    // order; that difference is the cheapest proof of which one answered.
+    expect(body.items.map((t) => t.code)).toEqual([
       "annual",
       "compassionate",
       "hospitalisation",
@@ -375,13 +388,21 @@ describe("the S6 policy seam", () => {
       "sick",
       "unpaid",
     ]);
+    expect(body.items.map((t) => t.code)).not.toEqual(
+      PROVISIONAL_DEFAULTS.leaveTypes.map((t) => t.code),
+    );
   });
 
-  it("marks a provisional balance as such, so a console cannot present it as policy", async () => {
+  it("marks the balance as policy, and takes S6's entitlement over its own", async () => {
     const balances = await getBalances(env as unknown as Env, TENANT_ID, EMP_STAFF, YEAR);
     const annual = balances.find((b) => b.leave_type_code === "annual")!;
-    expect(annual.entitlement_source).toBe("default");
-    expect(annual.entitlement_days).toBe(PROVISIONAL_DEFAULTS.entitlementDays.annual);
+    // `policy`, not `default` — the console may present this as real policy.
+    expect(annual.entitlement_source).toBe("policy");
+    // S6's tenure band for this employee, which is deliberately NOT the flat
+    // provisional figure. If these two ever coincide the test stops proving
+    // anything, hence the second assertion.
+    expect(annual.entitlement_days).toBe(ANNUAL_ENTITLEMENT_DAYS);
+    expect(annual.entitlement_days).not.toBe(PROVISIONAL_DEFAULTS.entitlementDays.annual);
   });
 });
 
@@ -411,9 +432,9 @@ describe("preview (PRD-006: working days shown BEFORE submission)", () => {
       { date: SAT, reason: "non_working_day" },
       { date: SUN, reason: "non_working_day" },
     ]);
-    // The fallback annual entitlement is 8 days, so 8 − 5 = 3 left.
-    expect(body.balance.available_days).toBe(8);
-    expect(body.balance_after_days).toBe(3);
+    // S6's annual entitlement for this employee, less the 5 days requested.
+    expect(body.balance.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS);
+    expect(body.balance_after_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 5);
     expect(body.blockers).toEqual([]);
   });
 
@@ -472,7 +493,12 @@ describe("preview (PRD-006: working days shown BEFORE submission)", () => {
     expect(body.blockers.map((b) => b.code)).toContain("no_working_days");
   });
 
-  it("warns that policy is not configured while the fallback is in use", async () => {
+  it("does not warn about unconfigured policy once S6 is answering", async () => {
+    // The inverse of what this asserted before S6 landed. `policy_not_configured`
+    // is driven by `entitlement_source`, so it is the user-visible half of the
+    // seam: with real policy behind the number, the console must NOT tell the
+    // employee their balance is provisional. The warning itself is still live —
+    // a tenant that has archived the type it is asking about still gets it.
     const staff = await login("staff@leave-req.test", "staff-password");
     const res = await fetchWorker("/v1/leave/preview", {
       method: "POST",
@@ -480,7 +506,7 @@ describe("preview (PRD-006: working days shown BEFORE submission)", () => {
       body: JSON.stringify({ leave_type_code: "annual", start_date: MON, end_date: MON }),
     });
     const body = (await res.json()) as { warnings: Array<{ code: string }> };
-    expect(body.warnings.map((w) => w.code)).toContain("policy_not_configured");
+    expect(body.warnings.map((w) => w.code)).not.toContain("policy_not_configured");
   });
 });
 
@@ -640,15 +666,30 @@ describe("submission", () => {
 describe("acceptance: a request exceeding available balance is blocked with the shortfall", () => {
   it("422s and states the shortfall", async () => {
     const { env: capturing } = capturingEnv();
-    // Annual entitlement is 8 in the provisional defaults; ask for 10 working
-    // days (Mon–next Fri, two full weeks minus the weekend).
+    // A whole month, which is comfortably more than any tenure band grants.
+    //
+    // The expected shortfall is DERIVED from the preview rather than written out
+    // as a number, because the working-day count now comes from S6's holiday
+    // engine: March 2027 may carry a public holiday, and which days are working
+    // days is exactly what that engine is entitled to change. Hard-coding "short
+    // by N" here would make this acceptance test fail on a holiday-data update
+    // rather than on the behaviour it is about.
+    const preview = await previewLeaveRequest(capturing, TENANT_ID, {
+      employee_id: EMP_STAFF,
+      leave_type_code: "annual",
+      start_date: MON,
+      end_date: `${YEAR}-03-31`,
+    });
+    const shortfall = preview.working_days - ANNUAL_ENTITLEMENT_DAYS;
+    expect(shortfall).toBeGreaterThan(0);
+
     let thrown: LeaveError | null = null;
     try {
       await submitLeaveRequest(capturing, TENANT_ID, {
         employee_id: EMP_STAFF,
         leave_type_code: "annual",
         start_date: MON,
-        end_date: `${YEAR}-03-12`,
+        end_date: `${YEAR}-03-31`,
         requested_by: user.staff,
       });
     } catch (err) {
@@ -659,15 +700,15 @@ describe("acceptance: a request exceeding available balance is blocked with the 
     expect(thrown!.httpStatus).toBe(422);
     expect(thrown!.detail).toMatchObject({ code: "insufficient_balance" });
     // The shortfall is stated, not merely implied — PRD-006's wording.
-    expect(thrown!.message).toContain("short by 2");
+    expect(thrown!.message).toContain(`short by ${shortfall}`);
     const blockers = thrown!.detail!.blockers as Array<{
       code: string;
       shortfall_days?: number;
       available_days?: number;
     }>;
     expect(blockers.find((b) => b.code === "insufficient_balance")).toMatchObject({
-      shortfall_days: 2,
-      available_days: 8,
+      shortfall_days: shortfall,
+      available_days: ANNUAL_ENTITLEMENT_DAYS,
     });
   });
 
@@ -693,8 +734,10 @@ describe("acceptance: a request exceeding available balance is blocked with the 
       headers: sessionHeaders(staff),
       body: JSON.stringify({
         leave_type_code: "annual",
+        // The whole month, for the same reason as the case above: any tenure
+        // band is exceeded by it, whatever the holiday calendar says.
         start_date: MON,
-        end_date: `${YEAR}-03-12`,
+        end_date: `${YEAR}-03-31`,
       }),
     });
     expect(res.status).toBe(422);
@@ -841,7 +884,7 @@ describe("acceptance: pending reduces balance immediately, rejection restores it
   it("reduces available balance by the pending working days", async () => {
     const { env: capturing } = capturingEnv();
     const before = await getBalances(capturing, TENANT_ID, EMP_STAFF, YEAR);
-    expect(before.find((b) => b.leave_type_code === "annual")!.available_days).toBe(8);
+    expect(before.find((b) => b.leave_type_code === "annual")!.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS);
 
     await submitLeaveRequest(capturing, TENANT_ID, {
       employee_id: EMP_STAFF,
@@ -857,7 +900,7 @@ describe("acceptance: pending reduces balance immediately, rejection restores it
     // reduced by 3 immediately."
     expect(annual.pending_days).toBe(3);
     expect(annual.taken_days).toBe(0);
-    expect(annual.available_days).toBe(5);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
   });
 
   it("restores the balance when the request is rejected", async () => {
@@ -873,7 +916,7 @@ describe("acceptance: pending reduces balance immediately, rejection restores it
       (await getBalances(capturing, TENANT_ID, EMP_STAFF, YEAR)).find(
         (b) => b.leave_type_code === "annual",
       )!.available_days,
-    ).toBe(5);
+    ).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
 
     // `rejected` is not a consuming state, so the days come straight back with
     // no compensating write anywhere.
@@ -886,7 +929,7 @@ describe("acceptance: pending reduces balance immediately, rejection restores it
     const annual = (await getBalances(capturing, TENANT_ID, EMP_STAFF, YEAR)).find(
       (b) => b.leave_type_code === "annual",
     )!;
-    expect(annual.available_days).toBe(8);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS);
     expect(annual.pending_days).toBe(0);
   });
 
@@ -912,7 +955,7 @@ describe("acceptance: pending reduces balance immediately, rejection restores it
     )!;
     expect(annual.taken_days).toBe(3);
     expect(annual.pending_days).toBe(0);
-    expect(annual.available_days).toBe(5);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
   });
 
   it("counts a cancellation-pending request as still consuming", async () => {
@@ -934,7 +977,7 @@ describe("acceptance: pending reduces balance immediately, rejection restores it
     const annual = (await getBalances(capturing, TENANT_ID, EMP_STAFF, YEAR)).find(
       (b) => b.leave_type_code === "annual",
     )!;
-    expect(annual.available_days).toBe(5);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
   });
 
   it("excludes a request from its own re-preview", async () => {
@@ -956,7 +999,7 @@ describe("acceptance: pending reduces balance immediately, rejection restores it
       exclude_request_id: request.leave_request_id,
     });
     expect(preview.blockers).toEqual([]);
-    expect(preview.balance_after_days).toBe(5);
+    expect(preview.balance_after_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
   });
 });
 

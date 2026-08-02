@@ -155,7 +155,25 @@ It runs as **one Cloudflare Worker + one D1 (SQLite) database** per deployment
   (manager hierarchy with cycle detection; self-management blocked).
 - Employees are HR records first, optionally linked to a console login.
 - Offboarding is soft (`status = inactive`); no hard deletes.
-- *(Leave/approval workflows and payroll are out of scope so far.)*
+- **Leave (PRD-006b + 006c).** Configurable leave types and entitlement
+  policies with tenure bands, three accrual methods, pro-rating for mid-year
+  joiners and carry-forward caps. Malaysian public holidays ship as a data file
+  with state variation, and a tenant can add, rename or suppress a date.
+  Configurable work weeks, per employee or per tenant. Employees preview the
+  working-day cost of a request before submitting, file it with an optional
+  medical certificate, and it routes to their manager through the approvals
+  primitive; cancelling already-approved leave raises a second approval rather
+  than taking effect on the spot. Balances are derived, never stored, so a
+  pending request reduces the balance immediately and a rejection restores it
+  with no compensating write. A team calendar shows who is off, and overlapping
+  team leave warns the approver without blocking.
+- **Expense claims (PRD-006a).** Multi-line claims with a required receipt per
+  line, per-category limits that warn without blocking, mileage at a rate frozen
+  at submission, and manager approval. Approval posts a balanced journal entry —
+  expense lines against reimbursements payable — stamped with employee, project
+  and department dimensions, so claims land in project profitability and the
+  cash-flow outlook. Recording the reimbursement clears the payable.
+- *(Payroll remains out of scope.)*
 
 ## 9. Outbound communications
 
@@ -234,7 +252,11 @@ React + Vite + TanStack Query single-page app over the same `/v1` API:
 | Quotes → invoice (quote-to-cash) with branded documents | ✅ Built |
 | Support tickets + state machine | ✅ Built (no agent yet) |
 | Build: projects/issues + JIRA/GitHub/Bitbucket inbound sync | ✅ Built (inbound only) |
-| People: directory, teams, reporting lines | ✅ Built (no leave/payroll) |
+| People: directory, teams, reporting lines | ✅ Built |
+| Leave: policy, entitlement, holidays, balances, requests, approval, team calendar | ✅ Built |
+| Expense claims: submission, approval, GL posting, reimbursement | ✅ Built |
+| Approvals inbox with type-specific cards (claims, leave) | ✅ Built |
+| Installable PWA console with mobile navigation | ✅ Built |
 | Cross-module insights / dashboard | ✅ Built |
 | Multi-tenant platform + multi-company identity + roles | ✅ Built |
 | Capability enforcement on every `/v1` route + self-service `employee` tier (PRD-008) | ✅ Built |
@@ -243,5 +265,6 @@ React + Vite + TanStack Query single-page app over the same `/v1` API:
 | Operator console covering all modules + onboarding | ✅ Built |
 | Sales agent (prospecting / pipeline working) | 📝 Designed only |
 | Scoped, rotatable API keys | 📝 Designed only |
-| Support/Build agents, Marketing, Ops/Legal/IT, leave/HR workflows | ⬜ Not started |
+| Support/Build agents, Marketing, Ops/Legal/IT | ⬜ Not started |
+| Payroll | ⬜ Not started |
 | Lead enrichment providers (Apollo etc.) | ⬜ Port built, no real provider |

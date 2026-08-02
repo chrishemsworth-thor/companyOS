@@ -25,6 +25,7 @@ import { quotes } from "./gateway/routes/quotes";
 import { settings } from "./gateway/routes/settings";
 import { people } from "./gateway/routes/people";
 import { leave } from "./gateway/routes/leave";
+import { leaveRequests } from "./gateway/routes/leave-requests";
 import { files, publicFiles } from "./gateway/routes/files";
 import { approvals } from "./gateway/routes/approvals";
 import { notifications } from "./gateway/routes/notifications";
@@ -173,6 +174,15 @@ export const V1_MOUNTS: ReadonlyArray<readonly [string, CapabilityModule, Hono<A
   // per-role, which is why gating them on any business module would be wrong.
   ["/v1/approvals", "self", approvals],
   ["/v1/notifications", "self", notifications],
+  // Claims are on the same `self` axis and for the same reason: the `employee`
+  // tier holds `self` and nothing else, and employees are exactly who files a
+  // claim. Visibility is per row inside the service ("is this yours, are you its
+  // approver, do you hold finance:read"), and the one genuinely financial act —
+  // recording the reimbursement — carries `finance:write` on its own route.
+  // `/v1/claim-categories` reads are the picklist a filer needs; its writes map a
+  // category to a GL account and are likewise held to `finance:write`.
+  ["/v1/claims", "self", claims],
+  ["/v1/claim-categories", "self", claimCategories],
   // Leave (PRD-006c) is on the `self` axis for the same reason, and it is the
   // clearest case for it: the `employee` tier holds no business capability at
   // all, and filing leave is the thing that tier exists to do. Gating it on
@@ -183,18 +193,10 @@ export const V1_MOUNTS: ReadonlyArray<readonly [string, CapabilityModule, Hono<A
   // Not mounted under `/v1/me` despite PRD-006's wording, because a leave
   // request must be readable by its approver, who is not "me"; `me.ts` holds
   // "you can only ever read your own record" as an invariant. Authorization is
-  // per-row in src/gateway/routes/leave.ts — the subject employee, anyone
-  // holding an approval on that one row, a `people:read` holder, or an admin.
-  ["/v1/leave", "self", leave],
-  // Claims are on the same `self` axis and for the same reason: the `employee`
-  // tier holds `self` and nothing else, and employees are exactly who files a
-  // claim. Visibility is per row inside the service ("is this yours, are you its
-  // approver, do you hold finance:read"), and the one genuinely financial act —
-  // recording the reimbursement — carries `finance:write` on its own route.
-  // `/v1/claim-categories` reads are the picklist a filer needs; its writes map a
-  // category to a GL account and are likewise held to `finance:write`.
-  ["/v1/claims", "self", claims],
-  ["/v1/claim-categories", "self", claimCategories],
+  // per-row in src/gateway/routes/leave-requests.ts — the subject employee,
+  // anyone holding an approval on that one row, a `people:read` holder, or an
+  // admin.
+  ["/v1/leave", "self", leaveRequests],
 ];
 
 for (const [path, module, router] of V1_MOUNTS) app.route(path, guardModule(module, router));

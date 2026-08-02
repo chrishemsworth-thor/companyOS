@@ -18,6 +18,18 @@ import {
 } from "../src/modules/people/leave/service";
 
 /**
+ * S6's annual entitlement for the fixtures below: the middle tenure band of the
+ * Malaysian defaults migration 0025 seeds. Named rather than spelled out at each
+ * use, because every balance assertion here is derived from it.
+ *
+ * Deliberately NOT the leave policy port's provisional figure (8). Since S6
+ * landed, this module reads real policy rather than its own fallback, and these
+ * numbers moving from 8 to 12 is what that reconciliation looks like.
+ */
+const ANNUAL_ENTITLEMENT_DAYS = 12;
+
+
+/**
  * PRD-006c — approval routing, decision handling and cancellation.
  *
  * Covers the two PRD-006 § "Leave: request and approval" criteria that need the
@@ -56,9 +68,18 @@ const TUE = `${YEAR}-03-02`;
 const WED = `${YEAR}-03-03`;
 const THU = `${YEAR}-03-04`;
 
-/** A span in the past, for the "already started" 409. */
-const PAST_START = "2020-03-02";
-const PAST_END = "2020-03-04";
+/**
+ * A span in the past, for the "already started" 409.
+ *
+ * Inside the employees' employment, not merely in the past. The fixtures join on
+ * `${YEAR - 3}-01-01`, and since S6 landed the entitlement behind a request is
+ * real policy evaluated for that request's own leave year — so a span from
+ * before somebody was hired now correctly has nothing to draw on and is blocked
+ * for insufficient balance before it can ever be approved and cancelled. 2024-03-04
+ * is a Monday.
+ */
+const PAST_START = `${YEAR - 3}-03-04`;
+const PAST_END = `${YEAR - 3}-03-06`;
 
 async function fetchWorker(path: string, init?: RequestInit): Promise<Response> {
   const ctx = createExecutionContext();
@@ -391,7 +412,7 @@ describe("acceptance: on approval the balance is decremented and the employee is
     // buckets, which is why approval needs no atomicity guarantee here.
     expect(annual.taken_days).toBe(3);
     expect(annual.pending_days).toBe(0);
-    expect(annual.available_days).toBe(5);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
   });
 
   it("notifies the employee of the decision, with no leave-specific mapper", async () => {
@@ -478,7 +499,7 @@ describe("acceptance: on approval the balance is decremented and the employee is
     const annual = (await getBalances(inline, TENANT_ID, EMP_STAFF, YEAR)).find(
       (b) => b.leave_type_code === "annual",
     )!;
-    expect(annual.available_days).toBe(8);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS);
 
     const logged = await env.DB.prepare(
       "SELECT payload FROM events_log WHERE tenant_id = ? AND event_type = 'leave.rejected'",
@@ -609,7 +630,7 @@ describe("PRD-000 acceptance: a cancelled subject's approval is cancelled and le
     const annual = (await getBalances(inline, TENANT_ID, EMP_STAFF, YEAR)).find(
       (b) => b.leave_type_code === "annual",
     )!;
-    expect(annual.available_days).toBe(8);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS);
   });
 
   it("emits leave.cancelled and no approval.cancelled", async () => {
@@ -688,7 +709,7 @@ describe("cancelling approved future leave (PRD-006: re-approval or admin action
     const annual = (await getBalances(inline, TENANT_ID, EMP_STAFF, YEAR)).find(
       (b) => b.leave_type_code === "annual",
     )!;
-    expect(annual.available_days).toBe(8);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS);
   });
 
   it("notifies the employee when an admin cancels it — the one leave.* mapper", async () => {
@@ -739,7 +760,7 @@ describe("cancelling approved future leave (PRD-006: re-approval or admin action
     const annual = (await getBalances(inline, TENANT_ID, EMP_STAFF, YEAR)).find(
       (b) => b.leave_type_code === "annual",
     )!;
-    expect(annual.available_days).toBe(5);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
   });
 
   it("approving the cancellation cancels the leave and gives the days back", async () => {
@@ -758,7 +779,7 @@ describe("cancelling approved future leave (PRD-006: re-approval or admin action
     const annual = (await getBalances(inline, TENANT_ID, EMP_STAFF, YEAR)).find(
       (b) => b.leave_type_code === "annual",
     )!;
-    expect(annual.available_days).toBe(8);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS);
 
     // The event describes what happened to the LEAVE, not which button was
     // pressed: an approve decision produced a `leave.cancelled`.
@@ -798,7 +819,7 @@ describe("cancelling approved future leave (PRD-006: re-approval or admin action
     const annual = (await getBalances(inline, TENANT_ID, EMP_STAFF, YEAR)).find(
       (b) => b.leave_type_code === "annual",
     )!;
-    expect(annual.available_days).toBe(5);
+    expect(annual.available_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
   });
 
   it("409s cancelling approved leave that has already started", async () => {
@@ -866,7 +887,7 @@ describe("per-row read access (what makes the approvals inbox card work)", () =>
     // Everything PRD-006c's card needs, in one call.
     expect(body.employee_name).toBe("Staff Member");
     expect(body.working_days).toBe(3);
-    expect(body.balance_after_days).toBe(5);
+    expect(body.balance_after_days).toBe(ANNUAL_ENTITLEMENT_DAYS - 3);
     expect(body.team_overlaps).toEqual([]);
     expect(body.approval).toMatchObject({ state: "pending" });
   });

@@ -14,17 +14,13 @@ import type { ApprovalRenderer } from "./types";
  * changes to the inbox shell", and this map is where that one file gets plugged
  * in.
  *
- * S4 registered nothing; each later session adds its own line:
- *
- *  - `leave_request` → **registered by S7** (PRD-006c), with dates, working days,
- *    remaining balance after approval, overlapping team leave and the attachment.
- *  - `expense_claim` → S5 (PRD-006a), with the receipt image inline and zoomable.
  * Each session registers its own type; S4 shipped the registry with none:
  *
  *  - `expense_claim` → **S5 (PRD-006a), registered below.** Receipt image inline
  *    and zoomable, category, amount, project, limit status, line breakdown.
- *  - `leave_request` → S7 (PRD-006c), with dates, working days, remaining balance
- *    after approval, overlapping team leave and the attachment.
+ *  - `leave_request` → **S7 (PRD-006c), registered below.** Dates, working days,
+ *    remaining balance after approval, overlapping team leave and the
+ *    attachment.
  *  - `quote` → S9 (PRD-004), with total, validity, lines and discount.
  *  - `invoice` → never. It is a reserved subject type nothing creates
  *    (SESSION-PLAN conflict C5); the fallback covers it.
@@ -36,8 +32,8 @@ import type { ApprovalRenderer } from "./types";
  * happen — a card that silently falls back because nothing pulled its file in.
  */
 const RENDERERS: Record<string, ApprovalRenderer> = {
-  leave_request: LeaveRequestCard,
   expense_claim: ExpenseClaimCard,
+  leave_request: LeaveRequestCard,
 };
 
 /**
@@ -57,7 +53,6 @@ export function hasApprovalRenderer(subjectType: string): boolean {
   return subjectType in RENDERERS;
 }
 
-/** Subject types with a purpose-built card. */
 /** Subject types with a purpose-built card. See above for who adds what. */
 export function registeredSubjectTypes(): string[] {
   return Object.keys(RENDERERS);

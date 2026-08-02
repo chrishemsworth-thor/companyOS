@@ -23,9 +23,11 @@ function approval(overrides: Partial<Approval> = {}): Approval {
   return {
     approval_id: "apr_1",
     // A type with no registered renderer, so these tests exercise the shell plus
-    // the generic fallback. Was `expense_claim` until S5 gave claims a real card,
-    // which fetches — the shell's own behaviour is what is under test here.
-    subject_type: "leave_request",
+    // the generic fallback. The stand-in keeps moving as sessions ship cards —
+    // `expense_claim` until S5, `leave_request` until S7, both of which now
+    // fetch their own subject. `quote` is next (S9); the shell's own behaviour
+    // is what is under test here, not any renderer's.
+    subject_type: "quote",
     subject_id: "clm_1",
     requested_by: "usr_aisha",
     approver_user_id: "usr_me",
@@ -33,7 +35,10 @@ function approval(overrides: Partial<Approval> = {}): Approval {
     decision_comment: null,
     decided_by: null,
     decided_at: null,
-    created_at: new Date("2026-07-27T12:00:00.000Z").toISOString(),
+    // Relative, not a fixed date: the card ages against the real `Date.now()`,
+    // so a hard-coded timestamp silently drifts past the staleness threshold and
+    // the suite starts failing on a calendar, not on a code change.
+    created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
     idempotency_key: null,
     ...overrides,
   };
@@ -74,7 +79,7 @@ describe("the card shell", () => {
   it("shows the subject, requester and age without a type-specific renderer", () => {
     render(<ApprovalCard approval={approval()} userName={userName} />);
 
-    expect(screen.getByRole("heading").textContent).toBe("Leave request");
+    expect(screen.getByRole("heading").textContent).toBe("Quote");
     expect(screen.getByText("from Aisha Rahman")).toBeTruthy();
     // Two days old.
     expect(screen.getByText("2d")).toBeTruthy();

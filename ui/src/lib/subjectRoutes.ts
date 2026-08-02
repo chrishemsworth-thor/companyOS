@@ -23,22 +23,18 @@ type RouteBuilder = (subjectId: string) => string;
 const SUBJECT_ROUTES: Record<string, RouteBuilder> = {
   quote: (id) => `/quotes/${id}`,
   invoice: (id) => `/invoices/${id}`,
+  // The rule both lines here obey: a route goes in only when the page exists,
+  // because the catch-all redirect would otherwise swallow the click and look
+  // like a bug. Each session adds its own line — that plus a renderer is the
+  // whole cost of a new approvable type.
+  //
+  // Added by S5 together with the read-only claim screen it points at.
+  expense_claim: (id) => `/claims/${id}`,
   // Added by S7 (PRD-006c). The approvals card is self-sufficient, so this route
   // is not what a manager deciding a request uses — it is what a *notification*
   // needs, in particular the "your leave was cancelled" one, which has no
   // approval behind it and would otherwise render as unavailable.
   leave_request: (id) => `/leave/requests/${id}`,
-  // `expense_claim` is deliberately still ABSENT. Its screen ships with S5;
-  // until then the generic fallback is the honest answer, and adding a route to
-  // a page that does not exist would send a user to the catch-all redirect
-  // instead. Each session adds its own line here — that plus a renderer is the
-  // whole cost of a new approvable type.
-  // Added by S5 together with the read-only claim screen it points at. The rule
-  // this line obeys: a route goes in here only when the page exists, because the
-  // catch-all redirect would otherwise swallow the click and look like a bug.
-  expense_claim: (id) => `/claims/${id}`,
-  // `leave_request` is deliberately still ABSENT — its screen ships with S7, and
-  // until then the generic fallback card is the honest answer.
 };
 
 /** The route for a subject, or null when this build cannot show it. */

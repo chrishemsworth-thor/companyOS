@@ -404,6 +404,83 @@ export interface NotificationPage {
   unread_count: number;
 }
 
+// ── Expense claims (PRD-006a) ────────────────────────────────────────────────
+
+export type ClaimStatus =
+  | "draft"
+  | "submitted"
+  | "approved"
+  | "rejected"
+  | "paid"
+  | "cancelled";
+
+export interface ExpenseClaim {
+  claim_id: string;
+  employee_id: string;
+  claim_date: string;
+  description: string | null;
+  currency: string;
+  total_cents: number;
+  /** Captured, not posted — the SST Input leg lands with the tax work. */
+  tax_cents: number;
+  status: ClaimStatus;
+  project_id: string | null;
+  department_code: string | null;
+  submitted_by: string | null;
+  submitted_at: string | null;
+  approval_id: string | null;
+  rejection_comment: string | null;
+  rejected_at: string | null;
+  /** The `Dr expense / Cr reimbursements payable` entry. Null until approved. */
+  entry_id: string | null;
+  paid_entry_id: string | null;
+  payment_reference: string | null;
+  paid_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExpenseClaimLine {
+  line_no: number;
+  category_id: string;
+  category_code: string;
+  category_name: string;
+  category_kind: "standard" | "mileage";
+  /** The GL account this line debits on approval. */
+  account_code: string;
+  account_name: string;
+  description: string | null;
+  distance_km: number | null;
+  amount_cents: number;
+  tax_cents: number;
+  receipt_file_id: string;
+  /** All three are null when the receipt has been deleted — render as unavailable. */
+  receipt_filename: string | null;
+  receipt_content_type: string | null;
+  receipt_size_bytes: number | null;
+  project_id: string | null;
+  department_code: string | null;
+}
+
+/**
+ * A category on this claim that is over its configured limit. Advisory: PRD-006
+ * warns on a breach and still lets the claim submit.
+ */
+export interface ClaimLimitWarning {
+  category_id: string;
+  category_code: string;
+  category_name: string;
+  limit_cents: number;
+  claimed_cents: number;
+  over_by_cents: number;
+}
+
+export interface ClaimDetail {
+  claim: ExpenseClaim;
+  lines: ExpenseClaimLine[];
+  limit_warnings: ClaimLimitWarning[];
+}
+
 // ── Leave (PRD-006c) ─────────────────────────────────────────────────────────
 
 /**
@@ -462,38 +539,6 @@ export interface LeaveRequest {
   decided_at: string | null;
   cancelled_at: string | null;
   created_by: string | null;
-// ── Expense claims (PRD-006a) ────────────────────────────────────────────────
-
-export type ClaimStatus =
-  | "draft"
-  | "submitted"
-  | "approved"
-  | "rejected"
-  | "paid"
-  | "cancelled";
-
-export interface ExpenseClaim {
-  claim_id: string;
-  employee_id: string;
-  claim_date: string;
-  description: string | null;
-  currency: string;
-  total_cents: number;
-  /** Captured, not posted — the SST Input leg lands with the tax work. */
-  tax_cents: number;
-  status: ClaimStatus;
-  project_id: string | null;
-  department_code: string | null;
-  submitted_by: string | null;
-  submitted_at: string | null;
-  approval_id: string | null;
-  rejection_comment: string | null;
-  rejected_at: string | null;
-  /** The `Dr expense / Cr reimbursements payable` entry. Null until approved. */
-  entry_id: string | null;
-  paid_entry_id: string | null;
-  payment_reference: string | null;
-  paid_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -575,43 +620,4 @@ export interface LeaveCalendarResponse {
   to: string;
   year: number;
   items: LeaveRequest[];
-export interface ExpenseClaimLine {
-  line_no: number;
-  category_id: string;
-  category_code: string;
-  category_name: string;
-  category_kind: "standard" | "mileage";
-  /** The GL account this line debits on approval. */
-  account_code: string;
-  account_name: string;
-  description: string | null;
-  distance_km: number | null;
-  amount_cents: number;
-  tax_cents: number;
-  receipt_file_id: string;
-  /** All three are null when the receipt has been deleted — render as unavailable. */
-  receipt_filename: string | null;
-  receipt_content_type: string | null;
-  receipt_size_bytes: number | null;
-  project_id: string | null;
-  department_code: string | null;
-}
-
-/**
- * A category on this claim that is over its configured limit. Advisory: PRD-006
- * warns on a breach and still lets the claim submit.
- */
-export interface ClaimLimitWarning {
-  category_id: string;
-  category_code: string;
-  category_name: string;
-  limit_cents: number;
-  claimed_cents: number;
-  over_by_cents: number;
-}
-
-export interface ClaimDetail {
-  claim: ExpenseClaim;
-  lines: ExpenseClaimLine[];
-  limit_warnings: ClaimLimitWarning[];
 }
