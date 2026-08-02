@@ -139,11 +139,15 @@ export const DEPARTMENTS: Department[] = [
     id: "people",
     label: "People",
     status: "live",
-    summary: "Employee directory, teams, and reporting lines.",
+    summary: "Employee directory, teams, reporting lines, and leave.",
     modules: ["people"],
     tools: [
       { label: "Employees", route: "/employees" },
       { label: "Teams", route: "/teams" },
+      // The manager-facing half of leave (PRD-006c). The employee-facing half
+      // lives under "You" in the sidebar instead, because the self-service tier
+      // sees no departments at all and those are exactly the people filing leave.
+      { label: "Leave calendar", route: "/leave/calendar" },
     ],
   },
   {

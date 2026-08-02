@@ -173,6 +173,19 @@ export const V1_MOUNTS: ReadonlyArray<readonly [string, CapabilityModule, Hono<A
   // per-role, which is why gating them on any business module would be wrong.
   ["/v1/approvals", "self", approvals],
   ["/v1/notifications", "self", notifications],
+  // Leave (PRD-006c) is on the `self` axis for the same reason, and it is the
+  // clearest case for it: the `employee` tier holds no business capability at
+  // all, and filing leave is the thing that tier exists to do. Gating it on
+  // `people` would mean an employee needed read access to the HR directory —
+  // employment terms, salaries-adjacent notes, everyone's records — to book a
+  // day off.
+  //
+  // Not mounted under `/v1/me` despite PRD-006's wording, because a leave
+  // request must be readable by its approver, who is not "me"; `me.ts` holds
+  // "you can only ever read your own record" as an invariant. Authorization is
+  // per-row in src/gateway/routes/leave.ts — the subject employee, anyone
+  // holding an approval on that one row, a `people:read` holder, or an admin.
+  ["/v1/leave", "self", leave],
   // Claims are on the same `self` axis and for the same reason: the `employee`
   // tier holds `self` and nothing else, and employees are exactly who files a
   // claim. Visibility is per row inside the service ("is this yours, are you its

@@ -123,15 +123,24 @@ async function notificationsFor(userId: string, tenantId = TENANT_ID): Promise<N
 }
 
 describe("the event→notification map", () => {
-  it("covers exactly the four approval events S4 owns, and nothing else", () => {
+  it("covers the four approval events S4 owns plus leave.cancelled, and nothing else", () => {
     // A guard on the extension point: a session adding an entry should add it
     // deliberately, and a session that accidentally registers a high-volume
     // event type here would fill every user's bell with noise.
+    //
+    // S7 added exactly one entry, and the restraint is the point. Leave
+    // submission, approval and rejection all notify through the `approval.*`
+    // mappers above, so registering `leave.requested` / `leave.approved` /
+    // `leave.rejected` here would have produced two badges for one event.
+    // `leave.cancelled` is the genuine gap: an admin cancelling somebody's
+    // approved leave involves no approval decision, so no `approval.*` event
+    // exists and the employee would never be told. See PRD-006c.
     expect(notifiableEventTypes().sort()).toEqual([
       "approval.approved",
       "approval.nudged",
       "approval.rejected",
       "approval.requested",
+      "leave.cancelled",
     ]);
   });
 

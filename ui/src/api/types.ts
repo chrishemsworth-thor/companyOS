@@ -404,6 +404,64 @@ export interface NotificationPage {
   unread_count: number;
 }
 
+// ── Leave (PRD-006c) ─────────────────────────────────────────────────────────
+
+/**
+ * `cancellation_pending` is the state an approved request enters when the
+ * employee asks to hand the leave back: PRD-006 requires re-approval for that,
+ * so a second approval is raised and the leave stays booked until it is decided.
+ */
+export type LeaveRequestState =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "cancellation_pending"
+  | "cancelled";
+
+export interface LeaveType {
+  code: string;
+  name: string;
+  paid: boolean;
+  requires_attachment: boolean;
+  max_consecutive_days: number | null;
+  allows_half_day: boolean;
+  allows_negative_balance: boolean;
+}
+
+export interface LeaveBalance {
+  leave_type_code: string;
+  leave_type_name: string;
+  entitlement_days: number;
+  carry_forward_days: number;
+  taken_days: number;
+  pending_days: number;
+  available_days: number;
+  /**
+   * `default` means the server had no configured policy to read and supplied a
+   * provisional figure. The console must say so rather than present a guess as
+   * policy — see the S6 seam in src/modules/people/leave/policy-port.ts.
+   */
+  entitlement_source: "policy" | "default";
+}
+
+export interface LeaveRequest {
+  leave_request_id: string;
+  employee_id: string;
+  employee_name: string;
+  employee_user_id: string | null;
+  leave_type_code: string;
+  start_date: string;
+  end_date: string;
+  start_half_day: boolean;
+  end_half_day: boolean;
+  working_days: number;
+  reason: string | null;
+  attachment_file_id: string | null;
+  state: LeaveRequestState;
+  approval_id: string | null;
+  decided_at: string | null;
+  cancelled_at: string | null;
+  created_by: string | null;
 // ── Expense claims (PRD-006a) ────────────────────────────────────────────────
 
 export type ClaimStatus =
@@ -440,6 +498,83 @@ export interface ExpenseClaim {
   updated_at: string;
 }
 
+export interface TeamOverlap {
+  leave_request_id: string;
+  employee_id: string;
+  employee_name: string;
+  leave_type_code: string;
+  start_date: string;
+  end_date: string;
+  working_days: number;
+  state: LeaveRequestState;
+}
+
+export interface LeaveExcludedDay {
+  date: string;
+  reason: "non_working_day" | "public_holiday";
+}
+
+export interface LeaveWarning {
+  code: "team_overlap" | "policy_not_configured" | "unpaid_leave";
+  message: string;
+}
+
+export interface LeaveBlocker {
+  code: string;
+  message: string;
+  shortfall_days?: number;
+  available_days?: number;
+  conflicting_leave_request_id?: string;
+}
+
+/**
+ * What `POST /v1/leave/preview` returns — the working days computed *before*
+ * submission, which PRD-006 requires be shown to the employee. `blockers` empty
+ * is exactly the condition under which submit will succeed, because the server
+ * runs the identical computation on both paths.
+ */
+export interface LeavePreview {
+  leave_type_code: string;
+  start_date: string;
+  end_date: string;
+  start_half_day: boolean;
+  end_half_day: boolean;
+  working_days: number;
+  calendar_days: number;
+  excluded_days: LeaveExcludedDay[];
+  balance: LeaveBalance;
+  balance_after_days: number;
+  team_overlaps: TeamOverlap[];
+  warnings: LeaveWarning[];
+  blockers: LeaveBlocker[];
+  calendar_source: "policy" | "default";
+}
+
+/** `GET /v1/leave/requests/:id` — the row plus the context a decision needs. */
+export interface LeaveRequestDetail extends LeaveRequest {
+  balance: LeaveBalance | null;
+  balance_after_days: number | null;
+  team_overlaps: TeamOverlap[];
+  excluded_days: LeaveExcludedDay[];
+  approval: Approval | null;
+}
+
+export interface LeaveRequestPage {
+  items: LeaveRequest[];
+  next_cursor: string | null;
+}
+
+export interface LeaveBalancesResponse {
+  employee_id: string;
+  year: number;
+  items: LeaveBalance[];
+}
+
+export interface LeaveCalendarResponse {
+  from: string;
+  to: string;
+  year: number;
+  items: LeaveRequest[];
 export interface ExpenseClaimLine {
   line_no: number;
   category_id: string;
