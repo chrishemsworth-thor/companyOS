@@ -32,15 +32,18 @@ const NOW = new Date("2026-07-29T12:00:00.000Z").getTime();
 function approval(overrides: Partial<Approval> = {}): Approval {
   return {
     approval_id: "apr_1",
-    // A type that still takes the generic fallback card, whose Reference row
-    // prints the subject id — which is how `cardFor` finds a card. Was
-    // `expense_claim` until S5 gave claims a purpose-built card, then
-    // `leave_request` until S7 did the same, so `quote` is the last type in the
-    // shell's own tests that still shows an id (its card ships with S9).
+    // A type that takes the generic fallback card, whose Reference row prints
+    // the subject id — which is how `cardFor` finds a card. The stand-in kept
+    // moving as sessions shipped cards: `expense_claim` until S5,
+    // `leave_request` until S7, `quote` until S9.
     //
-    // The `clm_`/`lv_` prefixes on subject ids below are historical and mean
-    // nothing to the shell — it treats a subject id as an opaque string.
-    subject_type: "quote",
+    // `other` is where it stops. SESSION-PLAN conflict C5 settles that neither
+    // `other` nor `invoice` will ever get a card, so no future session can pull
+    // it out from under these tests again.
+    //
+    // The `clm_`/`lv_`/`qte_` prefixes on subject ids below are historical and
+    // mean nothing to the shell — it treats a subject id as an opaque string.
+    subject_type: "other",
     subject_id: "clm_1",
     requested_by: "usr_aisha",
     approver_user_id: "usr_me",
@@ -236,9 +239,8 @@ describe("Awaiting me", () => {
   it("lists approvals of three types in one list with type-specific context", async () => {
     // The criterion, and it is genuinely mixed: `leave_request` (S7) and
     // `expense_claim` (S5) each take a purpose-built card that fetches its own
-    // subject, while `quote` still takes the generic one (its card ships with
-    // S9). The shell renders all three without knowing which is which, which is
-    // the property PRD-007 asks for.
+    // subject, while `other` takes the generic one. The shell renders all three
+    // without knowing which is which, which is the property PRD-007 asks for.
     awaiting = [
       approval({ approval_id: "apr_1", subject_type: "leave_request", subject_id: "lvr_1" }),
       approval({
@@ -249,7 +251,7 @@ describe("Awaiting me", () => {
       }),
       approval({
         approval_id: "apr_3",
-        subject_type: "quote",
+        subject_type: "other",
         subject_id: "qte_3",
         requested_by: null,
       }),
@@ -259,7 +261,7 @@ describe("Awaiting me", () => {
     await screen.findByText("qte_3");
     // By heading: the subject label also appears in the generic card's Type row,
     // so a bare getByText would match twice.
-    expect(within(cardFor("qte_3")).getByRole("heading").textContent).toBe("Quote");
+    expect(within(cardFor("qte_3")).getByRole("heading").textContent).toBe("Request");
     // The other two carry no reference row — a purpose-built card shows real
     // content instead of an opaque id, which is the whole point of registering
     // one — so they are located by heading. Three types, three cards, one list.
@@ -411,11 +413,11 @@ describe("Awaiting me", () => {
 
 describe("filters", () => {
   it("filters by type", async () => {
-    // `quote` takes the generic card and prints its subject id; the claim takes
+    // `other` takes the generic card and prints its subject id; the claim takes
     // S5's card and is found by heading. What is under test is the filter, not
     // either renderer's internals.
     awaiting = [
-      approval({ approval_id: "apr_1", subject_type: "quote", subject_id: "qte_1" }),
+      approval({ approval_id: "apr_1", subject_type: "other", subject_id: "qte_1" }),
       approval({ approval_id: "apr_2", subject_type: "expense_claim", subject_id: "clm_2" }),
     ];
     renderInbox();

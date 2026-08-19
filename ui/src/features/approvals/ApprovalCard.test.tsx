@@ -23,11 +23,15 @@ function approval(overrides: Partial<Approval> = {}): Approval {
   return {
     approval_id: "apr_1",
     // A type with no registered renderer, so these tests exercise the shell plus
-    // the generic fallback. The stand-in keeps moving as sessions ship cards —
-    // `expense_claim` until S5, `leave_request` until S7, both of which now
-    // fetch their own subject. `quote` is next (S9); the shell's own behaviour
-    // is what is under test here, not any renderer's.
-    subject_type: "quote",
+    // the generic fallback. The stand-in kept moving as sessions shipped cards —
+    // `expense_claim` until S5, `leave_request` until S7, `quote` until S9, each
+    // of which now fetches its own subject and would drag a query client into a
+    // test about the shell.
+    //
+    // `other` is where it stops moving: SESSION-PLAN conflict C5 settles that
+    // neither `other` nor `invoice` will ever get a card, so no future session
+    // can pull this out from under the shell tests again.
+    subject_type: "other",
     subject_id: "clm_1",
     requested_by: "usr_aisha",
     approver_user_id: "usr_me",
@@ -79,7 +83,9 @@ describe("the card shell", () => {
   it("shows the subject, requester and age without a type-specific renderer", () => {
     render(<ApprovalCard approval={approval()} userName={userName} />);
 
-    expect(screen.getByRole("heading").textContent).toBe("Quote");
+    // `subjectLabel("other")` — the console's wording for a request with no
+    // more specific type.
+    expect(screen.getByRole("heading").textContent).toBe("Request");
     expect(screen.getByText("from Aisha Rahman")).toBeTruthy();
     // Two days old.
     expect(screen.getByText("2d")).toBeTruthy();

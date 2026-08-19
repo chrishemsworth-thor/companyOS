@@ -26,6 +26,7 @@ import {
   revokeQuoteLink,
 } from "../../modules/quotes/links";
 import { listAcceptances, readArtifact } from "../../modules/quotes/acceptance";
+import { ApprovalsError } from "../../modules/approvals/service";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -104,6 +105,14 @@ function publicQuoteUrl(requestUrl: string, token: string): string {
 
 export function quotesErrorResponse(c: Context<AuthedEnv>, err: unknown) {
   if (err instanceof QuotesError) {
+    return c.json({ error: err.message, code: err.code }, err.httpStatus);
+  }
+  // From the send path, which raises an internal sign-off through the approvals
+  // primitive (PRD-004 P1). The one that matters is 422 `no_approver`: the
+  // tenant set a threshold but has nobody who can act on it. Surfaced with the
+  // primitive's own message, which explains exactly that — as a 500 it would
+  // look like a server fault rather than a setting to fix.
+  if (err instanceof ApprovalsError) {
     return c.json({ error: err.message, code: err.code }, err.httpStatus);
   }
   throw err;
@@ -190,10 +199,25 @@ quotes.post("/:id/version", async (c) => {
   }
 });
 
+/**
+ * `POST /v1/quotes/:id/send`.
+ *
+ * Above the tenant's sign-off threshold this returns the quote in
+ * `pending_approval` rather than `sent` — the approver decides through the
+ * approvals primitive, and approval sends it. See src/modules/quotes/decision.ts.
+ */
 quotes.post("/:id/send", async (c) => {
   const tenant = c.get("tenant");
+  const actor = c.get("user");
   try {
-    return c.json(await sendQuote(c.env, tenant.tenant_id, c.req.param("id")));
+    return c.json(
+      await sendQuote(
+        c.env,
+        tenant.tenant_id,
+        c.req.param("id"),
+        actor?.type === "user" ? (actor.id ?? null) : null,
+      ),
+    );
   } catch (err) {
     return quotesErrorResponse(c, err);
   }

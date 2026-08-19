@@ -1,5 +1,6 @@
 import type { EventEnvelope } from "../../schemas/envelope";
 import { applyClaimDecision, type ClaimDecisionContext } from "../claims/decision";
+import { applyQuoteDecision } from "../quotes/decision";
 import type { Approval, SubjectType } from "./types";
 
 /**
@@ -29,7 +30,7 @@ import type { Approval, SubjectType } from "./types";
  *    claim, not the entry. That is the atomicity criterion in both directions.
  *
  * Adding one for a new subject type is a line here plus one function in the
- * consuming module. S7's leave balance deduction is the next one.
+ * consuming module. S9's quote sign-off is the second, and cost exactly that.
  *
  * **Import direction matters.** This file imports the consuming module; the
  * consuming module's effect file must not import `./service`. Today:
@@ -38,7 +39,13 @@ import type { Approval, SubjectType } from "./types";
  * imports `service.ts`. No cycle.
  */
 
-/** The decision as it is about to be written — see `ClaimDecisionContext`. */
+/**
+ * The decision as it is about to be written — see `ClaimDecisionContext`.
+ *
+ * Both registered effects take the same four fields, so one alias still serves.
+ * The day two effects genuinely need different context, this becomes a union
+ * and each effect narrows on `approval.subject_type`.
+ */
 export type DecisionContext = ClaimDecisionContext;
 
 export interface DecisionOutcome {
@@ -57,10 +64,16 @@ export type DecisionEffect = (
 
 /**
  * Subject types with a decision effect. Absent means "the decision is the whole
- * story", which is true of `quote`, `invoice` and `other`.
+ * story", which is still true of `invoice` and `other`.
  */
 export const SUBJECT_DECISION_EFFECTS: Partial<Record<SubjectType, DecisionEffect>> = {
   expense_claim: applyClaimDecision,
+  // PRD-004 P1 (S9). Approving an internal sign-off SENDS the quote, in the
+  // same transaction as the decision — otherwise there is a window where an
+  // approver has said yes and the quote is still parked with nothing left to
+  // trigger it. See src/modules/quotes/decision.ts for why approval sends
+  // rather than returning the quote to an editable state.
+  quote: applyQuoteDecision,
 };
 
 /** The effect for a subject type, if it has one. Never throws on an unknown value. */

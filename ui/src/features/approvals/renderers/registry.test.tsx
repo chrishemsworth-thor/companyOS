@@ -3,6 +3,7 @@ import { render, screen, cleanup } from "@testing-library/react";
 import { ExpenseClaimCard } from "./ExpenseClaimCard";
 import { GenericApprovalCard } from "./GenericApprovalCard";
 import { LeaveRequestCard } from "./LeaveRequestCard";
+import { QuoteApprovalCard } from "./QuoteApprovalCard";
 import {
   getApprovalRenderer,
   hasApprovalRenderer,
@@ -17,9 +18,10 @@ import type { Approval } from "../../../api/types";
  * registered renderer, then a generic fallback card renders rather than
  * crashing." That is not a hypothetical: S4 shipped zero type-specific renderers
  * and each later session adds one, so the fallback keeps being taken by any
- * subject type that arrives before its own card does. `expense_claim` (S5) and
- * `leave_request` (S7) have since landed theirs; `quote` (S9) is still in that
- * position today.
+ * subject type that arrives before its own card does. `expense_claim` (S5),
+ * `leave_request` (S7) and `quote` (S9) have all since landed theirs — which
+ * leaves `invoice` and `other` as the only types the fallback still serves, and
+ * permanently so.
  */
 
 afterEach(cleanup);
@@ -49,10 +51,10 @@ describe("getApprovalRenderer", () => {
   });
 
   it("returns the fallback for every type that still has no card", () => {
-    // The quote card ships with S9; no invoice card is ever built
-    // (SESSION-PLAN C5), and `other` has nothing type-specific to show, so for
-    // those two the fallback is the permanent answer.
-    for (const type of ["quote", "invoice", "other"]) {
+    // No invoice card is ever built (SESSION-PLAN C5) and `other` has nothing
+    // type-specific to show, so for these two the fallback is the PERMANENT
+    // answer rather than a placeholder waiting on a session.
+    for (const type of ["invoice", "other"]) {
       expect(getApprovalRenderer(type)).toBe(GenericApprovalCard);
       expect(hasApprovalRenderer(type)).toBe(false);
     }
@@ -68,10 +70,15 @@ describe("getApprovalRenderer", () => {
     expect(hasApprovalRenderer("leave_request")).toBe(true);
   });
 
+  it("returns the purpose-built card for quote (S9)", () => {
+    expect(getApprovalRenderer("quote")).toBe(QuoteApprovalCard);
+    expect(hasApprovalRenderer("quote")).toBe(true);
+  });
+
   it("registers exactly the subject types whose cards exist", () => {
     // Named exhaustively rather than just checking membership: this is the line
     // that catches a later session registering a card the plan does not expect.
-    expect(registeredSubjectTypes().sort()).toEqual(["expense_claim", "leave_request"]);
+    expect(registeredSubjectTypes().sort()).toEqual(["expense_claim", "leave_request", "quote"]);
   });
 
   it("never returns undefined, whatever it is handed", () => {
@@ -101,15 +108,18 @@ describe("GenericApprovalCard", () => {
   });
 
   it("offers a link to the subject when this build can route to it", () => {
+    // `invoice` rather than `quote`: S9 gave quotes a card, so a quote no longer
+    // reaches the fallback. `invoice` is routable and permanently card-less
+    // (SESSION-PLAN C5), which is exactly the combination this asserts.
     render(
       <GenericApprovalCard
-        approval={approval({ subject_type: "quote", subject_id: "qte_9" })}
+        approval={approval({ subject_type: "invoice", subject_id: "inv_9" })}
         userName={userName}
       />,
     );
 
-    const link = screen.getByRole("link", { name: /open the quote/i }) as HTMLAnchorElement;
-    expect(link.getAttribute("href")).toBe("/quotes/qte_9");
+    const link = screen.getByRole("link", { name: /open the invoice/i }) as HTMLAnchorElement;
+    expect(link.getAttribute("href")).toBe("/invoices/inv_9");
   });
 
   it("names a programmatic requester rather than leaving the field blank", () => {

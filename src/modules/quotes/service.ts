@@ -4,6 +4,7 @@ import { paginate } from "../../gateway/pagination";
 import { createInvoice, type CreateInvoiceInput } from "../finance/service";
 import { resolvePaymentTermsDays } from "../finance/payment-terms";
 import { getQuoteBranding, resolveQuoteDefaultCurrency } from "./settings";
+import { requestApproval } from "../approvals/service";
 import {
   canTransitionQuote,
   isQuoteEditable,
@@ -655,14 +656,75 @@ async function transition(
   return (await getQuote(env.DB, tenantId, quoteId))!;
 }
 
-export function sendQuote(env: { DB: D1Database; EVENTS: Queue }, tenantId: string, quoteId: string) {
-  return transition(env, tenantId, quoteId, {
-    from: ["draft"],
-    to: "sent",
-    eventType: "quote.sent",
-    stamp: "sent_at",
-    extraPayload: () => ({ sent_at: new Date().toISOString() }),
+/**
+ * Send a quote to the customer — or park it for internal sign-off first.
+ *
+ * PRD-004 P1: *"Tenant setting: quotes above a value threshold require internal
+ * approval before send"* and *"a quote cannot transition to `sent` while an
+ * approval is pending"*. So the gate lives HERE, in the one function that can
+ * make a quote sendable, rather than in the route: a programmatic caller gets
+ * the same gate a human clicking Send does.
+ *
+ * The comparison is at-or-above the threshold. A tenant setting "approve
+ * anything from RM 10,000" means a RM 10,000 quote, not RM 10,000.01.
+ *
+ * `requestApproval` runs BEFORE the status moves and can legitimately fail with
+ * 422 `no_approver`, so a tenant with nobody able to sign off is left holding
+ * an editable draft rather than a quote wedged in `pending_approval`. That is
+ * the ordering S5 established for claims and it matters more here, because a
+ * wedged quote is one nobody can send, edit, or version.
+ */
+export async function sendQuote(
+  env: { DB: D1Database; EVENTS: Queue },
+  tenantId: string,
+  quoteId: string,
+  actorUserId: string | null = null,
+): Promise<Quote> {
+  const quote = await getQuote(env.DB, tenantId, quoteId);
+  if (!quote) throw new QuotesError("not_found", "quote not found", 404);
+
+  const threshold = (await getQuoteBranding(env.DB, tenantId)).sign_off_threshold_cents;
+  const needsSignOff = threshold !== null && quote.grand_total_cents >= threshold;
+
+  if (!needsSignOff) {
+    return transition(env, tenantId, quoteId, {
+      from: ["draft"],
+      to: "sent",
+      eventType: "quote.sent",
+      stamp: "sent_at",
+      extraPayload: () => ({ sent_at: new Date().toISOString() }),
+    });
+  }
+
+  // Guarded before the approval is raised, so a repeated Send on a quote that
+  // is already awaiting sign-off does not stack up approval rows.
+  if (quote.status !== "draft") {
+    throw new QuotesError(
+      "invalid_status",
+      `quote is ${quote.status}, expected draft`,
+      409,
+    );
+  }
+
+  const approval = await requestApproval(env, tenantId, {
+    subject_type: "quote",
+    subject_id: quoteId,
+    requested_by: actorUserId,
   });
+
+  const now = new Date().toISOString();
+  await env.DB.prepare(
+    `UPDATE quotes
+        SET status = 'pending_approval', sign_off_approval_id = ?, sign_off_comment = NULL, updated_at = ?
+      WHERE tenant_id = ? AND quote_id = ? AND status = 'draft'`,
+  )
+    .bind(approval.approval_id, now, tenantId, quoteId)
+    .run();
+
+  // No `quote.*` event here. Nothing has happened to the quote as far as the
+  // customer or the ledger is concerned, and `approval.requested` — already
+  // emitted by the primitive — is what notifies the approver.
+  return (await getQuote(env.DB, tenantId, quoteId))!;
 }
 
 export function acceptQuote(env: { DB: D1Database; EVENTS: Queue }, tenantId: string, quoteId: string) {

@@ -59,6 +59,9 @@ const quoteBrandingSchema = z.object({
   accent_color: z.string().regex(HEX_COLOR, "must be a hex colour").optional(),
   font_family: z.string().max(200).optional(),
   footer_text: z.string().max(5000).nullish(),
+  // PRD-004 P1: quotes at or above this grand total need internal sign-off
+  // before they can be sent. Null (or absent) means no gate.
+  sign_off_threshold_cents: z.number().int().nonnegative().nullish(),
   // Accept a partial config; the service re-validates/defaults through the full schema.
   template_config: quoteTemplateConfigSchema.partial().optional(),
 });

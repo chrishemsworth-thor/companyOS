@@ -159,6 +159,7 @@ interface BrandingRow {
   accent_color: string;
   font_family: string;
   footer_text: string | null;
+  sign_off_threshold_cents: number | null;
   template_config: string;
 }
 
@@ -169,7 +170,7 @@ export async function getQuoteBranding(
 ): Promise<QuoteBranding> {
   const row = await db
     .prepare(
-      "SELECT logo_url, logo_file_id, primary_color, accent_color, font_family, footer_text, template_config FROM quote_branding WHERE tenant_id = ?",
+      "SELECT logo_url, logo_file_id, primary_color, accent_color, font_family, footer_text, sign_off_threshold_cents, template_config FROM quote_branding WHERE tenant_id = ?",
     )
     .bind(tenantId)
     .first<BrandingRow>();
@@ -181,6 +182,7 @@ export async function getQuoteBranding(
     accent_color: row.accent_color,
     font_family: row.font_family,
     footer_text: row.footer_text,
+    sign_off_threshold_cents: row.sign_off_threshold_cents,
     template_config: resolveTemplateConfig(row.template_config),
   };
 }
@@ -192,6 +194,7 @@ export interface QuoteBrandingInput {
   accent_color?: string;
   font_family?: string;
   footer_text?: string | null;
+  sign_off_threshold_cents?: number | null;
   template_config?: Partial<QuoteTemplateConfig>;
 }
 
@@ -256,8 +259,8 @@ export async function upsertQuoteBranding(
   const config = quoteTemplateConfigSchema.parse(input.template_config ?? {});
   await db
     .prepare(
-      `INSERT INTO quote_branding (tenant_id, logo_url, logo_file_id, primary_color, accent_color, font_family, footer_text, template_config, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO quote_branding (tenant_id, logo_url, logo_file_id, primary_color, accent_color, font_family, footer_text, sign_off_threshold_cents, template_config, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (tenant_id) DO UPDATE SET
          logo_url = excluded.logo_url,
          logo_file_id = excluded.logo_file_id,
@@ -265,6 +268,7 @@ export async function upsertQuoteBranding(
          accent_color = excluded.accent_color,
          font_family = excluded.font_family,
          footer_text = excluded.footer_text,
+         sign_off_threshold_cents = excluded.sign_off_threshold_cents,
          template_config = excluded.template_config,
          updated_at = excluded.updated_at`,
     )
@@ -276,6 +280,7 @@ export async function upsertQuoteBranding(
       accent,
       font,
       input.footer_text ?? null,
+      input.sign_off_threshold_cents ?? null,
       JSON.stringify(config),
       new Date().toISOString(),
     )

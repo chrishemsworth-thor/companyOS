@@ -1,6 +1,7 @@
 import { ExpenseClaimCard } from "./ExpenseClaimCard";
 import { GenericApprovalCard } from "./GenericApprovalCard";
 import { LeaveRequestCard } from "./LeaveRequestCard";
+import { QuoteApprovalCard } from "./QuoteApprovalCard";
 import type { ApprovalRenderer } from "./types";
 
 /**
@@ -21,7 +22,8 @@ import type { ApprovalRenderer } from "./types";
  *  - `leave_request` → **S7 (PRD-006c), registered below.** Dates, working days,
  *    remaining balance after approval, overlapping team leave and the
  *    attachment.
- *  - `quote` → S9 (PRD-004), with total, validity, lines and discount.
+ *  - `quote` → **S9 (PRD-004), registered below.** Total, subtotal, tax,
+ *    validity, the line breakdown and the discount called out on its own.
  *  - `invoice` → never. It is a reserved subject type nothing creates
  *    (SESSION-PLAN conflict C5); the fallback covers it.
  *
@@ -34,6 +36,7 @@ import type { ApprovalRenderer } from "./types";
 const RENDERERS: Record<string, ApprovalRenderer> = {
   expense_claim: ExpenseClaimCard,
   leave_request: LeaveRequestCard,
+  quote: QuoteApprovalCard,
 };
 
 /**

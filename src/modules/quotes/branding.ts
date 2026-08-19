@@ -74,6 +74,12 @@ export interface QuoteBranding {
    * footer that appears on every page.
    */
   footer_text: string | null;
+  /**
+   * Grand total at or above which a quote needs internal sign-off before it can
+   * be sent (PRD-004 P1). NULL means no threshold — which is what every tenant
+   * has until somebody sets one, so the gate is opt-in.
+   */
+  sign_off_threshold_cents: number | null;
   template_config: QuoteTemplateConfig;
 }
 
@@ -84,5 +90,6 @@ export const DEFAULT_BRANDING: QuoteBranding = {
   accent_color: "#0f3460",
   font_family: "Helvetica, Arial, sans-serif",
   footer_text: null,
+  sign_off_threshold_cents: null,
   template_config: quoteTemplateConfigSchema.parse({}),
 };

@@ -277,3 +277,20 @@ CREATE INDEX idx_quote_acceptances_quote
 -- existing invoice predates quotes-with-signatures, so both stay NULL there.
 ALTER TABLE invoices ADD COLUMN quote_id            TEXT;
 ALTER TABLE invoices ADD COLUMN quote_acceptance_id TEXT;
+
+-- ============================================================================
+-- (e) Internal sign-off threshold
+-- ============================================================================
+--
+-- PRD-004 P1: "Tenant setting: quotes above a value threshold require internal
+-- approval before send." NULL means no threshold and no sign-off, which is the
+-- behaviour every existing tenant already has — so this column changes nothing
+-- until somebody sets it.
+--
+-- It lives on `quote_branding` despite the table's name because that table is
+-- already the per-tenant quote CONFIGURATION surface, not just its design: it
+-- carries the tax rate, the document currency and the terms text today. A
+-- separate one-row-per-tenant `quote_settings` table would be a second thing to
+-- join for one integer.
+
+ALTER TABLE quote_branding ADD COLUMN sign_off_threshold_cents INTEGER;

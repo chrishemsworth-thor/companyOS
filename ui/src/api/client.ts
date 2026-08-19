@@ -86,6 +86,33 @@ export class ApiClient {
     return res.blob();
   }
 
+  /**
+   * Multipart upload — the file primitive's `POST /v1/files`.
+   *
+   * Deliberately does NOT set `Content-Type`: the browser has to write it
+   * itself so it can append the multipart boundary. Setting it by hand (as
+   * `request()` does for JSON) produces a body the server cannot parse, which
+   * is why this is its own method rather than a flag on `post`.
+   */
+  async postForm<T>(path: string, form: FormData): Promise<T> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "X-CSRF-Token": this.opts.getCsrf?.() ?? "" },
+      body: form,
+    });
+    if (!res.ok) {
+      if (res.status === 401) this.opts.onUnauthorized?.();
+      const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+      throw new ApiError(
+        typeof body.error === "string" ? body.error : `upload failed (${res.status})`,
+        res.status,
+        typeof body.code === "string" ? body.code : undefined,
+      );
+    }
+    return (await res.json()) as T;
+  }
+
   post<T>(path: string, body?: unknown, opts?: { idempotencyKey?: string }): Promise<T> {
     return this.request<T>(path, {
       method: "POST",
@@ -100,5 +127,29 @@ export class ApiClient {
 
   put<T>(path: string, body: unknown): Promise<T> {
     return this.request<T>(path, { method: "PUT", body: JSON.stringify(body) });
+  }
+
+  /**
+   * DELETE. The first console caller is revoking a public quote link, whose
+   * route answers 204 with no body — so this does not go through `request()`,
+   * which always parses JSON and would choke on an empty one. `MUTATING`
+   * already listed DELETE, so the CSRF token was always going to ride along;
+   * only the response handling needed writing.
+   */
+  async delete(path: string): Promise<void> {
+    const res = await fetch(`${this.baseUrl}${path}`, {
+      method: "DELETE",
+      credentials: "include",
+      headers: { "X-CSRF-Token": this.opts.getCsrf?.() ?? "" },
+    });
+    if (!res.ok) {
+      if (res.status === 401) this.opts.onUnauthorized?.();
+      const body = await res.json().catch(() => ({}) as Record<string, unknown>);
+      throw new ApiError(
+        typeof body.error === "string" ? body.error : `request failed (${res.status})`,
+        res.status,
+        typeof body.code === "string" ? body.code : undefined,
+      );
+    }
   }
 }

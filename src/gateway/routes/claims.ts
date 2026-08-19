@@ -27,6 +27,7 @@ import {
   tooLargeMessage,
   uploadFile,
 } from "../../modules/files/service";
+import { ApprovalsError } from "../../modules/approvals/service";
 import { streamFile } from "./files";
 
 /**
@@ -66,6 +67,14 @@ function claimsErrorResponse(c: Context<AuthedEnv>, err: unknown) {
   // oversized image, 415 for an unsupported type. Surfaced with the primitive's
   // own message, which names the limits.
   if (err instanceof FilesError) {
+    return c.json({ error: err.message, code: err.code }, err.httpStatus);
+  }
+  // From `submitClaim`, which raises the approval through the primitive. 422
+  // `no_approver` means the employee's chain has nobody who can log in to
+  // decide — a tenant configuration problem with a message that says so. Left
+  // unhandled it surfaced as a 500, which reads as a server fault. Spotted
+  // while wiring the same call into the quote send path (S9).
+  if (err instanceof ApprovalsError) {
     return c.json({ error: err.message, code: err.code }, err.httpStatus);
   }
   throw err;

@@ -8,13 +8,17 @@ import { FormError } from "../../components/FormError";
 import { Button } from "../../components/Button";
 import { CanWrite } from "../../components/CanWrite";
 import { useApiMutation } from "../../hooks/useApiMutation";
-import type { QuoteBranding as QuoteBrandingType } from "../../api/types";
+import type { FileMetadata, QuoteBranding as QuoteBrandingType } from "../../api/types";
 
 interface Form {
   logo_url: string;
+  logo_file_id: string | null;
   primary_color: string;
   accent_color: string;
   font_family: string;
+  footer_text: string;
+  /** Blank means "no threshold", which is what NULL means on the server. */
+  sign_off_threshold: string;
   show_discount_column: boolean;
   show_line_notes: boolean;
   show_tax_line: boolean;
@@ -32,9 +36,13 @@ function toForm(b: QuoteBrandingType): Form {
   const t = b.template_config;
   return {
     logo_url: b.logo_url ?? "",
+    logo_file_id: b.logo_file_id,
     primary_color: b.primary_color,
     accent_color: b.accent_color,
     font_family: b.font_family,
+    footer_text: b.footer_text ?? "",
+    sign_off_threshold:
+      b.sign_off_threshold_cents === null ? "" : String(b.sign_off_threshold_cents / 100),
     show_discount_column: t.show_discount_column,
     show_line_notes: t.show_line_notes,
     show_tax_line: t.show_tax_line,
@@ -50,8 +58,34 @@ function toForm(b: QuoteBrandingType): Form {
 }
 
 export function QuoteBranding() {
-  const { client } = useAuth();
+  const { client, baseUrl } = useAuth();
   const [form, setForm] = useState<Form | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  /**
+   * Upload straight to the file primitive and keep the returned id.
+   *
+   * Two steps rather than one because `POST /v1/files` is the only upload path
+   * in the system — branding stores a reference, never bytes. The id is not
+   * persisted until the form is saved, so an upload the user then abandons
+   * leaves an unreferenced file rather than a changed logo.
+   */
+  async function uploadLogo(file: File) {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      body.append("purpose", "quote_logo");
+      const stored = await client!.postForm<FileMetadata>("/v1/files", body);
+      setForm((f) => (f ? { ...f, logo_file_id: stored.file_id } : f));
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const query = useQuery({
     queryKey: ["settings", "quote-branding"],
@@ -78,11 +112,21 @@ export function QuoteBranding() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const taxPercent = Number(form.tax_percent);
+    const threshold = Number(form.sign_off_threshold);
     mutation.mutate({
       logo_url: form.logo_url.trim() || null,
+      logo_file_id: form.logo_file_id,
       primary_color: form.primary_color,
       accent_color: form.accent_color,
       font_family: form.font_family,
+      footer_text: form.footer_text.trim() || null,
+      // Blank clears the gate. A non-numeric value clears it too rather than
+      // sending NaN — the field is a plain text input and the server would
+      // reject a malformed number with a 400 the user cannot act on.
+      sign_off_threshold_cents:
+        form.sign_off_threshold.trim() === "" || !Number.isFinite(threshold)
+          ? null
+          : Math.round(threshold * 100),
       template_config: {
         show_discount_column: form.show_discount_column,
         show_line_notes: form.show_line_notes,
@@ -120,8 +164,41 @@ export function QuoteBranding() {
 
       <div style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 24 }}>
         <form onSubmit={submit}>
-          <FormRow label="Logo URL">
-            <input className="input" value={form.logo_url} onChange={(e) => set("logo_url", e.target.value)} placeholder="https://…" />
+          <FormRow label="Logo">
+            {form.logo_file_id ? (
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span className="text-sm text-muted">Uploaded logo in use</span>
+                <Button type="button" onClick={() => set("logo_file_id", null)}>
+                  Remove
+                </Button>
+              </div>
+            ) : (
+              <input
+                type="file"
+                className="input"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={uploading}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) void uploadLogo(file);
+                  e.target.value = "";
+                }}
+              />
+            )}
+            {uploadError && <div className="text-sm text-bad">{uploadError}</div>}
+            <div className="text-xs text-subtle">
+              PNG, JPEG or WebP, up to 2 MB. Around 400×120px reproduces well on both screen and
+              print. This is the one file served to a customer on a public quote link.
+            </div>
+          </FormRow>
+          <FormRow label="Logo URL (if hosted elsewhere)">
+            <input
+              className="input"
+              value={form.logo_url}
+              onChange={(e) => set("logo_url", e.target.value)}
+              placeholder="https://…"
+              disabled={!!form.logo_file_id}
+            />
           </FormRow>
           <div className="form-row-inline">
             <FormRow label="Primary colour">
@@ -133,6 +210,28 @@ export function QuoteBranding() {
           </div>
           <FormRow label="Font family (CSS)">
             <input className="input" value={form.font_family} onChange={(e) => set("font_family", e.target.value)} />
+          </FormRow>
+          <FormRow label="Document footer">
+            <textarea
+              className="input"
+              rows={3}
+              value={form.footer_text}
+              onChange={(e) => set("footer_text", e.target.value)}
+              placeholder="Bank details, registration numbers, payment terms…"
+            />
+          </FormRow>
+          <FormRow label="Require internal approval above">
+            <input
+              className="input"
+              inputMode="decimal"
+              value={form.sign_off_threshold}
+              onChange={(e) => set("sign_off_threshold", e.target.value)}
+              placeholder="Leave blank for no approval"
+            />
+            <div className="text-xs text-subtle">
+              A quote at or above this total cannot be sent until an admin or finance user approves
+              it. They get it in their approvals inbox.
+            </div>
           </FormRow>
 
           <div className="field-label" style={{ marginTop: 12 }}>Sections & columns</div>
@@ -184,14 +283,14 @@ export function QuoteBranding() {
           </div>
         </form>
 
-        <BrandingPreview form={form} />
+        <BrandingPreview form={form} baseUrl={baseUrl} />
       </div>
     </div>
   );
 }
 
 /** Lightweight in-page preview mirroring the document header/table/toggles. */
-function BrandingPreview({ form }: { form: Form }) {
+function BrandingPreview({ form, baseUrl }: { form: Form; baseUrl: string }) {
   return (
     <div>
       <div className="field-label">Live preview</div>
@@ -208,8 +307,15 @@ function BrandingPreview({ form }: { form: Form }) {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", borderBottom: `3px solid ${form.primary_color}`, paddingBottom: 10, marginBottom: 12 }}>
-          {form.logo_url ? (
-            <img src={form.logo_url} alt="logo" style={{ maxHeight: 40, maxWidth: 160 }} />
+          {form.logo_file_id || form.logo_url ? (
+            // An uploaded logo comes from the API origin's PUBLIC file route —
+            // no credential, which is the same way a customer's quote page will
+            // load it. `quote_logo` is the only purpose that route serves.
+            <img
+              src={form.logo_file_id ? `${baseUrl}/files/${form.logo_file_id}` : form.logo_url}
+              alt="logo"
+              style={{ maxHeight: 40, maxWidth: 160 }}
+            />
           ) : (
             <div style={{ fontWeight: 700, color: form.primary_color }}>Your Company</div>
           )}

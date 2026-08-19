@@ -179,7 +179,15 @@ export interface Lead {
   updated_at: string;
 }
 
-export type QuoteStatus = "draft" | "sent" | "accepted" | "rejected" | "expired" | "converted";
+export type QuoteStatus =
+  | "draft"
+  /** Awaiting internal sign-off before it can be sent (PRD-004 P1). */
+  | "pending_approval"
+  | "sent"
+  | "accepted"
+  | "rejected"
+  | "expired"
+  | "converted";
 
 export interface Quote {
   quote_id: string;
@@ -204,6 +212,58 @@ export interface Quote {
   updated_at: string;
   sent_at: string | null;
   accepted_at: string | null;
+  // PRD-004 (S9).
+  version: number;
+  supersedes_quote_id: string | null;
+  superseded_by_quote_id: string | null;
+  first_viewed_at: string | null;
+  last_viewed_at: string | null;
+  view_count: number;
+  accepted_acceptance_id: string | null;
+  sign_off_approval_id: string | null;
+  sign_off_comment: string | null;
+}
+
+/** A public quote link's metadata. Never the token — it is stored hashed. */
+export interface QuoteLinkInfo {
+  link_id: string;
+  quote_id: string;
+  created_by: string | null;
+  created_at: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+}
+
+/** What `POST /v1/quotes/:id/link` returns — the only time the token exists. */
+export interface MintedQuoteLink extends QuoteLinkInfo {
+  token: string;
+  url: string;
+}
+
+/** The evidentiary record of a customer's response (PRD-004 P0). */
+export interface QuoteAcceptance {
+  acceptance_id: string;
+  quote_id: string;
+  link_id: string;
+  decision: "accepted" | "declined";
+  signatory_name: string;
+  signatory_email: string;
+  contact_id: string | null;
+  contact_match: string | null;
+  agreement_version: string;
+  agreement_text: string;
+  document_sha256: string | null;
+  artifact_file_id: string | null;
+  signature_file_id: string | null;
+  decline_reason: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  created_at: string;
+}
+
+export interface QuoteAcceptances {
+  acceptances: QuoteAcceptance[];
+  accepted_acceptance_id: string | null;
 }
 
 export interface QuoteLine {
@@ -260,10 +320,28 @@ export interface QuoteTemplateConfig {
 
 export interface QuoteBranding {
   logo_url: string | null;
+  /** An uploaded logo (`purpose = quote_logo`); wins over `logo_url`. */
+  logo_file_id: string | null;
   primary_color: string;
   accent_color: string;
   font_family: string;
+  /** Standing footer: bank details, registration numbers, payment terms. */
+  footer_text: string | null;
+  /** Grand total at or above which a quote needs internal sign-off. */
+  sign_off_threshold_cents: number | null;
   template_config: QuoteTemplateConfig;
+}
+
+/** What `POST /v1/files` hands back. */
+export interface FileMetadata {
+  file_id: string;
+  filename: string;
+  content_type: string;
+  size_bytes: number;
+  sha256: string;
+  purpose: string;
+  uploaded_by: string | null;
+  created_at: string;
 }
 
 export interface PaymentHistoryEntry {
