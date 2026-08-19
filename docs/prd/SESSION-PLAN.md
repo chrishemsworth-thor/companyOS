@@ -106,7 +106,7 @@ Recorded so no session re-opens them.
 | S7 | Leave requests + team calendar | 006c | P0 | `claude/leave-request-approval-15v4bu`⁶ | S6 | **done** |
 | S8 | Contact roles, attributes, health | 003 | P1 | `claude/contact-roles-crm-depth-hlgw1f`⁷ | S1 (loose) | **done** |
 | S9 | Quote branding & click-to-sign | 004 | P1 | `claude/prd-004-quote-signing` | S2, S8; S3 for P1 sign-off | not started |
-| S10 | Agent guardrails, eval, observability | 002 | P1 | `claude/prd-002-agent-guardrails` | — | not started |
+| S10 | Agent guardrails, eval, observability | 002 | P1 | `claude/agent-guardrails-escalation-qi0ypi`⁸ | — | **done** |
 | S11 | Support intake & tracking | 005 | P1 | `claude/prd-005-support-intake` | S2, **S4** | not started |
 | S12 | Tax (SST) | 001b | P0¹ | `claude/prd-001b-tax` | S1 | not started |
 | S13 | Credit notes + ledger multi-currency | 001c | P0¹ | `claude/prd-001c-credit-notes` | S1, S12 | not started |
@@ -144,6 +144,15 @@ per standing rule 5.
 listed here — the same cosmetic divergence S2, S3 and S4 had. Migration
 `0027_crm_depth.sql` is taken, so **the next session takes `0028`** — check
 `main`, per standing rule 5.
+
+⁸ S10 likewise ran on its session's branch rather than the
+`claude/prd-002-agent-guardrails` listed here. Migration
+`0028_agent_guardrails.sql` is taken, so **the next session takes `0029`** —
+check `main`, per standing rule 5. **S9 was built concurrently from the same
+`main`**, so if it also reached for `0028` the numbers collide on merge; two
+`0028_*` files apply in name order and both run once, which is a review
+annoyance rather than a correctness problem (the same shape as the existing
+duplicate `0015` and `0022`). S10 touches nothing S9 touches.
 
 Reserving the numbers avoided a filename collision; it did not avoid a *content*
 collision, and that is the lesson worth carrying into S8. S6 and S7 both defined
@@ -277,6 +286,18 @@ frozen fixture files, so the context can describe a pending credit note before
 the feature exists) with a note that the agent's live context assembly will not
 produce it until S13.
 
+**Shipped in S10 as:** `company_profile.timezone` (migration `0028`), on the
+existing per-tenant settings row rather than a new one, validated against
+`Intl.DateTimeFormat` — the zone database changes and a hardcoded list would
+not. The eval scenario is
+`evals/scenarios/collections/c08-disputed-credit-note-pending.json`, flagged
+`fixture_only: { blocked_by: "S13 (PRD-001 credit notes)" }`. It expresses the
+pending credit note as a `credit_note_pending` entry in `recent_activities` — a
+context field the agent already populates — rather than inventing a `disputes`
+field nothing can fill, so the fixture is schema-valid today and S13 makes it
+*reachable* without changing it. The harness prints fixture-only scenarios under
+their own heading so nobody mistakes it for live coverage.
+
 ### C7 — PRD-003 changes a finance write path
 
 `payment_terms_days` on the customer is *"used to compute invoice due dates
@@ -336,6 +357,37 @@ did not actually generalise the runner, generalising it is S15's job too.
 **Also true of a third agent.** PRD-005 explicitly builds the support substrate
 without a SupportAgent. Whenever that lands, it inherits this resolution rather
 than re-litigating it: one guard, one override event, one runner.
+
+**What S10 actually left for S15.** All three parts still hold; here is the
+starting position:
+
+- **The guard is in `src/agents/guardrails/`**, with two entry points:
+  `preflight(policy, ctx, holidays)` before the model is asked (kill switches,
+  cooldown, per-reference send cap, contact window) and
+  `applyDecisionGuards(policy, ctx, decision, opts)` after it answers
+  (escalation gate, reference integrity, character cap). Nothing is imported
+  from the collections module.
+- **`SendContext` is already "this send, to this subject, on this channel, for
+  this tenant"** — `{ agent, subject_type, subject_id, channel, at,
+  last_contact_at, paused, sends_for_ref, ref }`. References are opaque strings
+  and the escalation rule is passed in (`{ action, downgrade_to, days_past_due,
+  prior_sends, min_prior_sends }`), so the guard does not know what an invoice
+  is. What is still collections-shaped: `subject_type` is a literal `"customer"`,
+  the deterministic replacement message is supplied by the caller as
+  `fallback_message(action)`, and `agent_settings` names its cap
+  `max_reminders_per_invoice`. Widening those is the generalisation S15 owns.
+- **`guardrail.override.v1` needs no change** for a sales send: pass
+  `agent: "sales"` and the deal in `subject_ref`. A test in
+  `test/agent-decision-events.test.ts` asserts exactly that payload validates,
+  so the shared-event decision is enforced rather than remembered.
+- **The eval runner is generic already.** `evals/types.ts` and `evals/runner.ts`
+  mention no invoices: an agent supplies scenarios and a `run()` returning an
+  `Observation`, and the checks, table, fallback-gap accounting, p95 and baseline
+  are shared. `evals/README.md` § "Adding another agent" is the two-step.
+- **Two things a sales guard must not re-derive:** the tenant's local time
+  (`company_profile.timezone`, read through `loadAgentPolicy`) and the working
+  calendar (`leave_settings.work_week` plus S6's `public_holidays`, resolved on
+  the national scope in `guardrails/holidays.ts`).
 
 ---
 
@@ -405,7 +457,7 @@ these answered before they start.
 | Question | PRD | Blocks | Recommendation |
 |---|---|---|---|
 | Does profitability's "direct cost" come only from dimensioned expense entries, or also employee cost rate × logged time? There is **no time tracking module**. | 001 | S1's rollup | Ship revenue-side and expense-side rollups only. Time-based cost is a separate PRD, and PRD-001 says as much. |
-| Default escalation threshold in days? Malaysian SME norms run 60–90 days in practice, so 30 may be culturally aggressive. | 002 | S10 guardrails | Needs a design partner's view. Ship it tenant-configurable with a conservative default so the decision is cheap to change. |
+| ~~Default escalation threshold in days?~~ | 002 | ~~S10 guardrails~~ | **Answered by S10: 60 days, tenant-configurable (1–365).** Malaysian SME payment behaviour runs 60–90 days in practice regardless of stated terms, so 30 escalates a customer who is behaving normally for the market; 60 is the bottom of that band, late enough not to be culturally aggressive and early enough that the guardrail is not decorative. Escalation is also the irreversible half of the decision, and the guard can only ever make the model escalate *later* than it wanted. ANDed with a **non-configurable** "≥ 2 prior reminders on that invoice", so a tenant lowering the threshold still cannot escalate on first contact. `agent_settings.escalation_threshold_days`. Still wants a design partner's view — one column, one settings field, one eval dimension to change. |
 | ~~Should `at_risk` health auto-pause outbound sales activity, or only surface as a signal?~~ | 003 | ~~S8 health~~ | **Answered by S8: signal only.** Confirmed with Josh, 2026-08-02. Nothing in the send path reads the band. Two reasons beyond "it wants real data first": the thresholds are uncalibrated, and PRD-002 (S10) already owns the kill switch (`agents.enabled`, `agent_paused`) in the guardrail layer — a second derived pause would mean two authorities and no owner. The band is machine-readable so S10 can consume it as a guardrail *input*. |
 | ~~Should high-value approvals require re-authentication?~~ | 007 | ~~S4~~ | **Answered by S4: no, not in v1.** Taken deliberately rather than by omission, as PRD-007 asks. Revisit when a tenant actually approves something large enough to care. |
 | ~~Where do public holidays come from each year — manual seed or a maintained data file shipped with releases?~~ | 006 | ~~S6~~ | **Answered by S6: a shipped data file, used as an OVERLAY.** State variation makes manual seeding per tenant an annual support burden. S6 went one step further than the recommendation: the shipped calendar is never written to the database. `public_holidays` holds only tenant deltas (additions and suppressions) and the effective set is merged at read time, so the annual update is a deploy with no backfill and a tenant's own edits survive it by construction. See [`../modules/leave.md`](../modules/leave.md). |
@@ -430,7 +482,7 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 | S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` — **done**. One mapper only, for the admin cancellation: it is the sole leave decision with no approval behind it to notify off. |
 | S8 | `customer.no_contact.v1` (PRD-003 writes it without a version suffix — added one, per the existing convention) — **done**. No `NOTIFICATION_MAP` entry: the consumer must not query D1 for a recipient and the payload carries no user id. `collections.decision.v1` also gained optional `contact_id` / `contact_match` — additive to a non-strict schema, so no v2; **S10 must carry both into `collections.decision.v2`.** |
 | S9 | `quote.viewed.v1`. **`quote.accepted.v1` and `quote.rejected.v1` already exist** in the registry — reuse, do not re-add. |
-| S10 | `guardrail.override.v1`, plus `collections.decision.v2` (PRD-002 extends the payload with provider, model, prompt version, tokens, latency, cost, fallback and override flags — that is a breaking payload change, so it is a v2 file and a registry bump, per the convention documented in `registry.ts`) |
+| S10 | `guardrail.override.v1`, plus `collections.decision.v2` — **done**. The v2 payload carries provider, model, prompt version, tokens, latency, `cost_micros`, the fallback reason, `guardrail_overridden` / `overrides[]`, S8's `contact_id` / `contact_match` as first-class fields, and `invoice_id` (which is what makes PRD-002's P2 outcome scoring a query rather than a migration). A v1-shaped payload no longer validates — that is what made it a v2 file rather than an edit — and v1 stays as a file because `events_log` history was written against it. `guardrail.override.v1` is **agent-agnostic** (`agent`, `subject_type`/`subject_id`, `subject_ref`), so per C9 **S15 reuses it rather than adding a sales override event**; a test asserts a sales-shaped payload validates. Neither is in `NOTIFICATION_MAP`: an override is an engineering and audit fact, and the tenant admin's view of it is the Agent Activity badge, not the approvals bell. |
 | S11 | `ticket.assigned.v1`, `ticket.sla_breached.v1` |
 | S13 | `credit_note.issued.v1` |
 | S14 | `project.deadline_approaching.v1`, `project.overdue.v1` |
@@ -455,7 +507,7 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 | R2 | **Bound as of S2**: bucket `companyos-files`, binding `FILES`, in *both* `wrangler.jsonc` and `wrangler.free.jsonc`. Create it once with `npx wrangler r2 bucket create companyos-files` — R2 has a free tier, so the free-plan deploy is not blocked. |
 | File storage | `src/modules/files/` — `uploadFile`/`getFile`/`getPublicFile`/`deleteFile`, plus a per-purpose policy table (`policy.ts`). A module wanting to store a binary adds a `purpose` entry there and calls the service; it never touches R2. See [`docs/modules/files.md`](../modules/files.md). |
 | Public (credential-less) reads | `GET /files/:id`, mounted **outside `/v1`** alongside `/webhooks` and `/oauth/google`. Serves only purposes whose policy sets `publiclyReadable` — `quote_logo` alone in v1. S9/S11 extend the policy table, not the read path. |
-| Tenant timezone | **Does not exist anywhere in `src/`.** S10 needs it (C6). |
+| Tenant timezone | **`company_profile.timezone` as of S10** (`0028`), an IANA zone name defaulting to `Asia/Kuala_Lumpur`, validated against `Intl.DateTimeFormat` on the way in. Company-wide rather than agent-owned — SLA targets and any report with a "today" in it want the same answer. Read through `loadAgentPolicy()` in `src/agents/guardrails/policy.ts`; tenant-local arithmetic lives in `src/agents/guardrails/zone.ts` (workerd ships full ICU, so IANA zones and DST both work). |
 | `is_internal` on ticket messages | **Does not exist.** S11 adds it, and must default it correctly — PRD-005 calls leaking an internal note the failure mode that would kill trust in the module. |
 | Event registry | `src/schemas/events/registry.ts`, one Zod file per event, mapped `event_type → latest schema`. Unknown types are rejected by the consumer. |
 | Event consumer | `processEvent()` in `src/queue/consumer.ts`: validate → append to `events_log` → route to agent. `AGENT_ROUTES` is the per-type routing map. New consumers hook in here. |
@@ -1163,10 +1215,18 @@ customer reminders.
 
 ---
 
-### S10 — PRD-002: Agent guardrails, eval harness, observability
+### S10 — PRD-002: Agent guardrails, eval harness, observability — **shipped**
 
 **PRD:** [002](PRD-002-agent-portability-and-eval.md) · **Branch:**
-`claude/prd-002-agent-guardrails` · **Depends on:** nothing
+`claude/agent-guardrails-escalation-qi0ypi` · **Depends on:** nothing ·
+**Plan:** [`S10-IMPLEMENTATION-PLAN.md`](S10-IMPLEMENTATION-PLAN.md)
+
+**Shipped**, in three commits: guardrails (migration `0028`), the eval harness
+(`evals/`, `npm run eval`), then observability (`collections.decision.v2`,
+`GET /v1/insights/agents`, console badges). The threshold decision, the C6
+timezone setting and what was left for S15 are recorded in their own sections
+above. Not built, all P1 or P2 in PRD-002: the escalation approval gate,
+per-tenant tone configuration, local-model support, outcome-based scoring.
 
 **Read C6:** this session must add a tenant timezone setting, and one eval
 scenario reaches into S13's credit notes. **Read C9 too:** S15's SalesAgent

@@ -155,7 +155,8 @@ includes `next_cursor`; `null` means there is no further page.
 | `invoice.overdue` | v2 | `invoice_id, customer_id, amount_due_cents, currency, days_overdue` | daily sweep (re-emitted while unpaid) |
 | `payment.received` | v2 | `payment_id?, invoice_id, customer_id, amount_paid_cents, currency` | `recordPayment`, per fully settled invoice |
 | `payment.partial` | v1 | `payment_id, invoice_id, customer_id, amount_paid_cents, remaining_cents, currency` | `recordPayment`, per partially settled invoice |
-| `collections.decision` | v1 | `customer_id, risk_score, action, channel, message, source, trigger` | CollectionsAgent, every assessment (LLM or fallback) — the audit trail |
+| `collections.decision` | **v2** | v1's `customer_id, risk_score, action, channel, message, source, trigger` plus `invoice_id`, `contact_id`, `contact_match`, `provider`, `model`, `prompt_version`, `input_tokens`, `output_tokens`, `latency_ms`, `cost_micros`, `fallback_reason`, `guardrail_overridden`, `overrides[]`, `deferred_until` | CollectionsAgent, every assessment (LLM or fallback) — the audit trail. See [`agents.md`](agents.md) |
+| `guardrail.override` | v1 | `agent, subject_type, subject_id, channel, guardrail, outcome, from_action, to_action, subject_ref, detail, defer_until` | a hard guardrail changed or blocked a send. **Agent-agnostic on purpose** — one override event for every agent that messages a person. See [`agents.md`](agents.md) |
 | `customer.risk_flagged` | v1 | `customer_id, risk_score, open_invoices, total_due_cents` | CollectionsAgent, on the transition into `escalated` |
 
 `invoice.overdue` and `payment.received` route to the `CollectionsAgent`

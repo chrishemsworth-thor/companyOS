@@ -1,7 +1,13 @@
 # PRD-002 — Collections Agent: Model Portability & Evaluation Harness
 
-**Status:** Partially built (portability ✅, evaluation ⬜) · **Priority:** P1
+**Status:** Built (portability ✅, guardrails ✅, evaluation ✅, observability ✅) ·
+**Priority:** P1
 **Depends on:** nothing · **Blocks:** confident model upgrades, future agents
+
+**Shipped in S10** — see [`S10-IMPLEMENTATION-PLAN.md`](S10-IMPLEMENTATION-PLAN.md)
+for the plan and [`../../evals/README.md`](../../evals/README.md) for how to run
+the suite. P0 in full; the P1 escalation approval gate, per-tenant tone
+configuration and local-model support are not built.
 
 ---
 
@@ -81,12 +87,21 @@ who paid yesterday, and we would find out from the customer.
   pre-merge step for any prompt or model change.
 
 **Acceptance criteria**
-- [ ] Given the current default model, when `npm run eval` runs, then all scenarios
-      pass and a baseline result is committed to the repo.
-- [ ] Given a deliberately broken prompt, then the eval fails and names which scenarios.
-- [ ] Given no LLM key configured, then eval runs against the deterministic fallback
-      and reports which scenarios the fallback handles.
-- [ ] Given a run, then total cost and p95 latency are reported.
+- [x] Given the current default model, when `npm run eval` runs, then all scenarios
+      pass and a baseline result is committed to the repo. *(The committed baseline is
+      the deterministic one, `evals/baseline/collections-fallback.json` — 22 pass,
+      6 declared fallback gaps, 0 failures. A model baseline needs a key and is
+      captured with `npm run eval -- --write-baseline`.)*
+- [x] Given a deliberately broken prompt, then the eval fails and names which scenarios.
+      *(`evals/prompts/broken.ts` + `npm run eval -- --prompt=broken` for the live half;
+      the reporting half is asserted against a canned bad decision in
+      `test/evals-harness.test.ts`, since a prompt only changes behaviour through a model.)*
+- [x] Given no LLM key configured, then eval runs against the deterministic fallback
+      and reports which scenarios the fallback handles. *(Per check, not per scenario:
+      a fixture declares `fallback.missing`, so "never escalate" stays enforced even
+      where the risk band is a known blind spot.)*
+- [x] Given a run, then total cost and p95 latency are reported. *(Cost in integer
+      micro-USD; the total refuses to sum when any call's model had no known rate.)*
 
 ### P0 — Hard guardrails in code
 
@@ -107,15 +122,22 @@ overridden by the fallback, and the override is logged.
   Both checked before any send.
 
 **Acceptance criteria**
-- [ ] Given an LLM response with `action=escalate` on a 2-day-overdue first contact,
+- [x] Given an LLM response with `action=escalate` on a 2-day-overdue first contact,
       then the guardrail downgrades to `remind` and logs `guardrail.override.v1`.
-- [ ] Given a decision made at 23:00 tenant time, then the send is deferred to 09:00,
-      not dropped.
-- [ ] Given a message referencing invoice INV-9999 which is not in context, then the
-      deterministic template is sent instead and the override is logged.
-- [ ] Given `agent_paused` on a customer, then no send occurs and the DO alarm still
-      reschedules.
-- [ ] Given the 6th reminder attempt on one invoice with a cap of 5, then no send.
+      *(The downgrade also replaces the message: the escalation's wording must not
+      go out as a reminder.)*
+- [x] Given a decision made at 23:00 tenant time, then the send is deferred to 09:00,
+      not dropped. *(Tenant-local via `company_profile.timezone`; the DO alarm is set to
+      the window opening, and no guardrail can clear the alarm.)*
+- [x] Given a message referencing invoice INV-9999 which is not in context, then the
+      deterministic template is sent instead and the override is logged. *(Also when
+      the message names no invoice at all — the requirement is a real reference,
+      not merely the absence of a fake one.)*
+- [x] Given `agent_paused` on a customer, then no send occurs and the DO alarm still
+      reschedules. *(Not audited as an override: a standing instruction re-checked
+      daily would bury the override rate.)*
+- [x] Given the 6th reminder attempt on one invoice with a cap of 5, then no send.
+      *(Audited once per invoice, not once a day: the cap is a terminal state.)*
 
 ### P0 — Decision observability
 
@@ -127,9 +149,11 @@ overridden by the fallback, and the override is logged.
 - Console Agent Activity feed shows fallback and override badges.
 
 **Acceptance criteria**
-- [ ] Given any decision, then provider, model, and prompt version are queryable from
-      `events_log`.
-- [ ] Given a month of decisions, then total LLM spend for a tenant is derivable.
+- [x] Given any decision, then provider, model, and prompt version are queryable from
+      `events_log`. *(`collections.decision.v2`; asserted as a `json_extract` query.)*
+- [x] Given a month of decisions, then total LLM spend for a tenant is derivable.
+      *(`GET /v1/insights/agents`, which also reports how many decisions it could not
+      price rather than understating the total.)*
 
 ### P1
 
@@ -148,6 +172,10 @@ overridden by the fallback, and the override is logged.
 
 ## Success Metrics
 
+All four are now measurable rather than aspirational: the first from
+`npm run eval`, the middle two from `GET /v1/insights/agents`
+(`overrides.rate`, `fallback.rate`), and the last by construction.
+
 - Eval suite passes on the default model with a committed baseline.
 - Guardrail override rate on the eval suite < 10% (higher means the prompt is wrong,
   not that guardrails are working).
@@ -156,13 +184,30 @@ overridden by the fallback, and the override is logged.
 
 ## Open Questions
 
-- **(Product, blocking)** What is the default escalation threshold in days? Malaysian
-  SME payment norms are often 60–90 days in practice regardless of stated terms;
-  a 30-day escalation may be culturally aggressive. Needs a design partner's view.
-- **(Engineering, non-blocking)** Where does tenant local time live? Currently no
-  tenant timezone setting exists — this PRD needs one added to `/v1/settings`.
-- **(Engineering, non-blocking)** Should eval scenarios be committed as JSON fixtures
-  or generated from `seed:sample`? Fixtures are more stable; generation stays in sync.
+- ~~**(Product, blocking)** What is the default escalation threshold in days?~~
+  **Answered in S10: 60, tenant-configurable (1–365).** Malaysian norms run 60–90
+  days regardless of stated terms, so 30 escalates a customer behaving normally
+  for the market; 60 is the bottom of that band, and escalation is the
+  irreversible half of the decision. ANDed with a non-configurable "≥ 2 prior
+  reminders on that invoice". Still wants a design partner's view — it is one
+  column, one settings field and one eval dimension to change.
+- ~~**(Engineering, non-blocking)** Where does tenant local time live?~~
+  **Answered in S10: `company_profile.timezone`**, an IANA name defaulting to
+  `Asia/Kuala_Lumpur`, validated against `Intl.DateTimeFormat`. On the existing
+  per-tenant settings row rather than an agent-owned one: SLA targets and any
+  report with a "today" in it want the same answer.
+- ~~**(Engineering, non-blocking)** JSON fixtures or generated from `seed:sample`?~~
+  **Answered in S10: committed fixtures.** A baseline can only be compared against
+  a frozen context, and a scenario that drifts when the seed changes is not a
+  regression test. The cost — a fixture rotting against the context type — is paid
+  by schema-validating every fixture on load.
+
+**New, from running the harness:** the deterministic fallback's risk score
+saturates. It is `min(100, days_overdue * 5 + reminders * 10)`, so anything past
+about 20 days scores 100 and a 20-day-late invoice from a reliable customer reads
+identically to a 200-day write-off. S10 recorded it rather than fixing it —
+re-tuning the risk curve changes agent behaviour and wants a product decision.
+See `evals/README.md`.
 
 ## Timeline Considerations
 
