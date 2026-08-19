@@ -18,9 +18,13 @@ import {
   updateQuote,
 } from "../../modules/quotes/service";
 import { quoteStatusSchema } from "../../modules/quotes/types";
-import { getCompanyProfile, getQuoteBranding } from "../../modules/quotes/settings";
 import { renderQuoteHtml } from "../../modules/quotes/document/render";
-import { getContact, getCustomer } from "../../modules/crm/service";
+import { loadQuoteDocumentInput } from "../../modules/quotes/document/load";
+import {
+  getActiveLink,
+  mintQuoteLink,
+  revokeQuoteLink,
+} from "../../modules/quotes/links";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -85,6 +89,17 @@ const convertBodySchema = z
   .optional();
 
 export const quotes = new Hono<AuthedEnv>();
+
+/**
+ * The customer-facing URL for a token, built from the request's own origin.
+ *
+ * Derived rather than configured because the Worker already knows the origin it
+ * was reached on, and a mis-set base URL would produce links that resolve to
+ * nothing — the one thing a quote link must never do.
+ */
+function publicQuoteUrl(requestUrl: string, token: string): string {
+  return `${new URL(requestUrl).origin}/q/${token}`;
+}
 
 export function quotesErrorResponse(c: Context<AuthedEnv>, err: unknown) {
   if (err instanceof QuotesError) {
@@ -222,17 +237,54 @@ quotes.get("/:id/document", async (c) => {
   const quote = await getQuote(c.env.DB, tenant.tenant_id, c.req.param("id"));
   if (!quote) return c.json({ error: "quote not found" }, 404);
 
-  const [lines, customer, profile, branding] = await Promise.all([
-    getQuoteLines(c.env.DB, tenant.tenant_id, quote.quote_id),
-    getCustomer(c.env.DB, tenant.tenant_id, quote.customer_id),
-    getCompanyProfile(c.env.DB, tenant.tenant_id),
-    getQuoteBranding(c.env.DB, tenant.tenant_id),
-  ]);
-  if (!customer) return c.json({ error: "customer not found" }, 404);
-  const contact = quote.contact_id
-    ? await getContact(c.env.DB, tenant.tenant_id, quote.contact_id)
-    : null;
+  const input = await loadQuoteDocumentInput(c.env.DB, tenant.tenant_id, quote);
+  if (!input) return c.json({ error: "customer not found" }, 404);
+  return c.html(renderQuoteHtml(input));
+});
 
-  const html = renderQuoteHtml({ quote, lines, customer, contact, profile, branding });
-  return c.html(html);
+/**
+ * `POST /v1/quotes/:id/link` — mint the customer-facing link.
+ *
+ * The raw token is in this response and nowhere else, ever: only its SHA-256 is
+ * stored. An operator who loses it mints a new one, which revokes the old.
+ */
+quotes.post("/:id/link", async (c) => {
+  const tenant = c.get("tenant");
+  const actor = c.get("user");
+  try {
+    const { token, link } = await mintQuoteLink(
+      c.env.DB,
+      tenant.tenant_id,
+      c.req.param("id"),
+      actor?.type === "user" ? (actor.id ?? null) : null,
+    );
+    return c.json({ ...link, token, url: publicQuoteUrl(c.req.url, token) }, 201);
+  } catch (err) {
+    return quotesErrorResponse(c, err);
+  }
+});
+
+/**
+ * `GET /v1/quotes/:id/link` — the live link's metadata.
+ *
+ * Never the token. It is stored hashed, so this endpoint could not return it
+ * even if it wanted to — which is the property that makes a database leak
+ * useless against live links.
+ */
+quotes.get("/:id/link", async (c) => {
+  const tenant = c.get("tenant");
+  const link = await getActiveLink(c.env.DB, tenant.tenant_id, c.req.param("id"));
+  if (!link) return c.json({ error: "this quote has no active public link" }, 404);
+  return c.json(link);
+});
+
+/** `DELETE /v1/quotes/:id/link` — revoke it. The token stops working at once. */
+quotes.delete("/:id/link", async (c) => {
+  const tenant = c.get("tenant");
+  try {
+    await revokeQuoteLink(c.env.DB, tenant.tenant_id, c.req.param("id"));
+    return c.body(null, 204);
+  } catch (err) {
+    return quotesErrorResponse(c, err);
+  }
 });

@@ -26,6 +26,7 @@ import { issueStatusChangedV1 } from "./issue.status_changed.v1";
 import { issueCompletedV1 } from "./issue.completed.v1";
 import { quoteCreatedV1 } from "./quote.created.v1";
 import { quoteSentV1 } from "./quote.sent.v1";
+import { quoteViewedV1 } from "./quote.viewed.v1";
 import { quoteAcceptedV1 } from "./quote.accepted.v1";
 import { quoteRejectedV1 } from "./quote.rejected.v1";
 import { quoteExpiredV1 } from "./quote.expired.v1";
@@ -87,6 +88,10 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "issue.completed": issueCompletedV1,
   "quote.created": quoteCreatedV1,
   "quote.sent": quoteSentV1,
+  // PRD-004 (S9). The only NEW quote event this session registers:
+  // `quote.accepted` and `quote.rejected` already existed and were extended
+  // with optional fields rather than re-added or versioned.
+  "quote.viewed": quoteViewedV1,
   "quote.accepted": quoteAcceptedV1,
   "quote.rejected": quoteRejectedV1,
   "quote.expired": quoteExpiredV1,

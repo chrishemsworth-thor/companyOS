@@ -110,7 +110,7 @@ describe("editing a draft", () => {
     expect(patched.subtotal_cents).toBe(45_000);
     expect(patched.grand_total_cents).toBe(47_700);
     expect(patched.lines).toHaveLength(2);
-    expect(patched.lines![1].line_no).toBe(2);
+    expect(patched.lines?.map((l) => l.line_no)).toEqual([1, 2]);
   });
 
   it("recomputes totals when only the tax rate changes", async () => {

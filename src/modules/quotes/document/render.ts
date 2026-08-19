@@ -38,14 +38,30 @@ export interface RenderQuoteInput {
   branding: QuoteBranding;
 }
 
+/** A rendered document, in parts, so another surface can wrap it. */
+export interface QuoteDocumentParts {
+  title: string;
+  /** The contents of the page's single `<style>` block. */
+  styles: string;
+  /** The contents of `<body>` — a `div.page`. */
+  body: string;
+}
+
 /**
  * Render a fully self-contained, per-company-branded HTML quote. Pure function
  * (no I/O) — the route loads the data and passes it in. Brand colours/font/logo
  * are inlined into a <style> block; `@media print` + `@page` make the browser's
  * "Save as PDF" produce a clean A4 document. Which columns/sections appear is
  * driven entirely by the tenant's `template_config`.
+ *
+ * Returns PARTS rather than a page (S9). Three surfaces now render the same
+ * document — the console's `/document` route, the public `/q/:token` page, and
+ * the frozen artifact archived at acceptance — and they differ only in what
+ * surrounds it. Splitting here is what stops the public page from being a
+ * second, drifting copy of the document: if the customer signs something that
+ * is not what the operator saw, the whole feature is a lie.
  */
-export function renderQuoteHtml(input: RenderQuoteInput): string {
+export function renderQuoteDocument(input: RenderQuoteInput): QuoteDocumentParts {
   const { quote, lines, customer, contact, profile, branding } = input;
   const cfg = branding.template_config;
   const L = resolveLabels(cfg);
@@ -162,14 +178,9 @@ export function renderQuoteHtml(input: RenderQuoteInput): string {
     ? `<img class="logo" src="${esc(branding.logo_url)}" alt="${sellerName}" />`
     : `<div class="logo-text">${sellerName}</div>`;
 
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>${esc(quote.quote_number)} · ${sellerName}</title>
-<style>
-  :root {
+  return {
+    title: `${esc(quote.quote_number)} · ${sellerName}`,
+    styles: `  :root {
     --primary: ${esc(branding.primary_color)};
     --accent: ${esc(branding.accent_color)};
   }
@@ -228,11 +239,8 @@ export function renderQuoteHtml(input: RenderQuoteInput): string {
   @media print {
     body { background: #fff; }
     .page { box-shadow: none; margin: 0; max-width: none; padding: 0; }
-  }
-</style>
-</head>
-<body>
-  <div class="page">
+  }`,
+    body: `  <div class="page">
     <header class="doc">
       <div>${logo}</div>
       <div class="doc-meta">
@@ -267,7 +275,40 @@ export function renderQuoteHtml(input: RenderQuoteInput): string {
     ${notesBlock}
     ${termsBlock}
     ${signatureBlock}
-  </div>
+  </div>`,
+  };
+}
+
+/**
+ * Assemble document parts into a standalone HTML page.
+ *
+ * Shared by the internal document route, the public quote page and the frozen
+ * artifact, so all three carry the same head, the same viewport and the same
+ * print rules. A public surface adds its own styles and markup through
+ * `extraStyles` / `extraBody` rather than by rebuilding the shell.
+ */
+export function htmlDocument(parts: QuoteDocumentParts): string {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${parts.title}</title>
+<style>
+${parts.styles}
+</style>
+</head>
+<body>
+${parts.body}
 </body>
 </html>`;
+}
+
+/**
+ * The tenant-branded quote document as a standalone page — the surface the
+ * console links to and the browser prints to PDF. Unchanged in shape by S9;
+ * the parts it is built from are simply reusable now.
+ */
+export function renderQuoteHtml(input: RenderQuoteInput): string {
+  return htmlDocument(renderQuoteDocument(input));
 }

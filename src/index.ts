@@ -27,6 +27,7 @@ import { people } from "./gateway/routes/people";
 import { leave } from "./gateway/routes/leave";
 import { leaveRequests } from "./gateway/routes/leave-requests";
 import { files, publicFiles } from "./gateway/routes/files";
+import { publicQuotes } from "./gateway/routes/public-quotes";
 import { approvals } from "./gateway/routes/approvals";
 import { notifications } from "./gateway/routes/notifications";
 import { claims } from "./gateway/routes/claims";
@@ -110,6 +111,14 @@ app.route("/oauth/google", googleOAuth);
 // publicly readable (`quote_logo` alone in v1, for the public quote page);
 // everything else 404s here. See src/modules/files/policy.ts.
 app.route("/files", publicFiles);
+
+// The customer-facing quote surface (PRD-004). Same reasoning as the four
+// routers above: the caller is a customer with no account, and the link token
+// is the entire authorization story — it names the quote and establishes the
+// tenant. Putting it inside /v1 would mean punching a hole in authenticate();
+// putting it here means the guard has no exceptions. Carries its own per-IP
+// rate limits, distinct from the authenticated API's.
+app.route("/q", publicQuotes);
 
 // Session login surface — public (no session required), mounted before the
 // authenticate() guard so login/logout/me are reachable.

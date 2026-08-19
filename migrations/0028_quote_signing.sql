@@ -141,3 +141,41 @@ SELECT
 FROM _mig28_quote_lines;
 
 DROP TABLE _mig28_quote_lines;
+
+-- ============================================================================
+-- (b) `quote_links` — the public, token-addressed view
+-- ============================================================================
+--
+-- PRD-004 P0: `GET /q/:token`, unauthenticated. The token is a high-entropy
+-- random value, NOT the quote id, and only its SHA-256 is stored — the same
+-- discipline `user_tokens` (invites, password resets) and `sessions` already
+-- use. A database leak therefore hands over no live links.
+--
+-- The unique index on `token_hash` is deliberately GLOBAL rather than
+-- tenant-scoped: the public route has no tenant context and resolves the tenant
+-- *from* the token, so the lookup must be by hash alone. A collision across
+-- tenants would be a 32-byte-random-value collision, which is not a threat
+-- model.
+--
+-- View state is NOT here — it lives on `quotes` (section (a)), so that revoking
+-- a link and issuing a new one cannot re-fire `quote.viewed.v1`. The first view
+-- is a fact about the quote, not about the link that carried it.
+
+CREATE TABLE quote_links (
+  link_id     TEXT NOT NULL,                 -- qlink_01J...
+  tenant_id   TEXT NOT NULL REFERENCES tenants(tenant_id),
+  quote_id    TEXT NOT NULL,
+  token_hash  TEXT NOT NULL,                 -- sha256(raw token); the raw value is never stored
+  created_by  TEXT,                          -- usr_...; NULL for tenant-API-key callers
+  created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+  -- Aligned to the quote's own expiry_date at mint time when it has one.
+  -- PRD-004: an expired link renders an "expired" state, not a 404.
+  expires_at  TEXT,
+  revoked_at  TEXT,
+  PRIMARY KEY (tenant_id, link_id),
+  FOREIGN KEY (tenant_id, quote_id) REFERENCES quotes(tenant_id, quote_id)
+);
+
+CREATE UNIQUE INDEX idx_quote_links_token ON quote_links (token_hash);
+-- "the live link for this quote", which is the only lookup the console does.
+CREATE INDEX idx_quote_links_quote ON quote_links (tenant_id, quote_id, created_at);
