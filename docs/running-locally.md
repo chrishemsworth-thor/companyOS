@@ -301,6 +301,178 @@ than measuring the result. **Open Safari or Chrome devtools at 375px** and check
 an approval can be read and decided with no horizontal scrolling. This is the one
 part of the feature that genuinely needs a human eye.
 
+## Contact roles, customer depth & health (PRD-003)
+
+Three features from S8, in the order they are worth checking. Everything below
+uses the tenant API key printed by `npm run seed:local` — set `K=<api_key>` and
+`CUST=<a customer id>` first.
+
+### Migration `0027` on an existing local database
+
+`0027_crm_depth.sql` is the first migration since `0022` that **changes data
+rather than only adding to it**: it backfills `contact_roles`, rewrites
+`contacts.is_primary` from those roles, and then adds a unique index enforcing
+one primary per customer. Nothing enforced that before, so a database with
+duplicate primaries is possible.
+
+It was verified against a populated database with all three pre-0027 shapes
+(a customer with two primaries, one with none, one whose primary is not its
+earliest contact) and resolves them rather than failing — so **you should not
+need to wipe `.wrangler`**. If you want to see what it did:
+
+```sh
+npx wrangler d1 execute companyos-db --local --command "
+SELECT c.customer_id, c.contact_id, c.is_primary,
+       (SELECT group_concat(role) FROM contact_roles r WHERE r.contact_id = c.contact_id) AS roles
+FROM contacts c ORDER BY c.customer_id, c.contact_id;"
+```
+
+Every customer with contacts should have exactly one `is_primary = 1`, and that
+row should be the one holding `primary`. The two are one fact — see
+[`modules/crm.md`](modules/crm.md) — and a row where they disagree means
+something wrote `is_primary` directly instead of going through the service.
+
+### Roles in the console
+
+Open any customer. The contacts table has a **Roles** column, and **Add contact**
+shows role checkboxes with **no** standalone "Primary contact" checkbox. That
+removal is deliberate: one fact, one control.
+
+1. Add "Ravi" with **Billing** ticked, then "Aina" with **Primary** ticked.
+2. Edit Ravi and tick **Primary** — a line appears warning that this clears the
+   current primary. Save.
+3. Aina's primary badge is gone. Exactly one primary survives, and the join
+   table agrees with the flag.
+
+PRD-003 offered either atomic-clear or a 409 here and said to pick one; S8 picked
+clear-atomically, last-write-wins, inside a single `db.batch()`.
+
+### The claim worth checking: a reminder addresses the billing contact
+
+This is what contact roles are *for*. Before S8, `sendReminder` read
+`customers.email` and nothing else.
+
+```sh
+curl -s -X POST -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+  -d '{"name":"Aina","email":"aina@example.com","roles":["primary"]}' \
+  http://localhost:8787/v1/customers/$CUST/contacts
+
+curl -s -X POST -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+  -d '{"name":"Ravi","email":"ravi@example.com","roles":["billing"]}' \
+  http://localhost:8787/v1/customers/$CUST/contacts
+
+# The resolution chain over HTTP: requested role -> primary -> any -> null.
+curl -s -H "Authorization: Bearer $K" \
+  "http://localhost:8787/v1/customers/$CUST/contacts/resolve?role=billing"    # matched: "role"
+curl -s -H "Authorization: Bearer $K" \
+  "http://localhost:8787/v1/customers/$CUST/contacts/resolve?role=signatory"  # matched: "primary"
+```
+
+`matched` is not decoration — PRD-003 requires that a *fallback* be recorded on
+the decision, so `"primary"` there means "nobody holds the role you asked for".
+
+Now send a reminder and check who it actually reached. Note the invoice below
+carries **no `due_date`** — that used to be required:
+
+```sh
+INV=$(curl -s -X POST -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+  -d "{\"customer_id\":\"$CUST\",\"currency\":\"MYR\",
+       \"lines\":[{\"description\":\"Consulting\",\"quantity\":1,\"unit_cents\":250000}]}" \
+  http://localhost:8787/v1/invoices \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['invoice_id'])")
+
+curl -s -X POST -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+  -d '{"channel":"email"}' http://localhost:8787/v1/invoices/$INV/reminder
+```
+
+The response carries `contact_id` and `contact_match: "role"`, the `wrangler dev`
+log prints a `[reminder:console]` line naming Ravi's address, and the audit row
+records which contact it was:
+
+```sh
+npx wrangler d1 execute companyos-db --local --command \
+  "SELECT to_address, contact_id FROM deliveries ORDER BY created_at DESC LIMIT 1;"
+```
+
+Drop Ravi's `billing` role (`PATCH .../contacts/<id>` with
+`{"roles":["other"]}`) and repeat — it falls back to Aina and reports
+`contact_match: "primary"`.
+
+### The graceful-failure path
+
+Make a customer with **no contacts and no email or phone**, invoice it, and send
+a reminder. You get **422 `no_recipient`** *and* a `customer.no_contact` event.
+
+Both, deliberately. PRD-003's criterion says dispatch "fails gracefully with a
+`customer.no_contact` event rather than throwing", but swallowing the error would
+make the endpoint answer 202 for a send that never happened — and the
+CollectionsAgent already treats `DeliveryError` as a graceful non-send (it logs,
+keeps tracking, and does not record a contact that never occurred). Graceful here
+means no unhandled exception plus an observable event, not a false 2xx.
+
+The event is written by the queue consumer, so on the default config wait for the
+batch:
+
+```sh
+sleep 6
+npx wrangler d1 execute companyos-db --local --command \
+  "SELECT event_type, payload FROM events_log WHERE event_type = 'customer.no_contact';"
+```
+
+Or use `wrangler.free.jsonc` for inline dispatch — but if you do, pass
+`--config wrangler.free.jsonc` to **every** command including the migration; the
+two configs do not share a local database (see the warning above).
+
+### Payment terms drive the due date (this touches finance)
+
+`payment_terms_days` is the PRD-003 field that changes invoice creation, which is
+why S8 is the CRM session that had to keep the finance suites green (conflict C7
+in [`prd/SESSION-PLAN.md`](prd/SESSION-PLAN.md)).
+
+```sh
+curl -s -X PATCH -H "Authorization: Bearer $K" -H "Content-Type: application/json" \
+  -d '{"payment_terms_days":45}' http://localhost:8787/v1/customers/$CUST
+```
+
+Create another invoice with no `due_date` → due is today + 45. Then set
+**Settings → Company profile → Default payment terms (days)**, clear the
+customer's own field, and create a third → it uses the tenant number. An explicit
+`due_date` still wins over both.
+
+One distinction worth exercising, because collapsing it would be a silent 30-day
+extension for a cash-on-delivery customer: `payment_terms_days = null` means
+"use the tenant default", `0` means "due on issue". The console shows the former
+as *Tenant default*, and a blank field sends `null` rather than `0`.
+
+### Health and the credit warning
+
+The customer list has a **Health** column; the detail page has an **Account
+health** panel showing the contributing reasons, not just a band. PRD-003 is
+explicit that the reasons are the product — *"2 invoices 60+ days overdue"* is
+actionable, a number is not.
+
+To force `at_risk`:
+
+```sh
+npx wrangler d1 execute companyos-db --local --command \
+  "UPDATE invoices SET status = 'overdue', due_date = '2026-01-01' WHERE customer_id = '$CUST';"
+```
+
+Reload → **At risk**, with both invoice ids named in the reasons and linked
+through to the invoices. A brand-new customer reads **Good** with an explicit
+*"nothing to assess"* reason rather than a misleading score.
+
+Set a credit limit below outstanding AR, then open **New invoice** for that
+customer: an amber warning appears and the submit button **stays enabled**. That
+is the requirement — warn only, never block — and no server-side path rejects
+anything on credit grounds either.
+
+**Health is a signal and nothing acts on it.** `at_risk` does not pause
+collections or any outbound path; that was PRD-003's blocking question and the
+answer was signal-only for v1. Pausing belongs to PRD-002's guardrail layer
+(`agents.enabled`, `agent_paused`), so if you are looking for a send to stop
+because of health, it will not — by design.
+
 ## Fast smoke test (no browser)
 
 The suites run against the real Workers runtime and cover the full auth flow,
