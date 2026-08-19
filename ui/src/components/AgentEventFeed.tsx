@@ -5,15 +5,34 @@ import { LoadingState, ErrorState, EmptyState } from "../components/AsyncState";
 import { Badge, type Tone } from "./Badge";
 import { Button } from "./Button";
 import { formatDate, formatCents } from "../lib/format";
-import type { AgentEvent, CollectionsDecisionPayload, RiskFlaggedPayload } from "../api/types";
+import type {
+  AgentEvent,
+  CollectionsDecisionPayload,
+  GuardrailOverridePayload,
+  RiskFlaggedPayload,
+} from "../api/types";
 
 /** Event types that tell the collections story: cause → decision → escalation. */
 export const AGENT_EVENT_TYPES = [
   "collections.decision",
+  "guardrail.override",
   "customer.risk_flagged",
   "invoice.overdue",
   "invoice.sent",
 ] as const;
+
+/** Plain-language names for the guardrails, for a reader who did not write them. */
+const GUARDRAIL_LABELS: Record<string, string> = {
+  reminder_cap: "reminder cap",
+  contact_window: "outside business hours",
+  escalation_gate: "escalation too early",
+  invoice_reference: "wrong invoice cited",
+  message_length: "message too long",
+};
+
+function guardrailLabel(guardrail: string): string {
+  return GUARDRAIL_LABELS[guardrail] ?? guardrail.replace(/_/g, " ");
+}
 
 interface FeedPage {
   items: AgentEvent[];
@@ -28,6 +47,12 @@ function eventBadge(event: AgentEvent): { label: string; tone: Tone } {
         label: action,
         tone: action === "escalate" ? "bad" : action === "remind" ? "warn" : "neutral",
       };
+    }
+    case "guardrail.override": {
+      const p = event.payload as unknown as GuardrailOverridePayload;
+      // A deferral is the guard working as designed; a suppression stopped a
+      // send outright. Neither is an error, so neither is red.
+      return { label: `guardrail · ${p.outcome}`, tone: p.outcome === "deferred" ? "neutral" : "warn" };
     }
     case "customer.risk_flagged":
       return { label: "risk flagged", tone: "bad" };
@@ -52,15 +77,63 @@ function EventSummary({ event, showCustomer }: { event: AgentEvent; showCustomer
     return (
       <span className="min-w-0 flex-1 text-muted">
         {customerLink} risk {p.risk_score}/100 · via {p.channel} ·{" "}
-        <Badge tone="neutral" dot={false}>
-          {p.source}
+        {/* PRD-002: fallback and override badges on the Agent Activity feed. The
+            fallback badge is the one a tenant admin needs to trust the agent —
+            it says "no model decided this, the template did". */}
+        <Badge tone={p.source === "fallback" ? "warn" : "neutral"} dot={false}>
+          {p.source === "fallback" ? "fallback" : "llm"}
         </Badge>
+        {p.guardrail_overridden && (
+          <>
+            {" "}
+            <Badge tone="warn" dot={false}>
+              guardrail: {(p.overrides ?? []).map(guardrailLabel).join(", ") || "overridden"}
+            </Badge>
+          </>
+        )}
+        {p.model && <span className="ml-1 text-xs text-subtle">{p.model}</span>}
         {p.message && (
           <details className="mt-1 text-sm">
             <summary className="cursor-pointer text-accent">message</summary>
             <div className="mt-1 whitespace-pre-wrap">{p.message}</div>
+            {/* What it cost and how it was reached, for the operator who wants
+                to know before leaving the agent running. */}
+            <div className="mt-1 text-xs text-subtle">
+              {p.provider ?? "no provider"}
+              {p.prompt_version ? ` · prompt ${p.prompt_version}` : ""}
+              {typeof p.latency_ms === "number" ? ` · ${p.latency_ms}ms` : ""}
+              {typeof p.input_tokens === "number"
+                ? ` · ${p.input_tokens}/${p.output_tokens ?? 0} tokens`
+                : ""}
+              {typeof p.cost_micros === "number" ? ` · $${(p.cost_micros / 1e6).toFixed(6)}` : ""}
+              {p.fallback_reason ? ` · fallback: ${p.fallback_reason}` : ""}
+            </div>
           </details>
         )}
+      </span>
+    );
+  }
+  if (event.event_type === "guardrail.override") {
+    const p = payload as unknown as GuardrailOverridePayload;
+    return (
+      <span className="min-w-0 flex-1 text-muted">
+        {showCustomer && p.subject_id ? (
+          <Link to={`/customers/${p.subject_id}`}>{p.subject_id}</Link>
+        ) : null}{" "}
+        {guardrailLabel(p.guardrail)}
+        {p.from_action && p.to_action && p.from_action !== p.to_action
+          ? ` · ${p.from_action} → ${p.to_action}`
+          : ""}
+        {p.subject_ref && (
+          <>
+            {" · "}
+            <Link to={`/invoices/${p.subject_ref}`}>{p.subject_ref}</Link>
+          </>
+        )}
+        <div className="mt-1 text-xs text-subtle">
+          {p.detail}
+          {p.defer_until ? ` · retrying ${formatDate(p.defer_until)}` : ""}
+        </div>
       </span>
     );
   }

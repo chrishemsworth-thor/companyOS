@@ -7,8 +7,9 @@ import { eventRegistry } from "../../schemas/events/registry";
 
 /**
  * Read-only feed over events_log, primarily so the operator UI can surface
- * agent activity (collections decisions, risk flags) without raw DB access.
- * Filters by event type and by the customer/invoice the payload references.
+ * agent activity (collections decisions, guardrail overrides, risk flags)
+ * without raw DB access. Filters by event type and by the customer/invoice the
+ * payload references — under whichever key that payload uses to name them.
  */
 
 const querySchema = pageQuerySchema.extend({
@@ -52,15 +53,24 @@ events.get("/", zValidator("query", querySchema), async (c) => {
     binds.push(...type);
   }
   if (customer_id) {
-    where.push("json_extract(payload, '$.customer_id') = ?");
-    binds.push(customer_id);
+    // `subject_id` as well as `customer_id`: PRD-002's guardrail.override is
+    // agent-agnostic by design (conflict C9) and names the thing it acted on
+    // rather than assuming a customer. Without this the customer page would
+    // silently omit every guardrail firing about that customer.
+    where.push(
+      "(json_extract(payload, '$.customer_id') = ? OR json_extract(payload, '$.subject_id') = ?)",
+    );
+    binds.push(customer_id, customer_id);
   }
   if (invoice_id) {
-    // Direct reference, or membership in a risk flag's open_invoices list.
+    // Direct reference, the guardrail event's `subject_ref`, or membership in a
+    // risk flag's open_invoices list.
     where.push(
-      "(json_extract(payload, '$.invoice_id') = ? OR EXISTS (SELECT 1 FROM json_each(payload, '$.open_invoices') WHERE json_each.value = ?))",
+      `(json_extract(payload, '$.invoice_id') = ?
+        OR json_extract(payload, '$.subject_ref') = ?
+        OR EXISTS (SELECT 1 FROM json_each(payload, '$.open_invoices') WHERE json_each.value = ?))`,
     );
-    binds.push(invoice_id, invoice_id);
+    binds.push(invoice_id, invoice_id, invoice_id);
   }
   if (cursor) {
     where.push("event_id < ?");

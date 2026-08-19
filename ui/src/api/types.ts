@@ -365,6 +365,62 @@ export interface CollectionsDecisionPayload {
   message: string;
   source: "llm" | "fallback";
   trigger: "event" | "alarm";
+  /**
+   * Everything below arrived with `collections.decision.v2` (PRD-002). Optional
+   * here rather than required, because the feed also renders decisions written
+   * before S10: a v1 event in `events_log` is history, not a bug, and the badges
+   * simply do not appear for it.
+   */
+  invoice_id?: string | null;
+  provider?: "anthropic" | "openai" | null;
+  model?: string | null;
+  prompt_version?: string;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  latency_ms?: number;
+  /** Integer micro-USD (1e-6 USD); null when the model has no known rate. */
+  cost_micros?: number | null;
+  fallback_reason?: string | null;
+  guardrail_overridden?: boolean;
+  overrides?: string[];
+  deferred_until?: string | null;
+}
+
+/** One guardrail firing (PRD-002). Agent-agnostic — S15's sales guard emits it too. */
+export interface GuardrailOverridePayload {
+  agent: string;
+  subject_type: "customer";
+  subject_id: string;
+  channel: "email" | "whatsapp";
+  guardrail: string;
+  outcome: "suppressed" | "deferred" | "downgraded" | "message_replaced" | "truncated";
+  from_action: string | null;
+  to_action: string | null;
+  subject_ref: string | null;
+  detail: string;
+  defer_until: string | null;
+}
+
+export interface AgentInsights {
+  period: { from: string; to: string };
+  decisions: { total: number; by_action: Record<string, number> };
+  fallback: { count: number; rate: number };
+  overrides: {
+    decisions_overridden: number;
+    rate: number;
+    firings: number;
+    by_guardrail: Record<string, number>;
+  };
+  spend: {
+    cost_micros: number;
+    priced_decisions: number;
+    unpriced_decisions: number;
+    input_tokens: number;
+    output_tokens: number;
+  };
+  latency_ms: { p95: number; max: number };
+  models: { provider: string | null; model: string | null; prompt_version: string | null; decisions: number }[];
+  by_month: { month: string; decisions: number; fallbacks: number; overridden: number; cost_micros: number }[];
 }
 
 export interface RiskFlaggedPayload {

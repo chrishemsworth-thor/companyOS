@@ -6,6 +6,9 @@ import { PageHeader } from "../components/PageHeader";
 const FILTERS: { label: string; types: string[] }[] = [
   { label: "All agent activity", types: [...AGENT_EVENT_TYPES] },
   { label: "Decisions", types: ["collections.decision"] },
+  // PRD-002 measures override rate as a quality signal, so it gets its own lens
+  // rather than being buried in the decision stream.
+  { label: "Guardrail overrides", types: ["guardrail.override"] },
   { label: "Risk flags", types: ["customer.risk_flagged"] },
   { label: "Invoice events", types: ["invoice.overdue", "invoice.sent"] },
 ];

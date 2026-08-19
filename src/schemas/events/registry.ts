@@ -7,7 +7,7 @@ import { paymentPartialV1 } from "./payment.partial.v1";
 import { customerCreatedV1 } from "./customer.created.v1";
 import { customerRiskFlaggedV1 } from "./customer.risk_flagged.v1";
 import { customerNoContactV1 } from "./customer.no_contact.v1";
-import { collectionsDecisionV1 } from "./collections.decision.v1";
+import { collectionsDecisionV2 } from "./collections.decision.v2";
 import { dealCreatedV1 } from "./deal.created.v1";
 import { dealStageChangedV1 } from "./deal.stage_changed.v1";
 import { dealWonV1 } from "./deal.won.v1";
@@ -69,7 +69,10 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "customer.created": customerCreatedV1,
   "customer.risk_flagged": customerRiskFlaggedV1,
   "customer.no_contact": customerNoContactV1,
-  "collections.decision": collectionsDecisionV1,
+  // PRD-002 (S10) extends the payload with provider, model, prompt version,
+  // tokens, latency, cost, fallback and guardrail fields. Those are required, so
+  // it is a breaking change: a v2 file and this bump, per the convention above.
+  "collections.decision": collectionsDecisionV2,
   "deal.created": dealCreatedV1,
   "deal.stage_changed": dealStageChangedV1,
   "deal.won": dealWonV1,

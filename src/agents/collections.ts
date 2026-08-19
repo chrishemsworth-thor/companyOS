@@ -73,8 +73,13 @@ const MIN_REMINDERS_BEFORE_ESCALATION = 2;
  * configured LLM (src/llm/ — provider-agnostic) for a structured decision,
  * validates it with Zod, and falls back to the Phase 1 heuristic + template
  * on any failure — collections never silently stops. Every decision is
- * audited as a collections.decision.v1 event; escalation emits
- * customer.risk_flagged.v1.
+ * audited as a collections.decision.v2 event carrying provider, model, prompt
+ * version, tokens, latency, cost and what the guardrails did (PRD-002);
+ * escalation emits customer.risk_flagged.v1.
+ *
+ * S10 put the hard guardrails (src/agents/guardrails/) on the send path: a
+ * decision is bounded by code before anything leaves, and every firing is
+ * audited as guardrail.override.v1.
  */
 export class CollectionsAgent extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
@@ -294,7 +299,10 @@ export class CollectionsAgent extends DurableObject<Env> {
     );
     if (overrides.length > 0) await this.emitOverrides(state.tenant_id, overrides);
 
-    // Audit every decision — LLM or fallback — into events_log.
+    // Audit every decision — LLM or fallback, sent or not — as
+    // collections.decision.v2. PRD-002: provider, model and prompt version must
+    // be queryable from events_log, and a month of these must add up to the
+    // tenant's LLM spend.
     await emitEvent(
       this.env,
       makeEnvelope({
@@ -306,12 +314,27 @@ export class CollectionsAgent extends DurableObject<Env> {
           ...decision,
           source: outcome.source,
           trigger,
-          // PRD-003 P0: "the fallback is recorded on the decision". Optional
-          // additions to a non-strict collections.decision.v1 — no v2 needed.
-          // S10 folds these into collections.decision.v2 along with the
-          // provider/model/cost fields PRD-002 wants.
+          // The invoice this decision was about. PRD-002's P2 outcome scoring is
+          // a query over this rather than a migration.
+          invoice_id: target.invoice_id,
+          // PRD-003 P0 (S8): "the fallback is recorded on the decision" — who
+          // the agent was targeting and how the resolution chain got there.
           contact_id: context.billing_contact?.contact_id ?? null,
           contact_match: context.billing_contact?.matched ?? null,
+          provider: outcome.provider,
+          model: outcome.model,
+          prompt_version: outcome.prompt_version,
+          input_tokens: outcome.input_tokens,
+          output_tokens: outcome.output_tokens,
+          latency_ms: outcome.latency_ms,
+          cost_micros: outcome.cost_micros,
+          fallback_reason: outcome.fallback_reason,
+          guardrail_overridden: overrides.length > 0,
+          overrides: overrides.map((o) => o.guardrail),
+          // Null here: a decision that reached this point was not deferred —
+          // the window is checked before the model is asked, and a deferral
+          // returns from `blocked()` without a decision to audit.
+          deferred_until: null,
         },
       }),
     );

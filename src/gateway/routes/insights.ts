@@ -3,6 +3,7 @@ import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
 import type { AuthedEnv } from "../middleware/auth";
 import {
+  agentInsights,
   arAging,
   dashboardSummary,
   pipelineByStage,
@@ -13,6 +14,17 @@ import {
 
 const profitabilityQuerySchema = z.object({
   group_by: z.enum(["project", "customer", "department"]).default("project"),
+});
+
+/**
+ * Agent activity window. ISO instants; the default covers the last 365 days,
+ * which is the shortest window in which "spend by period" has more than one
+ * period in it.
+ */
+const AGENT_WINDOW_DAYS = 365;
+const agentQuerySchema = z.object({
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
 });
 
 /**
@@ -55,6 +67,26 @@ insights.get("/profitability", zValidator("query", profitabilityQuerySchema), as
     group_by,
     rows: await profitability(c.env.DB, tenant.tenant_id, group_by),
   });
+});
+
+/**
+ * What the collections agent has been doing, and what it cost (PRD-002 P0):
+ * decisions by outcome, fallback rate, override rate, spend by period, and which
+ * provider/model/prompt produced them.
+ *
+ * Read straight off `events_log` — the decision event IS the audit record, so a
+ * projection table would only be a second thing to keep in sync.
+ */
+insights.get("/agents", zValidator("query", agentQuerySchema), async (c) => {
+  const tenant = c.get("tenant");
+  const { from, to } = c.req.valid("query");
+  const now = Date.now();
+  return c.json(
+    await agentInsights(c.env.DB, tenant.tenant_id, {
+      from: from ?? new Date(now - AGENT_WINDOW_DAYS * 86_400_000).toISOString(),
+      to: to ?? new Date(now).toISOString(),
+    }),
+  );
 });
 
 insights.get("/tickets", async (c) => {

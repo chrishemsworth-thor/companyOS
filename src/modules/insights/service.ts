@@ -346,3 +346,191 @@ export async function ticketInsights(
   }
   return { by_status: byStatus.by, by_priority: byPriority.by, oldest_open_days };
 }
+
+// ---------------------------------------------------------------------------
+// Agent activity (PRD-002 P0 decision observability)
+//
+// Everything here reads `events_log` rather than a projection table. The
+// decision event is already the audit record — a second copy in a table would
+// be a second thing to keep in sync, and D1's JSON1 functions make the audit
+// log queryable as it stands. That is also what makes PRD-002's P2 outcome
+// scoring a query later rather than a migration.
+// ---------------------------------------------------------------------------
+
+export interface AgentModelUsage {
+  provider: string | null;
+  model: string | null;
+  prompt_version: string | null;
+  decisions: number;
+}
+
+export interface AgentMonth {
+  month: string;
+  decisions: number;
+  fallbacks: number;
+  overridden: number;
+  cost_micros: number;
+}
+
+export interface AgentInsights {
+  period: { from: string; to: string };
+  decisions: {
+    total: number;
+    by_action: Record<string, number>;
+  };
+  fallback: { count: number; rate: number };
+  overrides: {
+    /** Decisions a guardrail changed — the denominator of PRD-002's < 10%. */
+    decisions_overridden: number;
+    rate: number;
+    /** Guardrail firings, which can exceed the decision count: one decision may
+     * trip two rules, and the pre-send gate fires without any decision at all. */
+    firings: number;
+    by_guardrail: Record<string, number>;
+  };
+  spend: {
+    /** Integer micro-USD over the priced decisions only. */
+    cost_micros: number;
+    priced_decisions: number;
+    /** Decisions whose model had no known rate — the total excludes them, and
+     * saying so is the difference between a spend figure and a guess. */
+    unpriced_decisions: number;
+    input_tokens: number;
+    output_tokens: number;
+  };
+  latency_ms: { p95: number; max: number };
+  models: AgentModelUsage[];
+  by_month: AgentMonth[];
+}
+
+const DECISION_WHERE = `tenant_id = ? AND event_type = 'collections.decision'
+  AND occurred_at >= ? AND occurred_at <= ?`;
+
+function rate(part: number, whole: number): number {
+  if (whole === 0) return 0;
+  return Math.round((part / whole) * 10_000) / 10_000;
+}
+
+export async function agentInsights(
+  db: D1Database,
+  tenantId: string,
+  period: { from: string; to: string },
+): Promise<AgentInsights> {
+  const binds = [tenantId, period.from, period.to];
+
+  const { results: byAction } = await db
+    .prepare(
+      `SELECT json_extract(payload, '$.action') AS action, COUNT(*) AS n
+       FROM events_log WHERE ${DECISION_WHERE} GROUP BY action`,
+    )
+    .bind(...binds)
+    .all<{ action: string | null; n: number }>();
+
+  const totals = await db
+    .prepare(
+      `SELECT
+         COUNT(*) AS total,
+         SUM(CASE WHEN json_extract(payload, '$.source') = 'fallback' THEN 1 ELSE 0 END) AS fallbacks,
+         -- A v1 event has no guardrail_overridden; json_extract returns NULL and
+         -- it counts as "not overridden", which is true: v1 predates the guard.
+         SUM(CASE WHEN json_extract(payload, '$.guardrail_overridden') IN (1, 'true') THEN 1 ELSE 0 END) AS overridden,
+         SUM(COALESCE(json_extract(payload, '$.input_tokens'), 0)) AS input_tokens,
+         SUM(COALESCE(json_extract(payload, '$.output_tokens'), 0)) AS output_tokens,
+         SUM(COALESCE(json_extract(payload, '$.cost_micros'), 0)) AS cost_micros,
+         SUM(CASE WHEN json_extract(payload, '$.cost_micros') IS NULL THEN 1 ELSE 0 END) AS unpriced,
+         MAX(COALESCE(json_extract(payload, '$.latency_ms'), 0)) AS max_latency
+       FROM events_log WHERE ${DECISION_WHERE}`,
+    )
+    .bind(...binds)
+    .first<{
+      total: number;
+      fallbacks: number | null;
+      overridden: number | null;
+      input_tokens: number | null;
+      output_tokens: number | null;
+      cost_micros: number | null;
+      unpriced: number | null;
+      max_latency: number | null;
+    }>();
+
+  const total = totals?.total ?? 0;
+  const unpriced = totals?.unpriced ?? 0;
+
+  // p95 by offset rather than by reading every row into memory: nearest-rank,
+  // so the number reported is a latency some request actually had.
+  let p95 = 0;
+  if (total > 0) {
+    const offset = Math.min(Math.max(Math.ceil(total * 0.95) - 1, 0), total - 1);
+    const row = await db
+      .prepare(
+        `SELECT COALESCE(json_extract(payload, '$.latency_ms'), 0) AS latency_ms
+         FROM events_log WHERE ${DECISION_WHERE}
+         ORDER BY latency_ms ASC LIMIT 1 OFFSET ?`,
+      )
+      .bind(...binds, offset)
+      .first<{ latency_ms: number }>();
+    p95 = row?.latency_ms ?? 0;
+  }
+
+  const { results: models } = await db
+    .prepare(
+      `SELECT json_extract(payload, '$.provider') AS provider,
+              json_extract(payload, '$.model') AS model,
+              json_extract(payload, '$.prompt_version') AS prompt_version,
+              COUNT(*) AS decisions
+       FROM events_log WHERE ${DECISION_WHERE}
+       GROUP BY provider, model, prompt_version
+       ORDER BY decisions DESC`,
+    )
+    .bind(...binds)
+    .all<AgentModelUsage>();
+
+  const { results: guardrails } = await db
+    .prepare(
+      `SELECT json_extract(payload, '$.guardrail') AS guardrail, COUNT(*) AS n
+       FROM events_log
+       WHERE tenant_id = ? AND event_type = 'guardrail.override'
+         AND occurred_at >= ? AND occurred_at <= ?
+       GROUP BY guardrail ORDER BY n DESC`,
+    )
+    .bind(...binds)
+    .all<{ guardrail: string | null; n: number }>();
+
+  const { results: months } = await db
+    .prepare(
+      `SELECT substr(occurred_at, 1, 7) AS month,
+              COUNT(*) AS decisions,
+              SUM(CASE WHEN json_extract(payload, '$.source') = 'fallback' THEN 1 ELSE 0 END) AS fallbacks,
+              SUM(CASE WHEN json_extract(payload, '$.guardrail_overridden') IN (1, 'true') THEN 1 ELSE 0 END) AS overridden,
+              SUM(COALESCE(json_extract(payload, '$.cost_micros'), 0)) AS cost_micros
+       FROM events_log WHERE ${DECISION_WHERE}
+       GROUP BY month ORDER BY month ASC`,
+    )
+    .bind(...binds)
+    .all<AgentMonth>();
+
+  return {
+    period,
+    decisions: {
+      total,
+      by_action: Object.fromEntries(byAction.map((r) => [r.action ?? "unknown", r.n])),
+    },
+    fallback: { count: totals?.fallbacks ?? 0, rate: rate(totals?.fallbacks ?? 0, total) },
+    overrides: {
+      decisions_overridden: totals?.overridden ?? 0,
+      rate: rate(totals?.overridden ?? 0, total),
+      firings: guardrails.reduce((sum, r) => sum + r.n, 0),
+      by_guardrail: Object.fromEntries(guardrails.map((r) => [r.guardrail ?? "unknown", r.n])),
+    },
+    spend: {
+      cost_micros: totals?.cost_micros ?? 0,
+      priced_decisions: total - unpriced,
+      unpriced_decisions: unpriced,
+      input_tokens: totals?.input_tokens ?? 0,
+      output_tokens: totals?.output_tokens ?? 0,
+    },
+    latency_ms: { p95, max: totals?.max_latency ?? 0 },
+    models,
+    by_month: months,
+  };
+}
