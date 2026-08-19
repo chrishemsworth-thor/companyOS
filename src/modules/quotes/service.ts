@@ -4,7 +4,13 @@ import { paginate } from "../../gateway/pagination";
 import { createInvoice, type CreateInvoiceInput } from "../finance/service";
 import { resolvePaymentTermsDays } from "../finance/payment-terms";
 import { getQuoteBranding, resolveQuoteDefaultCurrency } from "./settings";
-import type { Quote, QuoteLine, QuoteStatus } from "./types";
+import {
+  canTransitionQuote,
+  isQuoteEditable,
+  type Quote,
+  type QuoteLine,
+  type QuoteStatus,
+} from "./types";
 
 /**
  * Native Quotes service (source_module: 'sales'). Same shape as finance/crm:
@@ -20,7 +26,15 @@ export class QuotesError extends Error {
       | "invalid_status"
       | "empty_lines"
       | "invalid_total"
-      | "contact_mismatch",
+      | "contact_mismatch"
+      /**
+       * The quote has left `draft` and its content is frozen (PRD-004's
+       * load-bearing rule). Distinct from `invalid_status`, which is about an
+       * illegal lifecycle move: this one is about an edit, and its message
+       * names the way forward — create a new version.
+       */
+      | "locked"
+      | "already_superseded",
     message: string,
     readonly httpStatus: 404 | 409 | 422 = 422,
   ) {
@@ -117,7 +131,10 @@ export function computeQuoteTotals(
 const QUOTE_COLUMNS =
   "quote_id, quote_number, customer_id, contact_id, deal_id, status, currency, issue_date, expiry_date, " +
   "subtotal_cents, discount_total_cents, tax_rate_bps, tax_cents, grand_total_cents, " +
-  "prepared_by, approved_by, notes, converted_invoice_id, created_at, updated_at, sent_at, accepted_at";
+  "prepared_by, approved_by, notes, converted_invoice_id, created_at, updated_at, sent_at, accepted_at, " +
+  "version, supersedes_quote_id, superseded_by_quote_id, " +
+  "first_viewed_at, last_viewed_at, view_count, accepted_acceptance_id, " +
+  "sign_off_approval_id, sign_off_comment";
 
 export async function getQuote(
   db: D1Database,
@@ -299,6 +316,281 @@ export async function createQuote(
   return (await getQuote(env.DB, tenantId, quoteId))!;
 }
 
+/**
+ * Refuse to mutate a quote that has left `draft`.
+ *
+ * PRD-004: *"A quote cannot be edited after being sent. Changes require a new
+ * version. If the document can change after signing, the signature is
+ * worthless — this is the load-bearing requirement of the whole feature."*
+ *
+ * The message names the way forward rather than just refusing, because the
+ * caller virtually always still wants to change something: the answer is
+ * `createQuoteVersion`, not "give up". 409 matches the codebase's state-machine
+ * convention (src/modules/support/state-machine.ts).
+ */
+function assertEditable(quote: Quote): void {
+  if (!isQuoteEditable(quote.status)) {
+    throw new QuotesError(
+      "locked",
+      `quote ${quote.quote_number} is ${quote.status} and can no longer be edited: ` +
+        `create a new version (POST /v1/quotes/${quote.quote_id}/version) to change it`,
+      409,
+    );
+  }
+}
+
+export interface UpdateQuoteInput {
+  contact_id?: string | null;
+  deal_id?: string | null;
+  expiry_date?: string | null;
+  prepared_by?: string | null;
+  approved_by?: string | null;
+  notes?: string | null;
+  tax_rate_bps?: number;
+  /** Full replacement of the line set. Omitted leaves the existing lines alone. */
+  lines?: QuoteLineInput[];
+}
+
+/** Header fields a PATCH may set, paired with how an omitted key is read. */
+const PATCHABLE_FIELDS = [
+  "contact_id",
+  "deal_id",
+  "expiry_date",
+  "prepared_by",
+  "approved_by",
+  "notes",
+] as const;
+
+/**
+ * Edit a draft quote — the write path PRD-004's immutability rule guards.
+ *
+ * There was no edit endpoint before S9, which meant there was nothing for
+ * *"given a sent quote, when an edit is attempted, then 409"* to fire against.
+ * The rule needs a door to lock.
+ *
+ * Totals are always recomputed from the effective lines and tax rate rather
+ * than patched, so a header-only edit cannot leave `grand_total_cents`
+ * disagreeing with the lines it is supposed to summarise.
+ */
+export async function updateQuote(
+  env: { DB: D1Database; EVENTS: Queue },
+  tenantId: string,
+  quoteId: string,
+  input: UpdateQuoteInput,
+): Promise<Quote> {
+  const quote = await getQuote(env.DB, tenantId, quoteId);
+  if (!quote) throw new QuotesError("not_found", "quote not found", 404);
+  assertEditable(quote);
+
+  if (input.lines && input.lines.length === 0) {
+    throw new QuotesError("empty_lines", "a quote needs at least one line");
+  }
+
+  // The effective inputs: what the caller sent, else what is already stored.
+  const existingLines = await getQuoteLines(env.DB, tenantId, quoteId);
+  const lines: QuoteLineInput[] =
+    input.lines ??
+    existingLines.map((l) => ({
+      item_name: l.item_name,
+      description: l.description ?? undefined,
+      note: l.note ?? undefined,
+      quantity: l.quantity,
+      unit: l.unit ?? undefined,
+      unit_cents: l.unit_cents,
+      discount_cents: l.discount_cents,
+    }));
+  const totals = computeQuoteTotals(lines, input.tax_rate_bps ?? quote.tax_rate_bps);
+  if (totals.grand_total_cents <= 0) {
+    throw new QuotesError("invalid_total", "quote total must be positive");
+  }
+
+  const now = new Date().toISOString();
+  const setFragments: string[] = [];
+  const binds: unknown[] = [];
+  for (const field of PATCHABLE_FIELDS) {
+    if (field in input) {
+      setFragments.push(`${field} = ?`);
+      binds.push(input[field] ?? null);
+    }
+  }
+  setFragments.push(
+    "subtotal_cents = ?",
+    "discount_total_cents = ?",
+    "tax_rate_bps = ?",
+    "tax_cents = ?",
+    "grand_total_cents = ?",
+    "updated_at = ?",
+  );
+  binds.push(
+    totals.subtotal_cents,
+    totals.discount_total_cents,
+    totals.tax_rate_bps,
+    totals.tax_cents,
+    totals.grand_total_cents,
+    now,
+  );
+
+  const statements = [
+    env.DB.prepare(
+      `UPDATE quotes SET ${setFragments.join(", ")} WHERE tenant_id = ? AND quote_id = ?`,
+    ).bind(...binds, tenantId, quoteId),
+  ];
+
+  // Lines are replaced wholesale rather than diffed. Line numbers are positional
+  // (PRIMARY KEY (tenant_id, quote_id, line_no)), so a diff would have to
+  // renumber anyway, and the delete+insert runs in the same batch as the header
+  // update — there is no moment where the header describes a different line set.
+  if (input.lines) {
+    statements.push(
+      env.DB.prepare("DELETE FROM quote_lines WHERE tenant_id = ? AND quote_id = ?").bind(
+        tenantId,
+        quoteId,
+      ),
+      ...totals.lines.map((line, i) =>
+        env.DB.prepare(
+          `INSERT INTO quote_lines
+             (quote_id, tenant_id, line_no, item_name, description, note, quantity, unit, unit_cents, discount_cents, line_total_cents)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).bind(
+          quoteId,
+          tenantId,
+          i + 1,
+          line.item_name,
+          line.description,
+          line.note,
+          line.quantity,
+          line.unit,
+          line.unit_cents,
+          line.discount_cents,
+          line.line_total_cents,
+        ),
+      ),
+    );
+  }
+
+  await env.DB.batch(statements);
+  return (await getQuote(env.DB, tenantId, quoteId))!;
+}
+
+/**
+ * Create the next version of a locked quote — PRD-004's answer to "the customer
+ * wants a change to a quote we already sent".
+ *
+ * The new version is a genuinely new quote: its own id, its own number, its own
+ * lifecycle, starting at `draft`. The old one is not modified beyond a
+ * back-pointer, which is the point — a superseded quote must still render
+ * exactly as it did, because somebody may have been shown it.
+ *
+ * Versioning a `draft` is refused rather than silently allowed: a draft can just
+ * be edited, and a tenant accumulating v1..v6 of a quote nobody ever saw is a
+ * confusing audit trail, not a useful one.
+ */
+export async function createQuoteVersion(
+  env: { DB: D1Database; EVENTS: Queue },
+  tenantId: string,
+  quoteId: string,
+): Promise<Quote> {
+  const source = await getQuote(env.DB, tenantId, quoteId);
+  if (!source) throw new QuotesError("not_found", "quote not found", 404);
+  if (source.status === "draft") {
+    throw new QuotesError(
+      "invalid_status",
+      `quote ${source.quote_number} is still a draft and can be edited directly`,
+      409,
+    );
+  }
+  if (source.superseded_by_quote_id) {
+    throw new QuotesError(
+      "already_superseded",
+      `quote ${source.quote_number} was already superseded by ${source.superseded_by_quote_id}`,
+      409,
+    );
+  }
+
+  const lines = await getQuoteLines(env.DB, tenantId, quoteId);
+  const issueDate = new Date().toISOString().slice(0, 10);
+  const newQuoteId = `quote_${ulid()}`;
+  const quoteNumber = await nextQuoteNumber(env.DB, tenantId, issueDate.slice(0, 4));
+  const now = new Date().toISOString();
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO quotes
+         (quote_id, tenant_id, quote_number, customer_id, contact_id, deal_id, status, currency,
+          issue_date, expiry_date, subtotal_cents, discount_total_cents, tax_rate_bps, tax_cents,
+          grand_total_cents, prepared_by, approved_by, notes, created_at, updated_at,
+          version, supersedes_quote_id)
+       VALUES (?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      newQuoteId,
+      tenantId,
+      quoteNumber,
+      source.customer_id,
+      source.contact_id,
+      source.deal_id,
+      source.currency,
+      issueDate,
+      source.expiry_date,
+      source.subtotal_cents,
+      source.discount_total_cents,
+      source.tax_rate_bps,
+      source.tax_cents,
+      source.grand_total_cents,
+      source.prepared_by,
+      source.approved_by,
+      source.notes,
+      now,
+      now,
+      source.version + 1,
+      source.quote_id,
+    ),
+    ...lines.map((line) =>
+      env.DB.prepare(
+        `INSERT INTO quote_lines
+           (quote_id, tenant_id, line_no, item_name, description, note, quantity, unit, unit_cents, discount_cents, line_total_cents)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ).bind(
+        newQuoteId,
+        tenantId,
+        line.line_no,
+        line.item_name,
+        line.description,
+        line.note,
+        line.quantity,
+        line.unit,
+        line.unit_cents,
+        line.discount_cents,
+        line.line_total_cents,
+      ),
+    ),
+    // The only change to the superseded quote. Guarded on the column still being
+    // NULL so two concurrent version requests cannot both claim the same parent.
+    env.DB.prepare(
+      `UPDATE quotes SET superseded_by_quote_id = ?, updated_at = ?
+       WHERE tenant_id = ? AND quote_id = ? AND superseded_by_quote_id IS NULL`,
+    ).bind(newQuoteId, now, tenantId, quoteId),
+  ]);
+
+  await env.EVENTS.send(
+    makeEnvelope({
+      event_type: "quote.created",
+      source_module: "sales",
+      tenant_id: tenantId,
+      payload: {
+        quote_id: newQuoteId,
+        quote_number: quoteNumber,
+        customer_id: source.customer_id,
+        ...(source.contact_id ? { contact_id: source.contact_id } : {}),
+        currency: source.currency,
+        grand_total_cents: source.grand_total_cents,
+        supersedes_quote_id: source.quote_id,
+      },
+    }),
+  );
+
+  return (await getQuote(env.DB, tenantId, newQuoteId))!;
+}
+
 /** Shared lifecycle transition: guard the current status, update, emit. */
 async function transition(
   env: { DB: D1Database; EVENTS: Queue },
@@ -318,6 +610,19 @@ async function transition(
     throw new QuotesError(
       "invalid_status",
       `quote is ${quote.status}, expected ${opts.from.join(" or ")}`,
+      409,
+    );
+  }
+  // `opts.from` is what this particular operation accepts; QUOTE_TRANSITIONS is
+  // what the lifecycle allows at all. They are not the same question — sending
+  // accepts only `draft` even though `pending_approval` -> `sent` is a legal
+  // move (the approval decision makes it, not a second send) — so both are
+  // checked. Since 0028 dropped the status CHECK, this table is the only thing
+  // standing between a coding slip and an impossible row.
+  if (!canTransitionQuote(quote.status, opts.to)) {
+    throw new QuotesError(
+      "invalid_status",
+      `quote cannot move from ${quote.status} to ${opts.to}`,
       409,
     );
   }
