@@ -10,6 +10,13 @@ import {
   upsertQuoteBranding,
 } from "../../modules/quotes/settings";
 import { quoteTemplateConfigSchema } from "../../modules/quotes/branding";
+import {
+  AgentSettingsError,
+  DEFAULT_TIME_ZONE,
+  getAgentSettings,
+  isValidTimeZone,
+  upsertAgentSettings,
+} from "../../agents/guardrails";
 
 /**
  * Per-tenant settings that back the quote document: the seller "From" identity
@@ -43,7 +50,44 @@ const companyProfileSchema = z.object({
   // PRD-003's tenant-level default behind a customer's payment_terms_days.
   // 0 is legitimate (due on issue); the upper bound is a typo guard.
   default_payment_terms_days: z.number().int().min(0).max(365).optional(),
+  /**
+   * The tenant's local time (PRD-002, conflict C6). Validated against ICU
+   * rather than a hardcoded list: the zone database changes, our list would not,
+   * and `Intl.DateTimeFormat` is the same authority the guardrail resolves with.
+   */
+  timezone: z
+    .string()
+    .max(64)
+    .refine(isValidTimeZone, "must be an IANA time zone name, e.g. Asia/Kuala_Lumpur")
+    .default(DEFAULT_TIME_ZONE),
 });
+
+/**
+ * The agent guardrail policy (PRD-002 P0). Every bound here is one PRD-002
+ * calls tenant-configurable; the ones it does not are absent on purpose — a
+ * field on this form is a promise that a tenant may change it.
+ *
+ * A partial body: an omitted field keeps its current value, so a console form
+ * that predates a new bound cannot silently reset it.
+ */
+const agentSettingsSchema = z
+  .object({
+    enabled: z.boolean(),
+    contact_window_start_hour: z.number().int().min(0).max(23),
+    contact_window_end_hour: z.number().int().min(1).max(24),
+    suppress_weekends: z.boolean(),
+    suppress_holidays: z.boolean(),
+    max_reminders_per_invoice: z.number().int().min(1).max(50),
+    // PRD-002's blocking question, answered at 60 (Malaysian SME norms run
+    // 60-90 days). The floor is 1, not 0: escalating on the due date is not a
+    // policy, and the "and >= 2 prior reminders" half of the gate is not
+    // configurable at all.
+    escalation_threshold_days: z.number().int().min(1).max(365),
+    contact_cooldown_hours: z.number().int().min(1).max(720),
+    max_message_chars: z.number().int().min(200).max(10_000),
+  })
+  .partial()
+  .refine((p) => Object.keys(p).length > 0, { message: "empty patch" });
 
 const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
@@ -78,6 +122,40 @@ settings.put("/quote-branding", zValidator("json", quoteBrandingSchema), async (
   const branding = await upsertQuoteBranding(c.env.DB, tenant.tenant_id, c.req.valid("json"));
   return c.json(branding);
 });
+
+/**
+ * The resolved guardrail policy, including the defaults a tenant who has never
+ * saved settings is running under — `configured: false` says which case it is.
+ * A read is on the settings axis, so a finance or support user can see what the
+ * agent is allowed to do without being able to change it.
+ */
+settings.get("/agents", async (c) => {
+  const tenant = c.get("tenant");
+  return c.json(await getAgentSettings(c.env.DB, tenant.tenant_id));
+});
+
+/**
+ * Raised to `agents:write` rather than left on the router's `settings:write`.
+ * Both resolve to {admin, operator} today, so this records intent rather than
+ * changing behaviour: this endpoint carries PRD-002's kill switch, and if the
+ * settings axis ever widens it must not take the kill switch with it.
+ */
+settings.put(
+  "/agents",
+  requireCapability("agents:write"),
+  zValidator("json", agentSettingsSchema),
+  async (c) => {
+    const tenant = c.get("tenant");
+    try {
+      return c.json(await upsertAgentSettings(c.env.DB, tenant.tenant_id, c.req.valid("json")));
+    } catch (err) {
+      if (err instanceof AgentSettingsError) {
+        return c.json({ error: err.message, code: err.code }, err.httpStatus);
+      }
+      throw err;
+    }
+  },
+);
 
 // Marks the first-run onboarding journey as done (finished or dismissed) so
 // the console stops redirecting into /onboarding. Admin-only: onboarding is

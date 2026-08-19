@@ -6,6 +6,7 @@ import {
   type QuoteTemplateConfig,
 } from "./branding";
 import { DEFAULT_PAYMENT_TERMS_DAYS } from "../finance/payment-terms";
+import { DEFAULT_TIME_ZONE } from "../../agents/guardrails/zone";
 import type { CompanyProfile } from "./types";
 
 /**
@@ -16,7 +17,7 @@ import type { CompanyProfile } from "./types";
  */
 
 const PROFILE_COLUMNS =
-  "legal_name, reg_no, tax_no, address_line1, address_line2, city, state, postcode, country, phone, email, website, default_prepared_by, base_currency, default_payment_terms_days";
+  "legal_name, reg_no, tax_no, address_line1, address_line2, city, state, postcode, country, phone, email, website, default_prepared_by, base_currency, default_payment_terms_days, timezone";
 
 /** Company-wide default currency when no profile row exists yet. */
 export const DEFAULT_BASE_CURRENCY = "MYR";
@@ -52,6 +53,12 @@ export interface CompanyProfileInput {
    * NOT NULL DEFAULT 30, so an omitted value keeps 30.
    */
   default_payment_terms_days?: number;
+  /**
+   * IANA zone name — the tenant's local time (PRD-002 / conflict C6). The agent
+   * guardrails need it to answer "is it 2am for this customer's supplier", and
+   * it existed nowhere in `src/` before S10.
+   */
+  timezone?: string;
 }
 
 const PROFILE_FIELDS = [
@@ -70,6 +77,7 @@ const PROFILE_FIELDS = [
   "default_prepared_by",
   "base_currency",
   "default_payment_terms_days",
+  "timezone",
 ] as const;
 
 /**
@@ -91,6 +99,9 @@ export async function upsertCompanyProfile(
     // NOT NULL column, same treatment as base_currency.
     if (f === "default_payment_terms_days")
       return input.default_payment_terms_days ?? DEFAULT_PAYMENT_TERMS_DAYS;
+    // NOT NULL column, same treatment again. The route validates the zone name
+    // against Intl before it reaches here; this is the "no value sent" path.
+    if (f === "timezone") return input.timezone ?? DEFAULT_TIME_ZONE;
     return input[f] ?? null;
   });
   await db.batch([

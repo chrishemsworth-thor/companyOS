@@ -12,6 +12,19 @@ import type { CompanyProfile as CompanyProfileType } from "../api/types";
 
 type Form = Record<keyof CompanyProfileType, string>;
 
+/**
+ * Every zone the browser's ICU knows, which is the same authority the API
+ * validates against — so a hardcoded list here could only ever be wrong. The
+ * fallback covers a runtime without `supportedValuesOf` (older Safari, jsdom).
+ */
+const TIME_ZONES: string[] = (() => {
+  try {
+    return Intl.supportedValuesOf("timeZone");
+  } catch {
+    return ["Asia/Kuala_Lumpur", "Asia/Kuching", "Asia/Singapore", "Asia/Jakarta", "UTC"];
+  }
+})();
+
 const EMPTY: Form = {
   legal_name: "",
   reg_no: "",
@@ -28,6 +41,7 @@ const EMPTY: Form = {
   default_prepared_by: "",
   base_currency: "MYR",
   default_payment_terms_days: "30",
+  timezone: "Asia/Kuala_Lumpur",
 };
 
 /**
@@ -87,6 +101,9 @@ export function CompanyProfileForm({
     // NOT NULL on the server; a blank field means "keep the 30-day default"
     // rather than "no terms", and the API expects a number here.
     body.default_payment_terms_days = Number(form.default_payment_terms_days) || 30;
+    // NOT NULL on the server, and load-bearing: the agent guardrails defer a
+    // send that would land outside business hours in this zone.
+    body.timezone = form.timezone || "Asia/Kuala_Lumpur";
     mutation.mutate(body);
   };
 
@@ -129,6 +146,23 @@ export function CompanyProfileForm({
       <p className="mb-3 text-sm text-muted">
         An invoice created without an explicit due date falls due this many days after issue. A
         customer with its own payment terms overrides this.
+      </p>
+      <FormRow label="Time zone">
+        <select
+          className="input"
+          value={form.timezone}
+          onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
+        >
+          {TIME_ZONES.map((zone) => (
+            <option key={zone} value={zone}>
+              {zone.replace(/_/g, " ")}
+            </option>
+          ))}
+        </select>
+      </FormRow>
+      <p className="mb-3 text-sm text-muted">
+        Your local time. Agents will not contact a customer outside business hours in this zone —
+        an out-of-hours reminder waits for the morning rather than being dropped.
       </p>
       <FormRow label="Address line 1">
         <input className="input" value={form.address_line1} onChange={set("address_line1")} />

@@ -160,19 +160,33 @@ const ORG_FIELDS = [
   "ship_country",
 ] as const;
 
-const CUSTOMER_COLUMNS = `customer_id, name, email, phone, ${ORG_FIELDS.join(", ")}`;
+const CUSTOMER_COLUMNS = `customer_id, name, email, phone, agent_paused, ${ORG_FIELDS.join(", ")}`;
+
+/**
+ * `agent_paused` (PRD-002, 0028) is the per-customer half of the agent kill
+ * switch. It is stored as SQLite's 0/1 and read as a boolean — the same
+ * treatment `public_holidays.observed` gets. Not in `ORG_FIELDS`: those are all
+ * nullable and the create path binds `?? null` for each, which this NOT NULL
+ * column would reject.
+ */
+type CustomerRow = Omit<Customer, "agent_paused"> & { agent_paused: number };
+
+function mapCustomerRow(row: CustomerRow): Customer {
+  return { ...row, agent_paused: row.agent_paused === 1 };
+}
 
 export async function getCustomer(
   db: D1Database,
   tenantId: string,
   customerId: string,
 ): Promise<Customer | null> {
-  return db
+  const row = await db
     .prepare(
       `SELECT ${CUSTOMER_COLUMNS} FROM customers WHERE tenant_id = ? AND customer_id = ?`,
     )
     .bind(tenantId, customerId)
-    .first<Customer>();
+    .first<CustomerRow>();
+  return row ? mapCustomerRow(row) : null;
 }
 
 export async function listCustomers(
@@ -193,9 +207,9 @@ export async function listCustomers(
        ORDER BY customer_id ASC LIMIT ?`,
     )
     .bind(...binds)
-    .all<Customer>();
+    .all<CustomerRow>();
   const { items, next_cursor } = paginate(results, page.limit, "customer_id");
-  return { customers: items, next_cursor };
+  return { customers: items.map(mapCustomerRow), next_cursor };
 }
 
 export async function createCustomer(
@@ -241,7 +255,8 @@ export async function updateCustomer(
   db: D1Database,
   tenantId: string,
   customerId: string,
-  patch: { name?: string; email?: string; phone?: string } & CustomerOrgFields,
+  patch: { name?: string; email?: string; phone?: string; agent_paused?: boolean } &
+    CustomerOrgFields,
 ): Promise<Customer> {
   const sets: string[] = [];
   const binds: unknown[] = [];
@@ -250,6 +265,21 @@ export async function updateCustomer(
       sets.push(`${field} = ?`);
       binds.push(patch[field]);
     }
+  }
+  // Pausing the agent on a customer is a CRM edit, not a settings change: it is
+  // a property of the relationship, so it lives on the customer page and is
+  // held to `crm:write` like the rest of the record.
+  if (patch.agent_paused !== undefined) {
+    sets.push("agent_paused = ?");
+    binds.push(patch.agent_paused ? 1 : 0);
+  }
+  // Defensive: the route's validator refuses an empty patch, and an empty SET
+  // list would be invalid SQL. A no-op patch still has to 404 on a customer
+  // that does not exist, so it goes through the same read.
+  if (sets.length === 0) {
+    const existing = await getCustomer(db, tenantId, customerId);
+    if (!existing) throw new CrmError("not_found", "customer not found", 404);
+    return existing;
   }
   const result = await db
     .prepare(`UPDATE customers SET ${sets.join(", ")} WHERE tenant_id = ? AND customer_id = ?`)

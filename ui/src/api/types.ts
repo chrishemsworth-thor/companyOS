@@ -240,6 +240,12 @@ export interface CompanyProfile {
   base_currency: string;
   /** Fallback invoice payment terms when a customer states none (PRD-003). */
   default_payment_terms_days: number;
+  /**
+   * IANA zone name for the company's local time (PRD-002). The agent
+   * guardrails read it to answer "is it 2am for this customer" before any
+   * reminder goes out.
+   */
+  timezone: string;
 }
 
 export interface QuoteTemplateConfig {

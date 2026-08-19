@@ -64,6 +64,15 @@ const createBodySchema = z.object({
 });
 
 const patchBodySchema = createBodySchema
+  .extend({
+    /**
+     * PRD-002's per-customer agent kill switch (migration 0028). Patch-only:
+     * a customer is never created paused, and the flag is an operational
+     * decision about an existing relationship. Checked in the shared guard
+     * before any send — see src/agents/guardrails/guard.ts.
+     */
+    agent_paused: z.boolean(),
+  })
   .partial()
   .refine((p) => Object.keys(p).length > 0, { message: "empty patch" });
 

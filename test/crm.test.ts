@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { env, createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import worker from "../src/index";
 import { sha256Hex } from "../src/gateway/middleware/auth";
+import { openContactWindow } from "./agent-fixture";
 
 const API_KEY = "test_api_key_crm";
 const TENANT_ID = "biz_crm";
@@ -40,7 +41,11 @@ async function getStages(): Promise<
   return ((await res.json()) as { stages: never[] }).stages;
 }
 
-beforeAll(seedTenant);
+beforeAll(async () => {
+  await seedTenant();
+  // One activities test drives a real agent assessment (see test/agent-fixture.ts).
+  await openContactWindow(TENANT_ID);
+});
 
 describe("customers", () => {
   it("creates and reads back a customer", async () => {

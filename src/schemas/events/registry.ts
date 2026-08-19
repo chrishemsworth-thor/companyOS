@@ -49,6 +49,7 @@ import { leaveRequestedV1 } from "./leave.requested.v1";
 import { leaveApprovedV1 } from "./leave.approved.v1";
 import { leaveRejectedV1 } from "./leave.rejected.v1";
 import { leaveCancelledV1 } from "./leave.cancelled.v1";
+import { guardrailOverrideV1 } from "./guardrail.override.v1";
 
 /**
  * event_type → current payload schema. The queue consumer refuses events whose
@@ -134,6 +135,13 @@ export const eventRegistry: Record<string, z.ZodTypeAny> = {
   "leave.approved": leaveApprovedV1,
   "leave.rejected": leaveRejectedV1,
   "leave.cancelled": leaveCancelledV1,
+
+  // Agent guardrails (PRD-002, S10). ONE override event for every agent that
+  // sends a message to a person — see SESSION-PLAN conflict C9. It is not
+  // mapped in the notification consumer: an override is an engineering and
+  // audit fact, and a tenant admin learning about it belongs on the Agent
+  // Activity feed's badge, not in the approvals bell.
+  "guardrail.override": guardrailOverrideV1,
 };
 
 export function validatePayload(

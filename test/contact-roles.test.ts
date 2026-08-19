@@ -6,6 +6,7 @@ import { makeEnvelope, type EventEnvelope } from "../src/schemas/envelope";
 import { validatePayload } from "../src/schemas/events/registry";
 import { setLlmProviderFactoryForTests } from "../src/llm";
 import { setEventSenderForTests } from "../src/queue/producer";
+import { openContactWindow } from "./agent-fixture";
 import type { Contact, ContactRole } from "../src/modules/crm/types";
 
 /**
@@ -83,6 +84,9 @@ beforeAll(async () => {
   await seedCustomer(TENANT_ID, C.empty);
   await seedCustomer(TENANT_ID, C.legacy, { email: "general@legacy.example" });
   await seedCustomer(OTHER_TENANT_ID, C.staffed, { email: "general@othertenant.example" });
+  // Contact-role resolution, not office hours (see test/agent-fixture.ts).
+  await openContactWindow(TENANT_ID);
+  await openContactWindow(OTHER_TENANT_ID);
 });
 
 let capturedEvents: EventEnvelope[];

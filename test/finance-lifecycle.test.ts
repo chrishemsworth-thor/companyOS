@@ -5,6 +5,7 @@ import { sha256Hex } from "../src/gateway/middleware/auth";
 import { makeEnvelope, type EventEnvelope } from "../src/schemas/envelope";
 import { handleEventBatch } from "../src/queue/consumer";
 import { runOverdueSweep } from "../src/modules/finance/overdue-sweep";
+import { openContactWindow } from "./agent-fixture";
 
 /**
  * The native vertical slice — replaces the ERPNext-webhook leg:
@@ -99,7 +100,11 @@ function agentStub(customerId: string) {
   };
 }
 
-beforeAll(seedTenant);
+beforeAll(async () => {
+  await seedTenant();
+  // The lifecycle ends in a real agent assessment (see test/agent-fixture.ts).
+  await openContactWindow(TENANT_ID);
+});
 
 describe("native lifecycle: invoice → send → sweep → agent → payment", () => {
   it("the sweep marks sent invoices overdue and emits invoice.overdue.v2", async () => {

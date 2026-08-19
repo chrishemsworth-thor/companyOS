@@ -29,6 +29,14 @@ export interface Customer {
    */
   payment_terms_days: number | null;
   credit_limit_cents: number | null;
+  /**
+   * PRD-002's per-customer agent kill switch (migration 0028): true means no
+   * agent may contact this customer, checked in the shared guard before any
+   * send. PRD-003 (S8) named this column as the seam it was leaving when it
+   * decided derived health must not auto-pause anything — one authority for
+   * "may we send", and this is half of it.
+   */
+  agent_paused: boolean;
   preferred_channel: PreferredChannel | null;
   notes: string | null;
   ship_address_line1: string | null;

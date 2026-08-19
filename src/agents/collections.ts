@@ -17,12 +17,21 @@ import {
   DECISION_JSON_SCHEMA,
   DECISION_SYSTEM_PROMPT,
   fallbackDecision,
-  MAX_MESSAGE_CHARS,
+  type AgentStateSummary,
   type BillingContactContext,
   type CollectionsContext,
   type CollectionsDecision,
   type OverdueInvoiceContext,
 } from "./decision";
+import {
+  applyDecisionGuards,
+  loadAgentPolicy,
+  loadHolidayLookup,
+  preflight,
+  type GuardrailOverrideRecord,
+  type PreflightResult,
+  type SendContext,
+} from "./guardrails";
 
 interface AgentState {
   tenant_id: string;
@@ -32,13 +41,31 @@ interface AgentState {
   reminder_history: { invoice_id: string; sent_at: string; delivery_ref: string }[];
   escalation_stage: "none" | "reminded" | "escalated";
   open_overdue_invoices: string[];
+  /**
+   * When a guardrail deferred a send (out of hours, weekend, public holiday).
+   * PRD-002 requires deferral rather than dropping, so this is also what the
+   * alarm is set to — the send happens when the window opens.
+   */
+  deferred_until?: string | null;
+  /**
+   * Invoices whose reminder cap has already been audited. The cap is a terminal
+   * state — every daily re-check hits it again — so the override event fires
+   * once per invoice instead of once a day forever.
+   */
+  capped_invoices?: string[];
 }
 
 const RECHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily re-check while invoices stay open
-// Never contact the same customer more than once per 24h, no matter how many
-// overdue events arrive (the sweep re-emits daily by design).
-const CONTACT_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const LLM_MAX_TOKENS = 8192;
+/**
+ * PRD-002: "Escalation requires: invoice past due by >= tenant threshold AND
+ * >= 2 prior reminders." The days half is `escalation_threshold_days` in
+ * `agent_settings` (tenant-configurable, default 60); this half is not
+ * configurable, because a tenant lowering it to zero would be a tenant turning
+ * the guardrail off, and PRD-002 wants first contact to be un-escalatable by
+ * construction.
+ */
+const MIN_REMINDERS_BEFORE_ESCALATION = 2;
 
 /**
  * CollectionsAgent — one Durable Object per (tenant, customer), addressed by
@@ -102,10 +129,10 @@ export class CollectionsAgent extends DurableObject<Env> {
       state.open_overdue_invoices.push(payload.invoice_id);
     }
 
-    await this.assess(state, "event");
-
-    // Re-check daily while anything stays unpaid.
-    await this.ctx.storage.setAlarm(Date.now() + RECHECK_INTERVAL_MS);
+    // The alarm time comes back from the assessment: a guardrail deferral needs
+    // the DO awake when the contact window opens, not in 24 hours.
+    const { next_alarm_at } = await this.assess(state, "event");
+    await this.ctx.storage.setAlarm(next_alarm_at);
   }
 
   private async onPaymentReceived(envelope: EventEnvelope): Promise<void> {
@@ -133,30 +160,140 @@ export class CollectionsAgent extends DurableObject<Env> {
   async alarm(): Promise<void> {
     const state = await this.getState();
     if (!state || state.open_overdue_invoices.length === 0) return;
-    await this.assess(state, "alarm");
-    await this.ctx.storage.setAlarm(Date.now() + RECHECK_INTERVAL_MS);
+    const { next_alarm_at } = await this.assess(state, "alarm");
+    await this.ctx.storage.setAlarm(next_alarm_at);
   }
 
-  /** One assessment: cooldown gate → context → decision → act. */
-  private async assess(state: AgentState, trigger: "event" | "alarm"): Promise<void> {
-    const now = Date.now();
-    if (state.last_contact && now - Date.parse(state.last_contact) < CONTACT_COOLDOWN_MS) {
-      console.log(
-        `[CollectionsAgent] ${state.tenant_id}:${state.customer_id} contacted <24h ago, skipping (${trigger})`,
-      );
-      await this.putState(state);
-      return;
-    }
+  /**
+   * When to wake up next. The routine daily re-check, unless a guardrail said
+   * "try again at" sooner — a send deferred out of the night lands at 09:00,
+   * not tomorrow evening.
+   *
+   * **The alarm is never cleared by a guardrail.** That is the fallback
+   * guarantee in one line: whatever a guard decides about one send, the agent
+   * keeps looking. Only a closed loop (every invoice paid, in
+   * `onPaymentReceived`) stops the re-check.
+   */
+  private nextAlarm(now: number, retryAt: number | null): number {
+    const routine = now + RECHECK_INTERVAL_MS;
+    const candidate = retryAt === null ? routine : Math.min(retryAt, routine);
+    // Never schedule in the past: a stale retry_at would spin the DO.
+    return Math.max(candidate, now + 1_000);
+  }
 
-    const context = await this.assembleContext(state);
+  /** One `guardrail.override.v1` per firing (PRD-002: "the override is
+   * logged"). Agent-agnostic payload — see SESSION-PLAN C9. */
+  private async emitOverrides(
+    tenantId: string,
+    overrides: readonly GuardrailOverrideRecord[],
+  ): Promise<void> {
+    for (const override of overrides) {
+      await emitEvent(
+        this.env,
+        makeEnvelope({
+          event_type: "guardrail.override",
+          source_module: "finance",
+          tenant_id: tenantId,
+          payload: { ...override },
+        }),
+      );
+    }
+  }
+
+  /**
+   * One assessment: policy → guardrail preflight → context → decision →
+   * decision guards → act.
+   *
+   * The guardrails (PRD-002 P0) are enforced here, in code, at two points. The
+   * split is not cosmetic: the kill switches, the cooldown, the per-invoice cap
+   * and the contact window do not depend on what the model would say, so they
+   * run first and the tokens are never spent; the bounds on the model's own
+   * output — it cannot escalate early, cite an invoice it was not shown, or
+   * write past the character cap — can only run after it answers.
+   *
+   * Returns when the DO should wake next. Nothing in this method can stop the
+   * agent's loop; that is the fallback guarantee.
+   */
+  private async assess(
+    state: AgentState,
+    trigger: "event" | "alarm",
+  ): Promise<{ next_alarm_at: number }> {
+    const now = Date.now();
+    // Neither of these throws: an unreadable policy resolves to the
+    // conservative Malaysian defaults and missing holiday data reads as "no
+    // holidays". A guard that threw here would be a silent stop.
+    const policy = await loadAgentPolicy(this.env.DB, state.tenant_id);
+    const holidays = await loadHolidayLookup(this.env.DB, state.tenant_id, policy.timezone, now);
+
+    // Pass 1 — the checks that need no cross-module context. This is what keeps
+    // a 2am wake, or a customer contacted an hour ago, down to two queries.
+    const baseCtx: SendContext = {
+      agent: "collections",
+      subject_type: "customer",
+      subject_id: state.customer_id,
+      channel: "email",
+      at: now,
+      last_contact_at: state.last_contact ? Date.parse(state.last_contact) : null,
+      paused: false,
+      sends_for_ref: 0,
+      ref: null,
+    };
+    const early = preflight(policy, baseCtx, holidays);
+    if (!early.allow) return this.blocked(state, early, trigger, now);
+
+    const { context, paused } = await this.assembleContext(state);
     if (context.overdue_invoices.length === 0) {
       // Nothing actually due (e.g. paid between the event and now).
       await this.putState(state);
-      return;
+      return { next_alarm_at: this.nextAlarm(now, null) };
     }
 
-    const { decision, source } = await this.decide(context, state);
-    decision.message = decision.message.slice(0, MAX_MESSAGE_CHARS);
+    // Pass 2 — the same guard, now knowing which invoice this send is about and
+    // whether a human has paused this customer. The window and cooldown cannot
+    // have changed since pass 1 (same instant), so nothing is audited twice.
+    const target = context.overdue_invoices[0]!;
+    const sendsForTarget = state.reminder_history.filter(
+      (r) => r.invoice_id === target.invoice_id,
+    ).length;
+    const ctx: SendContext = {
+      ...baseCtx,
+      paused,
+      sends_for_ref: sendsForTarget,
+      ref: target.invoice_id,
+    };
+    const gate = preflight(policy, ctx, holidays);
+    if (!gate.allow) return this.blocked(state, gate, trigger, now);
+
+    const stateSummary = {
+      escalation_stage: state.escalation_stage,
+      reminders_sent: state.reminder_history.length,
+      last_contact: state.last_contact,
+    };
+    const { decision: proposed, source } = await this.decide(context, stateSummary);
+
+    const { decision, overrides } = applyDecisionGuards(
+      policy,
+      { ...ctx, channel: proposed.channel },
+      proposed,
+      {
+        valid_refs: context.overdue_invoices.map((i) => i.invoice_id),
+        // The deterministic template, supplied by the caller because only the
+        // caller owns it. PRD-002: "the deterministic template is sent instead".
+        fallback_message: fallbackDecision(context, stateSummary).message,
+        escalation: {
+          action: "escalate",
+          downgrade_to: "remind",
+          days_past_due: Math.max(...context.overdue_invoices.map((i) => i.days_overdue)),
+          // Reminders about THIS invoice, not every reminder this customer has
+          // ever had. Escalation is about one debt, and letting chases of other
+          // invoices count towards it is how a customer gets a final notice on
+          // an invoice they have been reminded about once.
+          prior_sends: sendsForTarget,
+          min_prior_sends: MIN_REMINDERS_BEFORE_ESCALATION,
+        },
+      },
+    );
+    if (overrides.length > 0) await this.emitOverrides(state.tenant_id, overrides);
 
     // Audit every decision — LLM or fallback — into events_log.
     await emitEvent(
@@ -181,14 +318,15 @@ export class CollectionsAgent extends DurableObject<Env> {
     );
 
     state.risk_score = decision.risk_score;
+    state.deferred_until = null;
 
     if (decision.action === "wait") {
       await this.putState(state);
-      return;
+      return { next_alarm_at: this.nextAlarm(now, null) };
     }
 
     // remind | escalate → send the composed message through the delivery port.
-    const invoiceId = context.overdue_invoices[0]!.invoice_id;
+    const invoiceId = target.invoice_id;
     let deliveryRef: string | null = null;
     let usedChannel = decision.channel;
     try {
@@ -208,7 +346,7 @@ export class CollectionsAgent extends DurableObject<Env> {
         `[CollectionsAgent] reminder undeliverable for ${state.tenant_id}:${state.customer_id}: ${err.message}`,
       );
       await this.putState(state);
-      return;
+      return { next_alarm_at: this.nextAlarm(now, null) };
     }
 
     // Collections history is CRM-visible: every reminder lands in the activities log.
@@ -249,18 +387,52 @@ export class CollectionsAgent extends DurableObject<Env> {
     }
 
     await this.putState(state);
+    return { next_alarm_at: this.nextAlarm(now, null) };
+  }
+
+  /**
+   * A guardrail stopped this send. Record it, keep the loop alive, and say when
+   * to try again.
+   *
+   * The reminder cap is audited once per invoice rather than once per re-check:
+   * it is a terminal state, so every daily wake would otherwise write another
+   * `guardrail.override.v1` for the same fact, for as long as the invoice stays
+   * open.
+   */
+  private async blocked(
+    state: AgentState,
+    result: Extract<PreflightResult, { allow: false }>,
+    trigger: "event" | "alarm",
+    now: number,
+  ): Promise<{ next_alarm_at: number }> {
+    console.log(
+      `[CollectionsAgent] ${state.tenant_id}:${state.customer_id} not contacted — ${result.guardrail}: ${result.detail} (${trigger})`,
+    );
+    state.deferred_until =
+      result.guardrail === "contact_window" && result.retry_at !== null
+        ? new Date(result.retry_at).toISOString()
+        : null;
+
+    let override = result.override;
+    if (override?.guardrail === "reminder_cap" && override.subject_ref) {
+      const capped = state.capped_invoices ?? [];
+      if (capped.includes(override.subject_ref)) {
+        override = null;
+      } else {
+        state.capped_invoices = [...capped, override.subject_ref];
+      }
+    }
+    if (override) await this.emitOverrides(state.tenant_id, [override]);
+
+    await this.putState(state);
+    return { next_alarm_at: this.nextAlarm(now, result.retry_at) };
   }
 
   /** LLM decision with Zod validation; any failure falls back to the template. */
   private async decide(
     context: CollectionsContext,
-    state: AgentState,
+    stateSummary: AgentStateSummary,
   ): Promise<{ decision: CollectionsDecision; source: "llm" | "fallback" }> {
-    const stateSummary = {
-      escalation_stage: state.escalation_stage,
-      reminders_sent: state.reminder_history.length,
-      last_contact: state.last_contact,
-    };
     const provider = getLlmProvider(this.env);
     if (provider) {
       try {
@@ -280,8 +452,16 @@ export class CollectionsAgent extends DurableObject<Env> {
     return { decision: fallbackDecision(context, stateSummary), source: "fallback" };
   }
 
-  /** Everything one database makes cheap: the cross-module customer picture. */
-  private async assembleContext(state: AgentState): Promise<CollectionsContext> {
+  /**
+   * Everything one database makes cheap: the cross-module customer picture.
+   *
+   * `agent_paused` comes back beside the context rather than inside it: it is a
+   * guardrail input, and the context is what the model is shown. The model has
+   * no business knowing it was nearly muzzled.
+   */
+  private async assembleContext(
+    state: AgentState,
+  ): Promise<{ context: CollectionsContext; paused: boolean }> {
     const db = this.env.DB;
     const tenantId = state.tenant_id;
     const customerId = state.customer_id;
@@ -348,13 +528,16 @@ export class CollectionsAgent extends DurableObject<Env> {
       .all<{ title: string; value_cents: number; currency: string }>();
 
     return {
-      customer,
-      billing_contact,
-      health,
-      overdue_invoices,
-      recent_payments,
-      recent_activities,
-      open_deals,
+      context: {
+        customer,
+        billing_contact,
+        health,
+        overdue_invoices,
+        recent_payments,
+        recent_activities,
+        open_deals,
+      },
+      paused: customer?.agent_paused ?? false,
     };
   }
 

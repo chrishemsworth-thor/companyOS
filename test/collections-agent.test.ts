@@ -6,6 +6,7 @@ import { makeEnvelope, type EventEnvelope } from "../src/schemas/envelope";
 import { validatePayload } from "../src/schemas/events/registry";
 import { setLlmProviderFactoryForTests } from "../src/llm";
 import { setEventSenderForTests } from "../src/queue/producer";
+import { openContactWindow } from "./agent-fixture";
 import type { CollectionsDecision } from "../src/agents/decision";
 
 /**
@@ -30,6 +31,10 @@ async function seed() {
   )
     .bind(CUSTOMER_ID, TENANT_ID, "Slow Payer Sdn Bhd", "slow@example.com", new Date().toISOString())
     .run();
+  // This suite is about decisions, not about office hours: without an open
+  // window the guard would defer every send whenever CI happens to run at
+  // night in Kuala Lumpur. The window is tested in agent-guardrails*.test.ts.
+  await openContactWindow(TENANT_ID);
 }
 
 beforeAll(seed);
@@ -52,6 +57,7 @@ beforeEach(() => {
 afterEach(() => {
   setEventSenderForTests(null);
   setLlmProviderFactoryForTests(null);
+  vi.useRealTimers();
 });
 
 async function gatewayFetch(path: string, init?: RequestInit): Promise<Response> {
@@ -122,17 +128,25 @@ async function reminderActivities(): Promise<{ kind: string; body: string | null
   return results;
 }
 
-const REMIND: CollectionsDecision = {
-  risk_score: 55,
-  action: "remind",
-  channel: "email",
-  message: "Hi! Gentle nudge about your open invoice — could you arrange payment this week?",
-};
+/**
+ * A remind decision that cites the invoice it is about. PRD-002's guardrails
+ * require that: a message referencing no invoice from the context is replaced
+ * with the deterministic template, exactly as a hallucinated one is. Both cases
+ * are asserted in `agent-guardrails.test.ts`.
+ */
+function remind(invoiceId: string, risk = 55): CollectionsDecision {
+  return {
+    risk_score: risk,
+    action: "remind",
+    channel: "email",
+    message: `Hi! Gentle nudge about invoice ${invoiceId} — could you arrange payment this week?`,
+  };
+}
 
 describe("LLM-driven decisions", () => {
   it("remind: stores the risk score, sends the composed message, logs the activity + decision", async () => {
     const invoiceId = await createOverdueInvoice();
-    llmMock.mockResolvedValue(REMIND);
+    llmMock.mockResolvedValue(remind(invoiceId));
 
     await agentStub().onEvent(overdueEnvelope(invoiceId));
 
@@ -171,21 +185,40 @@ describe("LLM-driven decisions", () => {
       customer_id: CUSTOMER_ID,
       risk_score: 55,
       action: "remind",
-      message: REMIND.message,
+      message: remind(invoiceId).message,
       source: "llm",
       trigger: "event",
     });
   });
 
+  /**
+   * Escalation is no longer something the model can simply return: PRD-002's
+   * guardrail requires the invoice to be past due by the tenant threshold AND
+   * at least two prior reminders. So this walks the real path — the overdue
+   * sweep re-emitting daily, a reminder each day, then the escalation — with
+   * the clock moved forward between assessments so the 24h cooldown clears.
+   * The downgrade case (an escalation the model has not earned) is asserted in
+   * `agent-guardrails.test.ts`.
+   */
   it("escalate: emits customer.risk_flagged.v1 and marks the stage escalated", async () => {
+    // 2026-06-20 due date → 66 days past due, over the 60-day default.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-25T10:00:00Z"));
+
     const invoiceId = await createOverdueInvoice(300_000);
+    llmMock.mockResolvedValue(remind(invoiceId));
+    await agentStub().onEvent(overdueEnvelope(invoiceId, 300_000));
+
+    vi.setSystemTime(new Date("2026-08-26T10:00:01Z"));
+    await agentStub().onEvent(overdueEnvelope(invoiceId, 300_000));
+
+    vi.setSystemTime(new Date("2026-08-27T10:00:02Z"));
     llmMock.mockResolvedValue({
       risk_score: 90,
       action: "escalate",
       channel: "email",
-      message: "Final notice: your invoice remains unpaid despite reminders.",
+      message: `Final notice: invoice ${invoiceId} remains unpaid despite reminders.`,
     });
-
     await agentStub().onEvent(overdueEnvelope(invoiceId, 300_000));
 
     const state = await agentStub().snapshot();
@@ -202,8 +235,10 @@ describe("LLM-driven decisions", () => {
       total_due_cents: 300_000,
     });
 
-    // Escalation notices still reach the customer and the activity log.
-    expect(await reminderActivities()).toHaveLength(1);
+    // Two reminders and the escalation notice all reached the customer.
+    expect(await reminderActivities()).toHaveLength(3);
+    // No guardrail fired: this escalation was earned.
+    expect(capturedEvents.filter((e) => e.event_type === "guardrail.override")).toHaveLength(0);
   });
 
   it("wait: updates the risk score but sends nothing", async () => {
@@ -257,7 +292,7 @@ describe("rate limiting", () => {
   it("never contacts the same customer twice within 24h, but keeps tracking invoices", async () => {
     const first = await createOverdueInvoice();
     const second = await createOverdueInvoice();
-    llmMock.mockResolvedValue(REMIND);
+    llmMock.mockResolvedValue(remind(first));
 
     await agentStub().onEvent(overdueEnvelope(first));
     await agentStub().onEvent(overdueEnvelope(second));

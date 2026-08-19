@@ -5,6 +5,7 @@ import { sha256Hex } from "../src/gateway/middleware/auth";
 import { makeEnvelope } from "../src/schemas/envelope";
 import { setLlmProviderFactoryForTests } from "../src/llm";
 import { setEventSenderForTests } from "../src/queue/producer";
+import { openContactWindow } from "./agent-fixture";
 
 /** PATCH /v1/customers/:id and GET /v1/customers/:id/agent. */
 
@@ -31,6 +32,8 @@ beforeAll(async () => {
   )
     .bind(CUSTOMER_ID, TENANT_ID, "Original Name", "orig@example.com", new Date().toISOString())
     .run();
+  // The agent-snapshot test drives a real assessment (see test/agent-fixture.ts).
+  await openContactWindow(TENANT_ID);
 });
 
 beforeEach(() => {

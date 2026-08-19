@@ -67,4 +67,11 @@ export interface CompanyProfile {
    * `payment_terms_days` overrides it; NOT NULL, defaulting to 30.
    */
   default_payment_terms_days: number;
+  /**
+   * The tenant's local time as an IANA zone name (PRD-002, migration 0028).
+   * Company-wide rather than agent-owned: SLA targets, scheduled sends and any
+   * report with a "today" in it all want the same answer. NOT NULL, defaulting
+   * to `Asia/Kuala_Lumpur`.
+   */
+  timezone: string;
 }
