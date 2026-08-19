@@ -1,6 +1,6 @@
 # CompanyOS — Production Deployment
 
-*Last updated: 2026-07-23 · Deployment: **live** (Workers Free plan, queue-less mode)*
+*Last updated: 2026-08-02 · Deployment: **live** (Workers Free plan, queue-less mode)*
 
 The single reference for how the production CompanyOS platform is deployed,
 configured, and operated. Generic background lives elsewhere and is linked
@@ -139,6 +139,12 @@ npm run deploy:free
 to run every deploy. Never edit an applied migration — add the next
 `NNNN_*.sql` instead.
 
+That safety is about *re-running*, not about the migration's own contents. If the
+pending migration changes existing rows, adds a constraint, or alters
+customer-facing behaviour, stop and work through [§8.1](#81-when-a-deploy-is-not-routine)
+first — it wants a backup and a deploy order, neither of which this section
+provides.
+
 ## 5. Deploying the console (Pages)
 
 ```sh
@@ -217,6 +223,98 @@ Currently provisioned: `dvsb` — Dapat Vista (M) Sdn Bhd.
    alone; deploys are atomic and take seconds.
 4. If a change touched `wrangler.jsonc`, mirror it into
    `wrangler.free.jsonc` (minus the `queues` block) before deploying.
+
+**Step 3 assumes the two halves are independent.** They usually are, and most
+migrations are additive nullable columns. Three kinds of change break that
+assumption, and §8.1 is the checklist for them.
+
+### 8.1 When a deploy is not routine
+
+Run through these four questions before any deploy. A "yes" to any of them means
+the release has an order, a backup, or an operator heads-up attached to it — none
+of which the four steps above provide.
+
+**1. Does the migration change existing rows, or add a constraint?**
+
+D1 has **no down-migrations**. An additive nullable column is trivially safe to
+roll forward past; a statement that rewrites values or adds a `UNIQUE` index is
+not, because the old code may violate the new constraint and the old values are
+gone.
+
+Take an export first — it is the only rollback for the data half:
+
+```sh
+npx wrangler d1 export companyos-db --remote --config wrangler.free.jsonc \
+  --output ./backup-pre-NNNN-$(date +%Y%m%d).sql
+```
+
+Also: **test the migration against a populated database, not just a fresh one.**
+`applyD1Migrations` in the test suite runs against an empty database, which is
+the exact blind spot that let the original `0022_roles_drop_check` bug through —
+it passed CI and could not be applied to production at all. The cheap version is
+to apply it locally over a seeded database before it goes near `--remote`.
+
+**2. Does the new code read something the old schema does not have?**
+
+Then the order is **migrate → Worker → console**, and it is not interchangeable:
+
+- Worker before the migration → 500s on the missing table or column.
+- Console before the Worker → the SPA reads fields the old API does not return.
+  A missing object is usually survivable; a missing **array** is not, because
+  `thing.items.length` throws on `undefined` and takes the whole page with it.
+
+**3. How long is the gap between the migration and the Worker deploy?**
+
+Between those two steps the **old** Worker is running against the **new** schema.
+That is fine for added columns and fatal for added constraints: old code that
+wrote a now-unique value keeps trying, and users see raw
+`UNIQUE constraint failed` errors. Run the two back to back. Minutes is fine;
+migrating in the morning and deploying after lunch is not.
+
+**4. Does the change alter behaviour on a customer-facing path?**
+
+Recipient resolution, message content, due dates, anything that reaches a
+customer without an operator pressing a button. These need a *look at the data*
+before the deploy, not just a passing test suite — the tests prove the new
+behaviour is correct, not that it is what the tenant expects to happen tomorrow.
+
+#### Worked example — `0027_crm_depth.sql` (PRD-003, S8)
+
+All four applied, which is why it is recorded here rather than described in the
+abstract:
+
+| Question | For `0027` |
+|---|---|
+| Changes rows / adds a constraint? | **Yes.** Backfills `contact_roles`, rewrites `contacts.is_primary` from those roles, then adds a partial unique index (one primary per customer). Verified against a populated database carrying all three pre-0027 shapes — two primaries, none, and one that is not the earliest contact — and it resolves them rather than failing. |
+| New code needs new schema? | **Yes.** The console reads `contact.roles`, an array, so a console-first deploy white-screens the customer page. |
+| Migration → deploy gap? | **Matters.** The pre-S8 `createContact` set `is_primary` directly with no demote step, so during the gap a second primary contact is a `UNIQUE constraint failed`. |
+| Customer-facing behaviour change? | **Yes, and this was the one to check first.** Reminders previously went to `customers.email`; they now resolve billing contact → primary → any contact, falling back to the customer record only when there are no contacts. So the next reminder can reach a different person than it did the day before. |
+
+The pre-deploy look for that last one:
+
+```sh
+npx wrangler d1 execute companyos-db --remote --config wrangler.free.jsonc --command "
+SELECT c.name AS customer, ct.name AS contact, ct.email, ct.is_primary
+FROM customers c LEFT JOIN contacts ct
+  ON ct.tenant_id = c.tenant_id AND ct.customer_id = c.customer_id
+ORDER BY c.name;"
+```
+
+An empty right-hand side means nothing changes for that tenant. Rows with stale
+or personal addresses mean the roles want fixing — which is the feature, but it
+should be a decision rather than a discovery.
+
+Post-deploy, the constraint is the thing to confirm landed cleanly:
+
+```sh
+npx wrangler d1 execute companyos-db --remote --config wrangler.free.jsonc --command "
+SELECT customer_id, COUNT(*) AS primaries FROM contacts
+WHERE is_primary = 1 GROUP BY tenant_id, customer_id HAVING primaries > 1;"
+# zero rows expected
+```
+
+And in the console, the **Roles** column on a customer's contacts table is the
+canary for a version mismatch: if it renders, both halves are on the new build.
 
 ## 9. Upgrade path: free → paid (real Queues)
 
