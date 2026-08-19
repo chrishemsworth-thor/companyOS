@@ -123,11 +123,27 @@ It runs as **one Cloudflare Worker + one D1 (SQLite) database** per deployment
 ## 5. Quotes (quote-to-cash)
 
 - Quotes with line items, **per-line discounts and header-level tax**,
-  lifecycle (draft → sent → accepted / rejected / expired), and one-call
-  **conversion to an invoice**.
+  lifecycle (draft → pending approval → sent → accepted / rejected / expired),
+  and one-call **conversion to an invoice**.
 - **Rendered quote documents** — server-rendered HTML (`GET
   /v1/quotes/:id/document`) with per-tenant **branding settings** (company
-  profile, number/date formats, template config).
+  profile, uploaded logo, colours, footer, number/date formats, template
+  config).
+- **Immutability** — a quote past `draft` cannot be edited; changes require a
+  new version (`POST /v1/quotes/:id/version`), linked both ways to the quote it
+  replaces.
+- **Public customer link** — `GET /q/:token`, no login, high-entropy token
+  stored hashed, revocable, expiring with the quote. Records first view and
+  emits `quote.viewed`.
+- **Click-to-sign acceptance** — the customer accepts or declines from the link.
+  Produces an audit record (name, email, IP, user agent, UTC timestamp, the
+  agreement text and version) and **freezes the rendered document to file
+  storage**; the record's SHA-256 is the hash of those stored bytes, and the
+  artifact inlines its own images so it renders identically for ever. The
+  invoice created on conversion links back to it.
+- **Internal sign-off** — quotes at or above a tenant-set value threshold need
+  an admin or finance approval before they can be sent, through the platform
+  approvals primitive.
 - **Automatic expiry** — a cron sweep expires lapsed quotes and emits
   `quote.expired`.
 - Company profile + base currency settings (default `MYR`) live under
@@ -226,7 +242,8 @@ React + Vite + TanStack Query single-page app over the same `/v1` API:
   invoice-scoped event timelines.
 - **Departments** page mirroring the 11-department org-chart lens
   (live vs planned).
-- **Users admin**, **Settings** (company profile, quote branding), and a
+- **Users admin**, **Settings** (company profile, quote branding incl. logo
+  upload and the sign-off threshold), and a
   skippable **first-run onboarding wizard** (company profile → teams →
   employees) for new admins.
 - Light/dark theme, ~18 domain modals, idempotency keys on invoice/payment
@@ -261,12 +278,13 @@ React + Vite + TanStack Query single-page app over the same `/v1` API:
 | Autonomous collections agent (LLM + fallback) | ✅ Built |
 | CRM: customers, contacts, leads, deals, activities | ✅ Built |
 | Quotes → invoice (quote-to-cash) with branded documents | ✅ Built |
+| Quote click-to-sign: public link, acceptance audit record, frozen artifact | ✅ Built |
 | Support tickets + state machine | ✅ Built (no agent yet) |
 | Build: projects/issues + JIRA/GitHub/Bitbucket inbound sync | ✅ Built (inbound only) |
 | People: directory, teams, reporting lines | ✅ Built |
 | Leave: policy, entitlement, holidays, balances, requests, approval, team calendar | ✅ Built |
 | Expense claims: submission, approval, GL posting, reimbursement | ✅ Built |
-| Approvals inbox with type-specific cards (claims, leave) | ✅ Built |
+| Approvals inbox with type-specific cards (claims, leave, quotes) | ✅ Built |
 | Installable PWA console with mobile navigation | ✅ Built |
 | Cross-module insights / dashboard | ✅ Built |
 | Multi-tenant platform + multi-company identity + roles | ✅ Built |

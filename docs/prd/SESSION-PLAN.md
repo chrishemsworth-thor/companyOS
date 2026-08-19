@@ -50,10 +50,12 @@ The generic shape, if you need it:
 3. **One session, one branch, one shippable increment.** Do not start the next
    session's scope because there is context left over.
 4. `npm run typecheck && npm test` must pass before the push that closes a
-   session. **Baseline after S5, S6, S7 and the mobile-PWA session were merged
-   and reconciled:** clean typecheck both sides, 54 test files / 1015 tests in
-   the Workers suite, plus 15 files / 142 tests in `ui/` (`cd ui && npm test`,
-   which root `npm test` does NOT run — see the console note below).
+   session. **Baseline after S9:** clean typecheck both sides, 63 test files /
+   1159 tests in the Workers suite, plus 19 files / 181 tests in `ui/`
+   (`cd ui && npm test`, which root `npm test` does NOT run — see the console
+   note below). S9 measured `main` at 58 / 1087 and 18 / 172 before starting.
+   *(The previous line here, after S5–S7 and the mobile-PWA session, read
+   54 / 1015 and 15 / 142.)*
    (Each of those sessions measured `main` at 45 / 749 before starting, against
    the 42 / 476 recorded here after S4 — the number goes stale exactly as often
    as this rule says it does, so treat it as a floor and not a target. S3
@@ -105,7 +107,7 @@ Recorded so no session re-opens them.
 | S6 | Leave policy, holidays, balances | 006b | P0 | `claude/leave-policy-holidays-balances-4a0xcb`⁶ | S4 | **done** |
 | S7 | Leave requests + team calendar | 006c | P0 | `claude/leave-request-approval-15v4bu`⁶ | S6 | **done** |
 | S8 | Contact roles, attributes, health | 003 | P1 | `claude/contact-roles-crm-depth-hlgw1f`⁷ | S1 (loose) | **done** |
-| S9 | Quote branding & click-to-sign | 004 | P1 | `claude/prd-004-quote-signing` | S2, S8; S3 for P1 sign-off | not started |
+| S9 | Quote branding & click-to-sign | 004 | P1 | `claude/quote-branding-signing-q4s0dv`⁸ | S2, S8; S3 for P1 sign-off | **done** |
 | S10 | Agent guardrails, eval, observability | 002 | P1 | `claude/prd-002-agent-guardrails` | — | not started |
 | S11 | Support intake & tracking | 005 | P1 | `claude/prd-005-support-intake` | S2, **S4** | not started |
 | S12 | Tax (SST) | 001b | P0¹ | `claude/prd-001b-tax` | S1 | not started |
@@ -144,6 +146,13 @@ per standing rule 5.
 listed here — the same cosmetic divergence S2, S3 and S4 had. Migration
 `0027_crm_depth.sql` is taken, so **the next session takes `0028`** — check
 `main`, per standing rule 5.
+
+⁸ S9 likewise ran on the branch its session was given. Migration
+`0028_quote_signing.sql` is taken, so **the next session takes `0029`** — check
+`main`, per standing rule 5. Note 0028 **rebuilt `quotes` and dropped its status
+CHECK**, the same trade `0022_roles_drop_check.sql` made for `users.role`: a
+session adding a quote status now edits `src/modules/quotes/types.ts` and
+nothing else.
 
 Reserving the numbers avoided a filename collision; it did not avoid a *content*
 collision, and that is the lesson worth carrying into S8. S6 and S7 both defined
@@ -412,7 +421,7 @@ these answered before they start.
 | WhatsApp inbound before or after the public intake form? | 005 | S11 internal order | WhatsApp is how Malaysian SME customers actually complain, but needs a BSP relationship. Do the email path first either way — it is built on integrations that already exist. |
 | Is `credited` a distinct invoice state or derived from credit note totals? | 001 | S13 | — |
 | Does outbound sales to a **non-customer** need its own opt-in beyond `agents.enabled`? | 010 | S15 | **Yes — a separate `agents.outbound_sales_enabled`, defaulting off.** Cold outreach carries different risk and a different PDPA posture from chasing an invoice on an existing relationship, and a tenant who switched collections on did not thereby ask to be put into prospecting. Cheap to add now, awkward to retrofit after the first complaint. |
-| Confirm ECA 2006 click-accept sufficiency and the agreement text with a Malaysian lawyer. | 004 | **Customer use, not the build** | S9 can build and test the flow; do not rely on it commercially until confirmed. |
+| Confirm ECA 2006 click-accept sufficiency and the agreement text with a Malaysian lawyer. | 004 | **Customer use, not the build** | **Still open.** S9 built and tested the flow. The wording lives in `src/modules/quotes/agreement.ts` as a versioned constant carrying the caveat, and every acceptance stores the version *and* the exact text shown — so a lawyer's rewrite is a version bump, and past records keep the words their signatory actually saw. Do not put a real customer through it until confirmed. |
 
 ---
 
@@ -429,7 +438,7 @@ not a silent one. One Zod file per event under `src/schemas/events/`.
 | S5 | `claim.submitted.v1`, `claim.approved.v1`, `claim.rejected.v1`, `claim.paid.v1` — **done**. Note none is mapped in the notification consumer: the `approval.*` events already notify both parties, and a `claim.*` mapper would double the badge. |
 | S7 | `leave.requested.v1`, `leave.approved.v1`, `leave.rejected.v1`, `leave.cancelled.v1` — **done**. One mapper only, for the admin cancellation: it is the sole leave decision with no approval behind it to notify off. |
 | S8 | `customer.no_contact.v1` (PRD-003 writes it without a version suffix — added one, per the existing convention) — **done**. No `NOTIFICATION_MAP` entry: the consumer must not query D1 for a recipient and the payload carries no user id. `collections.decision.v1` also gained optional `contact_id` / `contact_match` — additive to a non-strict schema, so no v2; **S10 must carry both into `collections.decision.v2`.** |
-| S9 | `quote.viewed.v1`. **`quote.accepted.v1` and `quote.rejected.v1` already exist** in the registry — reuse, do not re-add. |
+| S9 | `quote.viewed.v1` — **done**, and it is the only new type. `quote.accepted.v1`, `quote.rejected.v1` and `quote.converted.v1` were **extended with optional fields** on their existing non-strict objects rather than re-added or versioned — the same additive move S8 made on `collections.decision.v1`. They are optional rather than required because the operator-side accept/reject routes still exist and carry no signatory, no artifact and no hash. **No `NOTIFICATION_MAP` entry:** the consumer must not query D1 for a recipient and a quote payload carries no user id; the P1 sign-off notifies through `approval.requested` instead. |
 | S10 | `guardrail.override.v1`, plus `collections.decision.v2` (PRD-002 extends the payload with provider, model, prompt version, tokens, latency, cost, fallback and override flags — that is a breaking payload change, so it is a v2 file and a registry bump, per the convention documented in `registry.ts`) |
 | S11 | `ticket.assigned.v1`, `ticket.sla_breached.v1` |
 | S13 | `credit_note.issued.v1` |
@@ -446,7 +455,7 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 |---|---|
 | `files`, `approvals`, `notifications` tables | All three **exist**: `files` (S2, `0021`), `approvals` (S3, `0022`), `notifications` + `approval_nudges` (S4, `0023`). |
 | Notifications | `src/modules/notifications/` — rows written **only** by `fanoutNotifications` in `consumer.ts`, hooked into `processEvent`. A module that wants to notify somebody emits an event and adds one entry to `NOTIFICATION_MAP`; it never inserts. The consumer **never throws** (the free-plan inline path has no retry) and inserts idempotently on a `dedupe_key`. See [`docs/modules/notifications.md`](../modules/notifications.md). |
-| Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. Empty in S4; **`expense_claim` registered by S5 and `leave_request` by S7**. S9 adds `quote`; no `invoice` card is ever built (C5), and `other` never gets one either. Adding one is a component plus one line in `RENDERERS`, plus one line in `ui/src/lib/subjectRoutes.ts` if the subject has a detail screen. `registry.test.tsx` and `subjectRoutes.test.ts` both pin the expected set, so each addition updates two assertions — and any shell test using a card-less `subject_type` as a stand-in has to move to one that is still card-less (`quote`, until S9). |
+| Approvals inbox renderers | `ui/src/features/approvals/renderers/registry.ts`. Empty in S4; **`expense_claim` (S5), `leave_request` (S7) and `quote` (S9) are all registered**. No `invoice` card is ever built (C5) and `other` never gets one either, so **the card-less stand-in has stopped moving: `ApprovalCard.test.tsx` and `ApprovalsInbox.test.tsx` now use `other`**, which no future session can take from them. `subjectRoutes.ts` already had `quote`, so S9 changed only `registry.ts`. Adding a card is a component plus one line in `RENDERERS`, plus one line in `subjectRoutes.ts` if the subject has a detail screen; `registry.test.tsx` pins the expected set. |
 | Console tests | `ui/` has its **own** vitest (jsdom + Testing Library, `ui/vitest.config.ts`), and root `npm test` does not run it — `vitest.config.ts` includes `test/**/*.test.ts` only. A session touching `ui/` must run `cd ui && npm test` separately or its console tests never execute in CI. `@testing-library/user-event` is **not** a dependency; use `fireEvent`. |
 | Name directory | `GET /v1/meta/users` (S4) — id, display name, email for the tenant, readable by **any** authenticated user. `/v1/users` is admin-only, so a non-admin manager needs this to see "requested by Aisha" instead of `usr_01J...`. |
 | Approvals | `src/modules/approvals/` — `requestApproval`/`decide`/`cancel`/`cancelForSubject`, plus `resolution.ts` (the C1 upward walk) and a per-`subject_type` strategy map. A module wanting a human decision adds a `subjectTypeSchema` value and calls the service; it never inserts into `approvals`. **S5 added `decision-effects.ts`**: a per-`subject_type` hook whose statements run in the same `db.batch()` as the decision, which is the only way to get atomicity (an event consumer runs after the commit, and the free-plan inline bus drops a thrower). S7's leave deduction should use it. See [`docs/modules/approvals.md`](../modules/approvals.md). |
@@ -464,7 +473,9 @@ Verified against `main` at `d1e5202` on 2026-07-25.
 | Leave | `src/modules/people/leave/` (S7, `0026`) — `leave_requests` only. **Balance is derived, never stored**, so approving does not decrement anything. `src/modules/people/leave/policy-port.ts` is the **S6 seam**: it reads S6's `leave_types` / `leave_balances` / `public_holidays` / work week and falls back to provisional defaults when they are unreadable, warning once with a `[leave/policy-port]` prefix. **S6's closing task is to reconcile that one file and delete the fallbacks** — its queries are a reading of PRD-006's wording, not a schema S6 agreed to. See [`docs/modules/leave.md`](../modules/leave.md). |
 | Subject-module reaction to an approval decision | An **event consumer**, not a hook in the approvals primitive. `applyLeaveDecision` (S7) sits beside `fanoutNotifications` in `processEvent` and dispatches on `subject_type`. Safe for leave because a missed transition cannot corrupt a derived balance; **not** safe for S5's ledger posting, which PRD-006 requires be atomic with the decision. S5 needs a different mechanism and should not copy this one. |
 | 409 state-machine convention | `src/modules/support/state-machine.ts` and `SupportError(httpStatus: 404 \| 409)`. Approvals must match this shape; so must PRD-004's immutability 409s and PRD-006's approved-claim 409. |
-| Quote branding | A `quote_branding` table **already exists** (`0013_quotes.sql`). S9 extends it rather than starting fresh. |
+| Quote branding | A `quote_branding` table **already exists** (`0013_quotes.sql`); S9 extended it with `logo_file_id`, `footer_text` and `sign_off_threshold_cents`. Despite the name it is the per-tenant quote **configuration** surface, not just its design — it already carried the tax rate, document currency and terms text. |
+| Quote statuses | **No SQL CHECK since `0028`.** `src/modules/quotes/types.ts` (`quoteStatusSchema`, `QUOTE_TRANSITIONS`, `EDITABLE_QUOTE_STATUSES`) is the source of truth, and only `draft` is editable. `pending_approval` exists and is deliberately frozen too. |
+| Public routes outside `/v1` | Four now: `/webhooks`, `/oauth/google`, `/files`, and **`/q` (S9)**. None is in `V1_MOUNTS` and `test/capabilities.test.ts` walks `/v1` only, so a credential-less router needs no capability row — but it does need its own abuse protection. `/q` carries three per-IP KV limits, one of which counts **only token misses** so a scanner is throttled without penalising a customer re-reading their own quote. |
 | Gmail client | `src/integrations/google/gmail-client.ts` — `getMessage()` is metadata-only with four headers; `sendMessage()` accepts `threadId`. See the resolved PRD-005 question. |
 | LLM ports | `src/llm/anthropic.ts` (`DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8"`), `src/llm/openai.ts`. Agent lives in `src/agents/collections.ts` + `decision.ts`. |
 | Tests | `@cloudflare/vitest-pool-workers`, real Workers runtime, flat files in `test/`. `vitest.config.ts` points at `wrangler.jsonc`, so **a new binding must be in `wrangler.jsonc` or tests cannot see it.** |

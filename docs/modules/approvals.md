@@ -61,6 +61,7 @@ batch as a single transaction, which is the mechanism `createInvoice` and
 // src/modules/approvals/decision-effects.ts
 export const SUBJECT_DECISION_EFFECTS: Partial<Record<SubjectType, DecisionEffect>> = {
   expense_claim: applyClaimDecision,   // posts Dr expense / Cr reimbursements payable
+  quote: applyQuoteDecision,           // S9: approval SENDS the quote; rejection returns it to draft
 };
 ```
 
@@ -81,11 +82,23 @@ Two rules when adding one:
   codebase already has. The primitive deliberately does not import a consuming
   module's error type.
 
+**The `quote` effect (S9, PRD-004 P1)** is the second entry and cost exactly what
+the design promised: one function in `src/modules/quotes/decision.ts` plus one
+line here. Approving an internal sign-off transitions the quote to `sent` in the
+same batch and emits `quote.sent` after it; rejecting returns it to `draft` with
+the approver's comment on `quotes.sign_off_comment`.
+
+Approval **sends** rather than returning the quote to an editable state, which is
+a reading of PRD-004's *"then the quote can be sent"* worth knowing about: the
+alternative would let somebody edit the price after sign-off and send it
+unapproved, which is the exact failure the gate exists to prevent and one the
+immutability rule cannot catch, because a draft is legitimately editable.
+
 This is a table in the same shape as `SUBJECT_STRATEGIES`; it is not a second
 approvals mechanism. There is still no module-local approvals table and no
 module-local decision route, and the console still calls
-`POST /v1/approvals/:id/approve`. See
-[`docs/modules/claims.md`](claims.md) for the worked example.
+`POST /v1/approvals/:id/approve`. See [`docs/modules/claims.md`](claims.md) and
+[`docs/modules/quotes.md`](quotes.md) for the worked examples.
 
 ## Approver resolution
 

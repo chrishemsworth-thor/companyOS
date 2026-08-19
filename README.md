@@ -13,7 +13,8 @@ for the full design ([phase-0.md](docs/architecture/phase-0.md) records the
 earlier OSS-wrapping approach it replaced).
 
 Per-module references: [Finance](docs/modules/finance.md) ·
-[CRM](docs/modules/crm.md) · [Support](docs/modules/support.md) ·
+[CRM](docs/modules/crm.md) · [Quotes](docs/modules/quotes.md) ·
+[Support](docs/modules/support.md) ·
 [Build](docs/modules/build.md) · [People](docs/modules/people.md) ·
 [Leave](docs/modules/leave.md) · [Claims](docs/modules/claims.md) ·
 [Approvals](docs/modules/approvals.md) ·

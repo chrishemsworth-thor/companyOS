@@ -39,11 +39,26 @@ table keyed on `purpose`:
 |---|---|---|---|
 | `quote_logo` | 2 MB | png, jpeg, webp | **yes** |
 | `claim_receipt` | 10 MB | png, jpeg, webp, pdf | no |
-| `signature` | 10 MB | png, jpeg, webp, pdf | no |
+| `leave_attachment` | 10 MB | png, jpeg, webp, pdf | no |
+| `signature` | 1 MB | png, jpeg, webp | no |
+| `quote_artifact` | 8 MB | `text/html` | no |
 | `other` | 10 MB | png, jpeg, webp, pdf | no |
 
 `quote_logo` drops PDF: it is the one purpose served to an unauthenticated
 caller, and a PDF cannot render in the `<img>` on PRD-004's public quote page.
+
+**S9 tightened `signature` and added `quote_artifact`** (PRD-004):
+
+- `signature` is a canvas drawing of a few tens of kilobytes, arriving from an
+  **unauthenticated** caller on the public quote page, and it is rendered into
+  an `<img>` on the archived artifact. So: 1 MB, images only, no PDF.
+- `quote_artifact` is the frozen HTML of an accepted quote — the document whose
+  SHA-256 is the acceptance record's proof. It is large because it **inlines its
+  own images as `data:` URIs**, which is what lets it render identically after
+  the tenant changes their branding or deletes the logo. It is **not** publicly
+  readable: it is reached through `GET /q/:token/artifact` (holding the link) or
+  `GET /v1/quotes/:id/artifact` (holding the tenant's credentials), each of
+  which establishes the caller's right to it first.
 
 **Public readability is a property of the purpose, never of the caller.**
 A valid credential does not unlock a private file on the public route, and an
@@ -73,8 +88,17 @@ and a lying `Content-Length` buys nothing.
 
 The content-type allowlist is applied to the **declared** type, as PRD-000
 specifies. Combined with `X-Content-Type-Options: nosniff` on every response
-and a fixed `Content-Disposition: inline`, a mislabelled upload cannot be
-talked into executing in a browser.
+and `Content-Disposition: inline`, a mislabelled upload cannot be talked into
+executing in a browser.
+
+**One exception, added by S9: stored `text/html` is served as `attachment`, not
+`inline`.** The only HTML in the bucket is an archived quote artifact, which is
+not publicly readable — but serving it inline here would put stored markup on
+the API origin for any authenticated caller holding an id, which is a cheap way
+to turn a file store into a stored-XSS surface for a convenience nobody needs.
+The artifact's own two routes serve it as HTML deliberately, under
+`default-src 'none'; style-src 'unsafe-inline'; img-src data:`, which it
+satisfies precisely because it is self-contained.
 
 ## Events
 

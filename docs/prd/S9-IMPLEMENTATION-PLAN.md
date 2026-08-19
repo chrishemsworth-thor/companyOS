@@ -13,6 +13,33 @@ second public read path. A `quote_branding` table also already exists
 
 ---
 
+## Outcome
+
+**All five phases shipped**, one commit each, on
+`claude/quote-branding-signing-q4s0dv`. Final: typecheck clean both sides,
+**63 test files / 1159 tests** in the Workers suite (from 58 / 1087) and
+**19 / 181** in the console (from 18 / 172).
+
+Two things went differently from this plan, both recorded here rather than
+quietly:
+
+1. **The logo phase (D) ran before acceptance (C).** The artifact frozen at
+   acceptance has to inline the logo to satisfy *"renders identically after the
+   tenant changes their branding"*, so the logo had to exist before the freeze
+   was written. Keeping PRD-004's listed order would have meant writing the
+   acceptance path twice.
+2. **The console work was larger than "one renderer file".** The plan named the
+   approvals card and the QuoteDetail panels but omitted the Quote Branding
+   settings page — which meant shipping a logo feature with no way for a tenant
+   to set a logo. Added, along with `postForm` and `delete` on the API client to
+   support it.
+
+One fix outside S9's scope: the claims submit path called `requestApproval` the
+same way the new send path does, and surfaced its 422 `no_approver` as a 500.
+Corrected while wiring the equivalent handler for quotes.
+
+---
+
 ## Phase order
 
 PRD-004's own order, which is also the risk order. Immutability first because
@@ -20,11 +47,11 @@ everything after it is worthless without it.
 
 | Phase | Scope | Pri | Commit |
 |---|---|---|---|
-| **A** | Immutability: edit path + `draft`-only rule + versioning | P0 | own commit, pushed |
-| **B** | Public link `/q/:token` — hashed token, expiry, revoke, `quote.viewed.v1`, rate limiting | P0 | own commit, pushed |
-| **C** | Click-to-sign: acceptance record, frozen artifact + SHA-256, decline | P0 | own commit, pushed |
-| **D** | Logo, accent colour, footer text via `quote_logo` | P0 | own commit, pushed |
-| **E** | Internal sign-off above a threshold (S3 approvals) + the `quote` inbox card | P1 | own commit, pushed |
+| **A** | Immutability: edit path + `draft`-only rule + versioning | P0 | ✅ `6932aef` |
+| **B** | Public link `/q/:token` — hashed token, expiry, revoke, `quote.viewed.v1`, rate limiting | P0 | ✅ `fc7fd2d` |
+| **D** | Logo, accent colour, footer text via `quote_logo` | P0 | ✅ `38af24e` — taken early, see Outcome |
+| **C** | Click-to-sign: acceptance record, frozen artifact + SHA-256, decline | P0 | ✅ `9759b46` |
+| **E** | Internal sign-off above a threshold (S3 approvals) + the `quote` inbox card | P1 | ✅ `5881172` |
 
 **A–D must land.** If the session runs long the stop point is after D, reported
 rather than rushed. E is the only part that needs S3, and the only P1 here.
@@ -551,8 +578,8 @@ and the test pool sees everything it needs.
 Measured on this branch at `e512072` before any change:
 
 - typecheck: clean both sides
-- Workers suite: **58 files / 1087 tests**, all passing
-- console (`cd ui && npm test`): **18 files / 172 tests**, all passing
+- Workers suite: **58 files / 1087 tests**, all passing → **63 / 1159** at close
+- console (`cd ui && npm test`): **18 files / 172 tests** → **19 / 181** at close
 
 Both are above the SESSION-PLAN floor (54 / 1015 and 15 / 142), which went stale
 between S8 and now exactly as standing rule 4 predicts.
