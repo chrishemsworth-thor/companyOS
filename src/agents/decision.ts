@@ -1,5 +1,7 @@
 import { z } from "zod";
 import type { PaymentHistoryEntry } from "../modules/crm/types";
+import type { LlmProvider } from "../llm/types";
+import { estimateCostMicros, type PriceOverride } from "../llm/pricing";
 
 /**
  * The CollectionsAgent's decision contract: what the LLM must return, the
@@ -7,7 +9,24 @@ import type { PaymentHistoryEntry } from "../modules/crm/types";
  * deterministic fallback used when no LLM is configured or the call fails.
  */
 
+/**
+ * Default outbound message cap. The enforced value is
+ * `agent_settings.max_message_chars` (tenant-configurable, same default) — this
+ * constant is what that column defaults to and what the eval harness uses when
+ * no tenant policy is in play.
+ */
 export const MAX_MESSAGE_CHARS = 2000;
+
+/**
+ * The prompt this build asks with. Every decision records it
+ * (`collections.decision.v2`), so an eval baseline is tied to a prompt and a
+ * behaviour change can be attributed to the prompt that caused it.
+ *
+ * **Bump this whenever DECISION_SYSTEM_PROMPT or buildDecisionPrompt changes**,
+ * and add a line to the changelog in `evals/README.md`. A baseline captured
+ * under one version says nothing about another.
+ */
+export const PROMPT_VERSION = "collections-2026-08-19";
 
 export const collectionsDecisionSchema = z.object({
   risk_score: z.number().int().min(0).max(100),
@@ -186,10 +205,127 @@ export function fallbackDecision(
   const risk_score = Math.min(100, maxDays * 5 + state.reminders_sent * 10);
   const action =
     state.escalation_stage !== "none" && state.reminders_sent >= 2 ? "escalate" : "remind";
-  const inv = context.overdue_invoices[0]!;
-  const message =
-    action === "escalate"
-      ? `Final notice: invoice ${inv.invoice_id} for ${inv.currency} ${(inv.amount_due_cents / 100).toFixed(2)} is ${inv.days_overdue} day(s) overdue despite previous reminders. Please arrange payment immediately to avoid further action.`
-      : `Friendly reminder: invoice ${inv.invoice_id} for ${inv.currency} ${(inv.amount_due_cents / 100).toFixed(2)} is ${inv.days_overdue} day(s) overdue.`;
-  return { risk_score, action, channel: "email", message };
+  return { risk_score, action, channel: "email", message: templateMessage(context, action) };
+}
+
+/**
+ * The deterministic message for a given action, on the oldest overdue invoice.
+ *
+ * Split out of `fallbackDecision` because the guardrail layer needs it too, and
+ * needs it **per action**: when the guard downgrades an escalation the model
+ * wrote, the escalation's words cannot go out with it. A "final notice, legal
+ * action will follow" sent as a friendly reminder is exactly the customer-
+ * relationship damage the downgrade exists to prevent, so the guard swaps the
+ * message for the one this composes for the action it settled on.
+ */
+export function templateMessage(
+  context: CollectionsContext,
+  action: "remind" | "escalate" | "wait",
+): string {
+  const inv = context.overdue_invoices[0];
+  if (!inv) return "(nothing due)";
+  const amount = `${inv.currency} ${(inv.amount_due_cents / 100).toFixed(2)}`;
+  return action === "escalate"
+    ? `Final notice: invoice ${inv.invoice_id} for ${amount} is ${inv.days_overdue} day(s) overdue despite previous reminders. Please arrange payment immediately to avoid further action.`
+    : `Friendly reminder: invoice ${inv.invoice_id} for ${amount} is ${inv.days_overdue} day(s) overdue.`;
+}
+
+
+/**
+ * One decision, with everything PRD-002 wants recorded about how it was
+ * reached: provider, model, prompt version, tokens, latency and estimated cost,
+ * and whether the deterministic fallback fired.
+ *
+ * This function — not the Durable Object's private method — is the collections
+ * agent's decision function. The DO calls it and so does the eval harness, which
+ * is the only way "run the scenario suite before switching models" can mean
+ * anything: an eval that exercised a copy of the logic would measure the copy.
+ */
+export interface DecisionOutcome {
+  decision: CollectionsDecision;
+  source: "llm" | "fallback";
+  provider: "anthropic" | "openai" | null;
+  model: string | null;
+  prompt_version: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  latency_ms: number;
+  cost_micros: number | null;
+  /** Present when the fallback fired: no provider, an API error, or bad output. */
+  fallback_reason: string | null;
+}
+
+export interface DecideOptions {
+  /** Override the system prompt — how the eval harness runs a broken prompt. */
+  system?: string;
+  /** Reads LLM_PRICE_* overrides for a model with no built-in rate. */
+  price_env?: PriceOverride;
+  max_tokens?: number;
+}
+
+const DEFAULT_MAX_TOKENS = 8192;
+
+export async function decideCollections(
+  provider: LlmProvider | null,
+  context: CollectionsContext,
+  state: AgentStateSummary,
+  opts: DecideOptions = {},
+): Promise<DecisionOutcome> {
+  const started = Date.now();
+  const base = {
+    prompt_version: PROMPT_VERSION,
+    input_tokens: null,
+    output_tokens: null,
+    cost_micros: null,
+  };
+
+  if (!provider) {
+    return {
+      ...base,
+      decision: fallbackDecision(context, state),
+      source: "fallback",
+      provider: null,
+      model: null,
+      latency_ms: Date.now() - started,
+      fallback_reason: "no_provider",
+    };
+  }
+
+  try {
+    const result = await provider.completeStructured({
+      system: opts.system ?? DECISION_SYSTEM_PROMPT,
+      prompt: buildDecisionPrompt(context, state),
+      schema: DECISION_JSON_SCHEMA,
+      max_tokens: opts.max_tokens ?? DEFAULT_MAX_TOKENS,
+    });
+    // Zod is the gate: a schema-shaped-but-wrong response (risk_score 900, an
+    // action outside the enum) falls back rather than reaching the send path.
+    const decision = collectionsDecisionSchema.parse(result.output);
+    return {
+      prompt_version: PROMPT_VERSION,
+      decision,
+      source: "llm",
+      provider: provider.name,
+      model: result.model,
+      input_tokens: result.usage?.input_tokens ?? null,
+      output_tokens: result.usage?.output_tokens ?? null,
+      latency_ms: Date.now() - started,
+      cost_micros: estimateCostMicros(result.model, result.usage, opts.price_env),
+      fallback_reason: null,
+    };
+  } catch (err) {
+    // The fallback guarantee: collections never silently stops, so every LLM
+    // failure mode — network, refusal, unparseable JSON, schema violation —
+    // lands on the deterministic heuristic and says so.
+    console.warn(`[collections] ${provider.name} decision failed, using fallback: ${String(err)}`);
+    return {
+      ...base,
+      decision: fallbackDecision(context, state),
+      source: "fallback",
+      provider: provider.name,
+      model: null,
+      latency_ms: Date.now() - started,
+      fallback_reason: String(err).slice(0, 200),
+    };
+  }
 }

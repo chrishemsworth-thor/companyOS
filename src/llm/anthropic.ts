@@ -1,5 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { LlmProvider, StructuredRequest } from "./types";
+import type { LlmProvider, StructuredRequest, StructuredResult } from "./types";
 
 export const DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8";
 
@@ -24,7 +24,7 @@ export class AnthropicLlm implements LlmProvider {
     });
   }
 
-  async completeStructured(req: StructuredRequest): Promise<unknown> {
+  async completeStructured(req: StructuredRequest): Promise<StructuredResult> {
     const response = await this.client.messages.create({
       model: this.model,
       max_tokens: req.max_tokens,
@@ -40,6 +40,14 @@ export class AnthropicLlm implements LlmProvider {
     if (!text || text.type !== "text") {
       throw new Error(`anthropic: no text block in response (stop: ${response.stop_reason})`);
     }
-    return JSON.parse(text.text);
+    return {
+      output: JSON.parse(text.text),
+      // What the API served, which is not always what was asked for.
+      model: response.model ?? this.model,
+      usage: {
+        input_tokens: response.usage.input_tokens,
+        output_tokens: response.usage.output_tokens,
+      },
+    };
   }
 }

@@ -1,0 +1,68 @@
+{
+  "id": "c11-malformed-llm-response",
+  "title": "The model returns something the schema rejects",
+  "covers": "PRD-002: malformed LLM response -> deterministic fallback fires",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "malformed"
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": []
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_1101",
+        "amount_due_cents": 740000,
+        "currency": "MYR",
+        "due_date": "2026-07-10",
+        "days_overdue": 40
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind",
+      "escalate"
+    ],
+    "source": [
+      "fallback"
+    ],
+    "message": {
+      "mentions_refs": [
+        "inv_eval_1101"
+      ],
+      "max_chars": 2000
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "this scenario IS the fallback"
+  }
+}

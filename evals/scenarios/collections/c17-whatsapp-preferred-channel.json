@@ -1,0 +1,74 @@
+{
+  "id": "c17-whatsapp-preferred-channel",
+  "title": "A customer who only ever answers WhatsApp",
+  "covers": "Channel choice is part of the decision, and it must stay in the allowed set",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_17",
+      "name": "Tan Wei Ming",
+      "title": "Owner",
+      "email": null,
+      "phone": "+60129998888",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": []
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_1701",
+        "amount_due_cents": 180000,
+        "currency": "MYR",
+        "due_date": "2026-08-04",
+        "days_overdue": 15
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [
+      {
+        "kind": "note",
+        "body": "Owner prefers WhatsApp; does not read email",
+        "occurred_at": "2026-06-01T02:00:00Z"
+      }
+    ],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind",
+      "wait"
+    ],
+    "channel": [
+      "email",
+      "whatsapp"
+    ],
+    "message": {
+      "mentions_refs": [
+        "inv_eval_1701"
+      ],
+      "max_chars": 1200
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true
+  }
+}

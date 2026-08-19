@@ -5,7 +5,7 @@ import { sha256Hex } from "../src/gateway/middleware/auth";
 import { makeEnvelope } from "../src/schemas/envelope";
 import { setLlmProviderFactoryForTests } from "../src/llm";
 import { setEventSenderForTests } from "../src/queue/producer";
-import { openContactWindow } from "./agent-fixture";
+import { llmResult, openContactWindow } from "./agent-fixture";
 
 /** PATCH /v1/customers/:id and GET /v1/customers/:id/agent. */
 
@@ -40,12 +40,12 @@ beforeEach(() => {
   setEventSenderForTests(async () => {});
   setLlmProviderFactoryForTests(() => ({
     name: "anthropic",
-    completeStructured: vi.fn().mockResolvedValue({
+    completeStructured: vi.fn().mockResolvedValue(llmResult({
       risk_score: 42,
       action: "remind",
       channel: "email",
       message: "Please pay soon.",
-    }),
+    })),
   }));
 });
 

@@ -209,9 +209,14 @@ export interface EscalationRule {
 export interface DecisionGuardOptions {
   /** References that genuinely exist in the context the model was given. */
   valid_refs: readonly string[];
-  /** The deterministic text substituted when the model cites something else.
-   * Supplied by the caller because only the caller owns its own template. */
-  fallback_message: string;
+  /**
+   * The deterministic text to substitute, for the action the guard settles on.
+   * A function rather than a string because a downgrade changes the action, and
+   * the replacement has to match: the words written to escalate must not go out
+   * as a reminder. Supplied by the caller because only the caller owns its own
+   * template.
+   */
+  fallback_message: (action: string) => string;
   /** Null when the decision has no escalation-shaped action. */
   escalation: EscalationRule | null;
 }
@@ -274,10 +279,17 @@ export function applyDecisionGuards<D extends GuardableDecision>(
           outcome: "downgraded",
           from_action: rule.action,
           to_action: rule.downgrade_to,
-          detail: why,
+          detail: `${why} (message replaced with the ${rule.downgrade_to} template)`,
         }),
       );
-      guarded = { ...guarded, action: rule.downgrade_to };
+      // The message goes with the action. Downgrading `escalate` to `remind`
+      // while sending the model's final-notice wording would be a downgrade in
+      // the audit log only, and the customer would still be threatened.
+      guarded = {
+        ...guarded,
+        action: rule.downgrade_to,
+        message: opts.fallback_message(rule.downgrade_to),
+      };
     }
   }
 
@@ -302,7 +314,7 @@ export function applyDecisionGuards<D extends GuardableDecision>(
               : "message cites no invoice from the context",
         }),
       );
-      guarded = { ...guarded, message: opts.fallback_message };
+      guarded = { ...guarded, message: opts.fallback_message(guarded.action) };
     }
   }
 

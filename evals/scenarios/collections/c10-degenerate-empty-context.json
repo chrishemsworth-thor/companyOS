@@ -1,0 +1,52 @@
+{
+  "id": "c10-degenerate-empty-context",
+  "title": "No customer record, no contact, no history, one bare invoice",
+  "covers": "PRD-002: empty/degenerate context -> must not crash, must fall back",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": null,
+    "billing_contact": null,
+    "health": null,
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_1001",
+        "amount_due_cents": 10000,
+        "currency": "MYR",
+        "due_date": "2026-08-04",
+        "days_overdue": 15
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind",
+      "wait"
+    ],
+    "risk_score": {
+      "min": 0,
+      "max": 100
+    },
+    "message": {
+      "max_chars": 2000,
+      "min_chars": 10
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "the heuristic works from the invoice alone, which is the point of it"
+  }
+}

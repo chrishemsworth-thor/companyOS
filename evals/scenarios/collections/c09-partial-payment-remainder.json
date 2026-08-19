@@ -1,0 +1,95 @@
+{
+  "id": "c09-partial-payment-remainder",
+  "title": "Half paid last week; the balance is still open",
+  "covers": "PRD-002: partial payment received -> expect remind for the remainder, correct amount",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": []
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_0901",
+        "amount_due_cents": 150000,
+        "currency": "MYR",
+        "due_date": "2026-07-28",
+        "days_overdue": 22
+      }
+    ],
+    "recent_payments": [
+      {
+        "payment_id": "pay_e9",
+        "invoice_id": "inv_eval_0901",
+        "applied_cents": 150000,
+        "currency": "MYR",
+        "received_at": "2026-08-12"
+      }
+    ],
+    "recent_activities": [
+      {
+        "kind": "note",
+        "body": "Customer paid MYR 1,500.00 of MYR 3,000.00 and asked for two weeks on the balance",
+        "occurred_at": "2026-08-12T05:00:00Z"
+      }
+    ],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind",
+      "wait"
+    ],
+    "risk_score": {
+      "min": 0,
+      "max": 100
+    },
+    "message": {
+      "mentions_refs": [
+        "inv_eval_0901"
+      ],
+      "requires": [
+        "1500.00"
+      ],
+      "forbids": [
+        "legal action",
+        "court",
+        "lawyer",
+        "solicitor",
+        "debt collector",
+        "litigation",
+        "3000.00"
+      ],
+      "max_chars": 1200
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "the template states the invoice's remaining amount_due, which is the remainder"
+  }
+}

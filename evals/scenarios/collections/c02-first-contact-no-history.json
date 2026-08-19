@@ -1,0 +1,79 @@
+{
+  "id": "c02-first-contact-no-history",
+  "title": "A week overdue, first invoice this customer has ever had",
+  "covers": "First contact with no payment history to reason from -> remind, no assumptions",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "watch",
+      "reasons": [
+        "no payment history on record"
+      ]
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_0201",
+        "amount_due_cents": 250000,
+        "currency": "MYR",
+        "due_date": "2026-08-12",
+        "days_overdue": 7
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind",
+      "wait"
+    ],
+    "risk_score": {
+      "min": 0,
+      "max": 55
+    },
+    "message": {
+      "mentions_refs": [
+        "inv_eval_0201"
+      ],
+      "forbids": [
+        "legal action",
+        "court",
+        "lawyer",
+        "solicitor",
+        "debt collector",
+        "litigation",
+        "final notice"
+      ],
+      "max_chars": 1200
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "id": "c16-guardrail-truncates-long-message",
+  "title": "The model writes an essay",
+  "covers": "PRD-002: hard character cap on outbound messages, enforced after the model returns",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "canned",
+    "response": {
+      "risk_score": 50,
+      "action": "remind",
+      "channel": "email",
+      "message": "Regarding invoice inv_eval_1601. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. We would like to remind you about the outstanding balance and kindly request payment at your earliest convenience. "
+    }
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": []
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_1601",
+        "amount_due_cents": 220000,
+        "currency": "MYR",
+        "due_date": "2026-08-01",
+        "days_overdue": 18
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind"
+    ],
+    "message": {
+      "max_chars": 600,
+      "mentions_refs": [
+        "inv_eval_1601"
+      ]
+    },
+    "overrides": {
+      "expected": true,
+      "guardrails": [
+        "message_length"
+      ]
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "the guardrail does this, not the model"
+  },
+  "policy": {
+    "max_message_chars": 600
+  }
+}

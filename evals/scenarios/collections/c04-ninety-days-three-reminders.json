@@ -1,0 +1,88 @@
+{
+  "id": "c04-ninety-days-three-reminders",
+  "title": "Ninety days overdue, three reminders ignored, nothing paid",
+  "covers": "PRD-002: invoice 90 days overdue, three prior reminders ignored -> expect escalate",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "reminded",
+    "reminders_sent": 3,
+    "last_contact": "2026-08-14T02:00:00Z"
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "at_risk",
+      "reasons": [
+        "1 invoice more than 90 days overdue",
+        "no payment in 120 days"
+      ]
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_0401",
+        "amount_due_cents": 1420000,
+        "currency": "MYR",
+        "due_date": "2026-05-21",
+        "days_overdue": 90
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [
+      {
+        "kind": "reminder_sent",
+        "body": "reminder for invoice inv_eval_0401 via email",
+        "occurred_at": "2026-06-20T02:00:00Z"
+      },
+      {
+        "kind": "reminder_sent",
+        "body": "reminder for invoice inv_eval_0401 via email",
+        "occurred_at": "2026-07-18T02:00:00Z"
+      },
+      {
+        "kind": "reminder_sent",
+        "body": "reminder for invoice inv_eval_0401 via whatsapp",
+        "occurred_at": "2026-08-14T02:00:00Z"
+      }
+    ],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "escalate",
+      "remind"
+    ],
+    "risk_score": {
+      "min": 55,
+      "max": 100
+    },
+    "message": {
+      "mentions_refs": [
+        "inv_eval_0401"
+      ],
+      "max_chars": 1500
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "the heuristic escalates once the stage is reminded and 2+ reminders have gone"
+  }
+}

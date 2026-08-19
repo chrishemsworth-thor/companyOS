@@ -1,0 +1,74 @@
+{
+  "id": "c20-long-overdue-one-reminder-cannot-escalate",
+  "title": "Very overdue, but only one reminder has ever been sent",
+  "covers": "The escalation gate's reminder-count half: >= 2 prior reminders, whatever the model returns",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "canned",
+    "response": {
+      "risk_score": 92,
+      "action": "escalate",
+      "channel": "email",
+      "message": "Final notice for invoice inv_eval_2001."
+    }
+  },
+  "state": {
+    "escalation_stage": "reminded",
+    "reminders_sent": 1,
+    "last_contact": "2026-08-01T02:00:00Z"
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "at_risk",
+      "reasons": [
+        "96 days overdue"
+      ]
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_2001",
+        "amount_due_cents": 1800000,
+        "currency": "MYR",
+        "due_date": "2026-05-15",
+        "days_overdue": 96
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind"
+    ],
+    "overrides": {
+      "expected": true,
+      "guardrails": [
+        "escalation_gate"
+      ]
+    },
+    "message": {
+      "mentions_refs": [
+        "inv_eval_2001"
+      ]
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "the guardrail does this, not the model"
+  }
+}

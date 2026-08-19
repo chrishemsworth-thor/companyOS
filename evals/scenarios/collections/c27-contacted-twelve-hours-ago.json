@@ -1,0 +1,68 @@
+{
+  "id": "c27-contacted-twelve-hours-ago",
+  "title": "The customer was emailed last night",
+  "covers": "Contact recency is a decision input as well as a hard gate; the model should back off",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "reminded",
+    "reminders_sent": 1,
+    "last_contact": "2026-08-18T16:00:00Z"
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": []
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_2701",
+        "amount_due_cents": 260000,
+        "currency": "MYR",
+        "due_date": "2026-08-06",
+        "days_overdue": 13
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [
+      {
+        "kind": "reminder_sent",
+        "body": "reminder for invoice inv_eval_2701 via email",
+        "occurred_at": "2026-08-18T16:00:00Z"
+      }
+    ],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "wait",
+      "remind"
+    ],
+    "risk_score": {
+      "min": 0,
+      "max": 80
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true
+  }
+}

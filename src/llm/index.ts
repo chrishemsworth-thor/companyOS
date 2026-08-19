@@ -3,7 +3,8 @@ import type { LlmProvider } from "./types";
 import { AnthropicLlm } from "./anthropic";
 import { OpenAiLlm } from "./openai";
 
-export type { LlmProvider, StructuredRequest } from "./types";
+export type { LlmProvider, StructuredRequest, StructuredResult, StructuredUsage } from "./types";
+export { estimateCostMicros, formatMicros, MODEL_PRICES, priceFor } from "./pricing";
 
 type LlmFactory = (env: Env) => LlmProvider | null;
 

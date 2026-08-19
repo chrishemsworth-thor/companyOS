@@ -1,4 +1,4 @@
-import type { LlmProvider, StructuredRequest } from "./types";
+import type { LlmProvider, StructuredRequest, StructuredResult } from "./types";
 
 export const DEFAULT_OPENAI_MODEL = "gpt-5";
 
@@ -7,6 +7,9 @@ interface ChatCompletionResponse {
     message: { content: string | null; refusal?: string | null };
     finish_reason: string;
   }[];
+  model?: string;
+  /** OpenAI names these differently from Anthropic; normalized on the way out. */
+  usage?: { prompt_tokens?: number; completion_tokens?: number };
 }
 
 /**
@@ -22,7 +25,7 @@ export class OpenAiLlm implements LlmProvider {
     private readonly model: string = DEFAULT_OPENAI_MODEL,
   ) {}
 
-  async completeStructured(req: StructuredRequest): Promise<unknown> {
+  async completeStructured(req: StructuredRequest): Promise<StructuredResult> {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -52,6 +55,13 @@ export class OpenAiLlm implements LlmProvider {
     if (choice.message.content == null) {
       throw new Error(`openai: no content (finish: ${choice.finish_reason})`);
     }
-    return JSON.parse(choice.message.content);
+    const usage =
+      body.usage?.prompt_tokens === undefined || body.usage?.completion_tokens === undefined
+        ? null
+        : {
+            input_tokens: body.usage.prompt_tokens,
+            output_tokens: body.usage.completion_tokens,
+          };
+    return { output: JSON.parse(choice.message.content), model: body.model ?? this.model, usage };
   }
 }

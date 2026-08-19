@@ -100,6 +100,14 @@ export interface Env {
   LLM_PROVIDER?: string;
   /** Override the provider's default model id. */
   LLM_MODEL?: string;
+  /**
+   * Per-million-token rates for a model `src/llm/pricing.ts` has no rate for —
+   * both or neither. Without them, a decision on an unpriced model records a
+   * null cost rather than a guessed one, and PRD-002's per-tenant spend figure
+   * says so honestly instead of being quietly wrong.
+   */
+  LLM_PRICE_INPUT_PER_MTOK?: string;
+  LLM_PRICE_OUTPUT_PER_MTOK?: string;
 
   /**
    * Lead-enrichment provider selection (src/enrichment/). Absent or "noop"

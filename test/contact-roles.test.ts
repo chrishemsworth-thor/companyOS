@@ -6,7 +6,7 @@ import { makeEnvelope, type EventEnvelope } from "../src/schemas/envelope";
 import { validatePayload } from "../src/schemas/events/registry";
 import { setLlmProviderFactoryForTests } from "../src/llm";
 import { setEventSenderForTests } from "../src/queue/producer";
-import { openContactWindow } from "./agent-fixture";
+import { openContactWindow, stubLlmProvider } from "./agent-fixture";
 import type { Contact, ContactRole } from "../src/modules/crm/types";
 
 /**
@@ -484,7 +484,7 @@ describe("acceptance: a reminder addresses the billing contact", () => {
       channel: "email",
       message: "Hi Ravi, a gentle nudge about the open invoice.",
     });
-    setLlmProviderFactoryForTests(() => ({ name: "anthropic", completeStructured: llmMock }));
+    stubLlmProvider(llmMock);
 
     const id = env.COLLECTIONS_AGENT.idFromName(`${TENANT_ID}:${C.staffed}`);
     const stub = env.COLLECTIONS_AGENT.get(id) as unknown as { onEvent(e: unknown): Promise<void> };

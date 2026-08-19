@@ -3,6 +3,7 @@ import { env } from "cloudflare:test";
 import { getLlmProvider } from "../src/llm";
 import { AnthropicLlm, DEFAULT_ANTHROPIC_MODEL } from "../src/llm/anthropic";
 import { OpenAiLlm, DEFAULT_OPENAI_MODEL } from "../src/llm/openai";
+import { estimateCostMicros, formatMicros } from "../src/llm/pricing";
 
 /**
  * The provider-agnostic LLM port. Request shapes are asserted against a
@@ -81,7 +82,14 @@ describe("anthropic adapter", () => {
     const mock = stubFetch(anthropicResponse(JSON.stringify({ ok: true })));
 
     const result = await new AnthropicLlm("sk-ant-test").completeStructured(REQUEST);
-    expect(result).toEqual({ ok: true });
+    // The port carries usage and the served model id alongside the JSON:
+    // PRD-002 records token counts and cost on every decision, and the provider
+    // boundary is the only place those exist.
+    expect(result).toEqual({
+      output: { ok: true },
+      model: DEFAULT_ANTHROPIC_MODEL,
+      usage: { input_tokens: 10, output_tokens: 10 },
+    });
 
     expect(mock).toHaveBeenCalledTimes(1);
     const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
@@ -113,13 +121,20 @@ describe("openai adapter", () => {
           choices: [
             { message: { content: JSON.stringify({ ok: true }) }, finish_reason: "stop" },
           ],
+          model: DEFAULT_OPENAI_MODEL,
+          usage: { prompt_tokens: 40, completion_tokens: 12 },
         }),
         { status: 200 },
       ),
     );
 
     const result = await new OpenAiLlm("sk-oai-test").completeStructured(REQUEST);
-    expect(result).toEqual({ ok: true });
+    // OpenAI names its usage fields differently; the port normalizes them.
+    expect(result).toEqual({
+      output: { ok: true },
+      model: DEFAULT_OPENAI_MODEL,
+      usage: { input_tokens: 40, output_tokens: 12 },
+    });
 
     const [url, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
     expect(String(url)).toBe("https://api.openai.com/v1/chat/completions");
@@ -162,5 +177,61 @@ describe("openai adapter", () => {
     await provider.completeStructured(REQUEST);
     const [, init] = mock.mock.calls[0] as unknown as [string, RequestInit];
     expect((JSON.parse(init.body as string) as { model: string }).model).toBe("claude-sonnet-5");
+  });
+});
+
+describe("usage and cost", () => {
+  it("reports no usage when the provider returns none", async () => {
+    // A provider that omits its usage block must yield a null cost, not a zero
+    // one: "we do not know" and "it was free" are different facts.
+    stubFetch(
+      new Response(
+        JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ ok: true }) }, finish_reason: "stop" }],
+        }),
+        { status: 200 },
+      ),
+    );
+    const result = await new OpenAiLlm("sk-oai-test").completeStructured(REQUEST);
+    expect(result.usage).toBeNull();
+    expect(estimateCostMicros(result.model, result.usage)).toBeNull();
+  });
+
+  it("prices a known model in integer micro-USD", () => {
+    // Claude Opus 4.8: $5/1M input, $25/1M output.
+    expect(
+      estimateCostMicros("claude-opus-4-8", { input_tokens: 1_000_000, output_tokens: 0 }),
+    ).toBe(5_000_000);
+    expect(
+      estimateCostMicros("claude-opus-4-8", { input_tokens: 0, output_tokens: 1_000_000 }),
+    ).toBe(25_000_000);
+    // A realistic decision: ~1.2k in, ~180 out.
+    expect(estimateCostMicros("claude-opus-4-8", { input_tokens: 1_200, output_tokens: 180 })).toBe(
+      10_500,
+    );
+  });
+
+  it("estimates nothing for a model it has no rate for", () => {
+    // A wrong cost on an invoice conversation is worse than an absent one.
+    expect(estimateCostMicros("some-local-llama", { input_tokens: 100, output_tokens: 100 })).toBeNull();
+  });
+
+  it("uses the operator's rates for an unpriced model, both or neither", () => {
+    const usage = { input_tokens: 1_000_000, output_tokens: 1_000_000 };
+    expect(
+      estimateCostMicros("some-local-llama", usage, {
+        LLM_PRICE_INPUT_PER_MTOK: "0.5",
+        LLM_PRICE_OUTPUT_PER_MTOK: "1.5",
+      }),
+    ).toBe(2_000_000);
+    // Half an override is a misconfiguration, not a rate.
+    expect(
+      estimateCostMicros("some-local-llama", usage, { LLM_PRICE_INPUT_PER_MTOK: "0.5" }),
+    ).toBeNull();
+  });
+
+  it("formats micro-USD for display, and says nothing when it knows nothing", () => {
+    expect(formatMicros(10_500)).toBe("$0.010500");
+    expect(formatMicros(null)).toBe("—");
   });
 });

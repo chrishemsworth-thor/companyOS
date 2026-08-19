@@ -1,0 +1,71 @@
+{
+  "id": "c13-at-risk-band-one-reminder",
+  "title": "Health band at_risk, but only one reminder has gone out",
+  "covers": "The health band is a tone signal, never a licence to escalate early (PRD-003 / C9)",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "reminded",
+    "reminders_sent": 1,
+    "last_contact": "2026-08-10T02:00:00Z"
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "at_risk",
+      "reasons": [
+        "credit limit exceeded",
+        "no payment in 90 days"
+      ]
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_1301",
+        "amount_due_cents": 2200000,
+        "currency": "MYR",
+        "due_date": "2026-06-05",
+        "days_overdue": 75
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind"
+    ],
+    "risk_score": {
+      "min": 40,
+      "max": 100
+    },
+    "message": {
+      "mentions_refs": [
+        "inv_eval_1301"
+      ],
+      "max_chars": 1500
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "one reminder keeps the heuristic on remind too"
+  }
+}

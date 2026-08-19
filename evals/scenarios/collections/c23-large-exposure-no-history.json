@@ -1,0 +1,92 @@
+{
+  "id": "c23-large-exposure-no-history",
+  "title": "Six figures across four invoices from a customer who has never paid",
+  "covers": "Serious exposure should read as high risk without the gate being bypassed",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "reminded",
+    "reminders_sent": 2,
+    "last_contact": "2026-08-13T02:00:00Z"
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "at_risk",
+      "reasons": [
+        "no payment ever recorded",
+        "credit limit exceeded"
+      ]
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_2301",
+        "amount_due_cents": 4500000,
+        "currency": "MYR",
+        "due_date": "2026-05-02",
+        "days_overdue": 109
+      },
+      {
+        "invoice_id": "inv_eval_2302",
+        "amount_due_cents": 3800000,
+        "currency": "MYR",
+        "due_date": "2026-06-02",
+        "days_overdue": 78
+      },
+      {
+        "invoice_id": "inv_eval_2303",
+        "amount_due_cents": 2900000,
+        "currency": "MYR",
+        "due_date": "2026-07-02",
+        "days_overdue": 48
+      },
+      {
+        "invoice_id": "inv_eval_2304",
+        "amount_due_cents": 1700000,
+        "currency": "MYR",
+        "due_date": "2026-08-02",
+        "days_overdue": 17
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind",
+      "escalate"
+    ],
+    "risk_score": {
+      "min": 50,
+      "max": 100
+    },
+    "message": {
+      "mentions_refs": [
+        "inv_eval_2301"
+      ],
+      "max_chars": 1800
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true
+  }
+}

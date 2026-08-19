@@ -1,0 +1,80 @@
+{
+  "id": "c14-guardrail-downgrades-early-escalation",
+  "title": "The model escalates a two-day-old invoice on first contact",
+  "covers": "PRD-002 acceptance criterion: action=escalate on a 2-day-overdue first contact is downgraded to remind",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "canned",
+    "response": {
+      "risk_score": 96,
+      "action": "escalate",
+      "channel": "email",
+      "message": "FINAL NOTICE for invoice inv_eval_1401. Legal action will follow within 48 hours."
+    }
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": []
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_1401",
+        "amount_due_cents": 110000,
+        "currency": "MYR",
+        "due_date": "2026-08-17",
+        "days_overdue": 2
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind"
+    ],
+    "message": {
+      "mentions_refs": [
+        "inv_eval_1401"
+      ],
+      "forbids": [
+        "legal action",
+        "court",
+        "lawyer",
+        "solicitor",
+        "debt collector",
+        "litigation"
+      ]
+    },
+    "overrides": {
+      "expected": true,
+      "guardrails": [
+        "escalation_gate"
+      ]
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "the guardrail does this, not the model"
+  }
+}

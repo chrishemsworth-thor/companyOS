@@ -12,15 +12,12 @@ import { computeHealth } from "../modules/crm/health";
 import { emitEvent } from "../queue/producer";
 import { ensureEventBus } from "../queue/direct";
 import {
-  buildDecisionPrompt,
-  collectionsDecisionSchema,
-  DECISION_JSON_SCHEMA,
-  DECISION_SYSTEM_PROMPT,
-  fallbackDecision,
+  decideCollections,
+  templateMessage,
   type AgentStateSummary,
+  type DecisionOutcome,
   type BillingContactContext,
   type CollectionsContext,
-  type CollectionsDecision,
   type OverdueInvoiceContext,
 } from "./decision";
 import {
@@ -269,7 +266,8 @@ export class CollectionsAgent extends DurableObject<Env> {
       reminders_sent: state.reminder_history.length,
       last_contact: state.last_contact,
     };
-    const { decision: proposed, source } = await this.decide(context, stateSummary);
+    const outcome = await this.decide(context, stateSummary);
+    const proposed = outcome.decision;
 
     const { decision, overrides } = applyDecisionGuards(
       policy,
@@ -277,9 +275,10 @@ export class CollectionsAgent extends DurableObject<Env> {
       proposed,
       {
         valid_refs: context.overdue_invoices.map((i) => i.invoice_id),
-        // The deterministic template, supplied by the caller because only the
-        // caller owns it. PRD-002: "the deterministic template is sent instead".
-        fallback_message: fallbackDecision(context, stateSummary).message,
+        // The deterministic template, for whichever action the guard settles
+        // on. PRD-002: "the deterministic template is sent instead".
+        fallback_message: (action) =>
+          templateMessage(context, action as "remind" | "escalate" | "wait"),
         escalation: {
           action: "escalate",
           downgrade_to: "remind",
@@ -305,7 +304,7 @@ export class CollectionsAgent extends DurableObject<Env> {
         payload: {
           customer_id: state.customer_id,
           ...decision,
-          source,
+          source: outcome.source,
           trigger,
           // PRD-003 P0: "the fallback is recorded on the decision". Optional
           // additions to a non-strict collections.decision.v1 — no v2 needed.
@@ -428,28 +427,20 @@ export class CollectionsAgent extends DurableObject<Env> {
     return { next_alarm_at: this.nextAlarm(now, result.retry_at) };
   }
 
-  /** LLM decision with Zod validation; any failure falls back to the template. */
+  /**
+   * The decision, through the shared decision function — the same one
+   * `npm run eval` runs. PRD-002's whole premise is that a model or prompt
+   * change can be evaluated before it ships, and an eval that exercised a copy
+   * of this logic would be measuring the copy.
+   */
   private async decide(
     context: CollectionsContext,
     stateSummary: AgentStateSummary,
-  ): Promise<{ decision: CollectionsDecision; source: "llm" | "fallback" }> {
-    const provider = getLlmProvider(this.env);
-    if (provider) {
-      try {
-        const raw = await provider.completeStructured({
-          system: DECISION_SYSTEM_PROMPT,
-          prompt: buildDecisionPrompt(context, stateSummary),
-          schema: DECISION_JSON_SCHEMA,
-          max_tokens: LLM_MAX_TOKENS,
-        });
-        return { decision: collectionsDecisionSchema.parse(raw), source: "llm" };
-      } catch (err) {
-        console.warn(
-          `[CollectionsAgent] ${provider.name} decision failed, using fallback: ${String(err)}`,
-        );
-      }
-    }
-    return { decision: fallbackDecision(context, stateSummary), source: "fallback" };
+  ): Promise<DecisionOutcome> {
+    return decideCollections(getLlmProvider(this.env), context, stateSummary, {
+      price_env: this.env,
+      max_tokens: LLM_MAX_TOKENS,
+    });
   }
 
   /**

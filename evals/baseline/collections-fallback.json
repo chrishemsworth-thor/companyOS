@@ -1,0 +1,183 @@
+{
+  "agent": "collections",
+  "mode": "fallback",
+  "prompt_version": "collections-2026-08-19",
+  "model": null,
+  "scenarios": [
+    {
+      "id": "c01-first-contact-one-day-overdue",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c02-first-contact-no-history",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c03-thirty-days-one-reminder",
+      "status": "gap",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c04-ninety-days-three-reminders",
+      "status": "pass",
+      "action": "escalate",
+      "source": "fallback"
+    },
+    {
+      "id": "c05-paid-today-still-flagged",
+      "status": "gap",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c06-live-deal-small-overdue",
+      "status": "gap",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c07-open-support-ticket",
+      "status": "gap",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c08-disputed-credit-note-pending",
+      "status": "gap",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c09-partial-payment-remainder",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c10-degenerate-empty-context",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c11-malformed-llm-response",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c12-several-invoices-oldest-first",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c13-at-risk-band-one-reminder",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c14-guardrail-downgrades-early-escalation",
+      "status": "pass",
+      "action": "remind",
+      "source": "llm"
+    },
+    {
+      "id": "c15-guardrail-rejects-hallucinated-invoice",
+      "status": "pass",
+      "action": "remind",
+      "source": "llm"
+    },
+    {
+      "id": "c16-guardrail-truncates-long-message",
+      "status": "pass",
+      "action": "remind",
+      "source": "llm"
+    },
+    {
+      "id": "c17-whatsapp-preferred-channel",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c18-no-named-contact",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c19-contact-resolved-by-fallback",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c20-long-overdue-one-reminder-cannot-escalate",
+      "status": "pass",
+      "action": "remind",
+      "source": "llm"
+    },
+    {
+      "id": "c21-below-threshold-cannot-escalate",
+      "status": "pass",
+      "action": "remind",
+      "source": "llm"
+    },
+    {
+      "id": "c22-nothing-due",
+      "status": "pass",
+      "action": "wait",
+      "source": "fallback"
+    },
+    {
+      "id": "c23-large-exposure-no-history",
+      "status": "pass",
+      "action": "escalate",
+      "source": "fallback"
+    },
+    {
+      "id": "c24-chronically-late-always-pays",
+      "status": "gap",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c25-first-contact-large-amount",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c26-foreign-currency-invoice",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c27-contacted-twelve-hours-ago",
+      "status": "pass",
+      "action": "remind",
+      "source": "fallback"
+    },
+    {
+      "id": "c28-twenty-open-invoices",
+      "status": "pass",
+      "action": "escalate",
+      "source": "fallback"
+    }
+  ],
+  "totals": {
+    "scenarios": 28,
+    "passed": 22,
+    "failed": 0,
+    "gaps": 6,
+    "errors": 0
+  }
+}

@@ -11,6 +11,7 @@ import { makeEnvelope, type EventEnvelope } from "../src/schemas/envelope";
 import { validatePayload } from "../src/schemas/events/registry";
 import { setLlmProviderFactoryForTests } from "../src/llm";
 import { setEventSenderForTests } from "../src/queue/producer";
+import { stubLlmProvider } from "./agent-fixture";
 import type { CollectionsAgent } from "../src/agents/collections";
 import type { CollectionsDecision } from "../src/agents/decision";
 
@@ -61,7 +62,7 @@ beforeEach(() => {
     capturedEvents.push(envelope);
   });
   llmMock = vi.fn();
-  setLlmProviderFactoryForTests(() => ({ name: "anthropic", completeStructured: llmMock }));
+  stubLlmProvider(llmMock);
 });
 
 afterEach(() => {
@@ -231,8 +232,18 @@ describe("escalation is gated, whatever the model returns", () => {
     // Both halves of the gate are named in the detail, so support can see why.
     expect(override[0]!.payload.detail).toContain("2 day(s) past due, threshold 60");
     expect(override[0]!.payload.detail).toContain("0 prior reminder(s), minimum 2");
+    expect(override[0]!.payload.detail).toContain("message replaced with the remind template");
 
     expect(decisions()[0]!.payload).toMatchObject({ action: "remind" });
+    // The escalation's WORDS were replaced too. A downgrade that left "legal
+    // action will follow" in the message would be a downgrade in the audit log
+    // only, and the customer would still have been threatened over an invoice
+    // two days late.
+    const sent = decisions()[0]!.payload.message as string;
+    expect(sent).not.toContain("Legal action");
+    expect(sent).not.toContain("Final notice");
+    expect(sent).toContain("Friendly reminder");
+    expect(sent).toContain(invoiceId);
     // No escalation side effects: no risk flag, and the stage stays `reminded`.
     expect(capturedEvents.filter((e) => e.event_type === "customer.risk_flagged")).toHaveLength(0);
     expect((await snapshot())!.escalation_stage).toBe("reminded");

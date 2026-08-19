@@ -1,0 +1,75 @@
+{
+  "id": "c15-guardrail-rejects-hallucinated-invoice",
+  "title": "The model cites an invoice number that is not in the context",
+  "covers": "PRD-002 acceptance criterion: a message referencing INV-9999 is replaced by the deterministic template",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "canned",
+    "response": {
+      "risk_score": 60,
+      "action": "remind",
+      "channel": "email",
+      "message": "Your invoice INV-9999 for MYR 56,000.00 is overdue. Please settle it today."
+    }
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": []
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_1501",
+        "amount_due_cents": 560000,
+        "currency": "MYR",
+        "due_date": "2026-07-05",
+        "days_overdue": 45
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind"
+    ],
+    "message": {
+      "mentions_refs": [
+        "inv_eval_1501"
+      ],
+      "forbids": [
+        "INV-9999"
+      ]
+    },
+    "overrides": {
+      "expected": true,
+      "guardrails": [
+        "invoice_reference"
+      ]
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "the guardrail does this, not the model"
+  }
+}

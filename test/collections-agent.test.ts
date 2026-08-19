@@ -6,7 +6,7 @@ import { makeEnvelope, type EventEnvelope } from "../src/schemas/envelope";
 import { validatePayload } from "../src/schemas/events/registry";
 import { setLlmProviderFactoryForTests } from "../src/llm";
 import { setEventSenderForTests } from "../src/queue/producer";
-import { openContactWindow } from "./agent-fixture";
+import { openContactWindow, stubLlmProvider } from "./agent-fixture";
 import type { CollectionsDecision } from "../src/agents/decision";
 
 /**
@@ -48,10 +48,7 @@ beforeEach(() => {
     capturedEvents.push(envelope);
   });
   llmMock = vi.fn();
-  setLlmProviderFactoryForTests(() => ({
-    name: "anthropic",
-    completeStructured: llmMock,
-  }));
+  stubLlmProvider(llmMock);
 });
 
 afterEach(() => {

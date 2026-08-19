@@ -2,7 +2,7 @@
   "name": "companyos",
   "version": "0.1.0",
   "private": true,
-  "description": "CompanyOS — AI-agent-first business operating system. Phase 0: data spine & agent orchestration on Cloudflare.",
+  "description": "CompanyOS \u2014 AI-agent-first business operating system. Phase 0: data spine & agent orchestration on Cloudflare.",
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
@@ -12,6 +12,7 @@
     "deploy:free:dry-run": "wrangler deploy --config wrangler.free.jsonc --dry-run",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval": "node scripts/run-evals.mjs",
     "typecheck": "tsc --noEmit",
     "db:migrate:local": "wrangler d1 migrations apply companyos-db --local",
     "db:migrate:remote": "wrangler d1 migrations apply companyos-db --remote",

@@ -1,0 +1,94 @@
+{
+  "id": "c06-live-deal-small-overdue",
+  "title": "A small overdue invoice while a large renewal is in the pipeline",
+  "covers": "PRD-002: open high-value deal + small overdue invoice -> remind or wait, never escalate",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_1",
+      "name": "Sinar Teknologi Sdn Bhd",
+      "email": "ap@sinar.example",
+      "phone": "+60123456789"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": [
+        "paid 11 of 12 invoices on time"
+      ]
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_0601",
+        "amount_due_cents": 62000,
+        "currency": "MYR",
+        "due_date": "2026-07-30",
+        "days_overdue": 20
+      }
+    ],
+    "recent_payments": [
+      {
+        "payment_id": "pay_e6",
+        "invoice_id": "inv_eval_0590",
+        "applied_cents": 62000,
+        "currency": "MYR",
+        "received_at": "2026-07-02"
+      }
+    ],
+    "recent_activities": [],
+    "open_deals": [
+      {
+        "title": "Regional rollout \u2014 3 year term",
+        "value_cents": 48000000,
+        "currency": "MYR"
+      }
+    ]
+  },
+  "expect": {
+    "action": [
+      "remind",
+      "wait"
+    ],
+    "risk_score": {
+      "min": 0,
+      "max": 60
+    },
+    "message": {
+      "forbids": [
+        "legal action",
+        "court",
+        "lawyer",
+        "solicitor",
+        "debt collector",
+        "litigation",
+        "final notice"
+      ],
+      "max_chars": 1200
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": false,
+    "missing": [
+      "risk_score"
+    ],
+    "note": "the heuristic's risk score saturates at 100 from about 20 days overdue (min(100, days*5 + reminders*10)), so it cannot land in a band; the action and message expectations still apply"
+  }
+}

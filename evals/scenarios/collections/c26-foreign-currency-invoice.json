@@ -1,0 +1,71 @@
+{
+  "id": "c26-foreign-currency-invoice",
+  "title": "An SGD invoice from the Singapore entity",
+  "covers": "PRD-002: state amounts with their currency exactly as given",
+  "now": "2026-08-19T04:00:00Z",
+  "llm": {
+    "mode": "live"
+  },
+  "state": {
+    "escalation_stage": "none",
+    "reminders_sent": 0,
+    "last_contact": null
+  },
+  "context": {
+    "customer": {
+      "customer_id": "cust_eval_26",
+      "name": "Sinar Teknologi Pte Ltd",
+      "email": "ap@sinar.sg",
+      "phone": "+6598887777"
+    },
+    "billing_contact": {
+      "contact_id": "con_eval_1",
+      "name": "Nurul Aziz",
+      "title": "Finance Manager",
+      "email": "nurul@sinar.example",
+      "phone": "+60122223333",
+      "matched": "role"
+    },
+    "health": {
+      "band": "good",
+      "reasons": []
+    },
+    "overdue_invoices": [
+      {
+        "invoice_id": "inv_eval_2601",
+        "amount_due_cents": 480000,
+        "currency": "SGD",
+        "due_date": "2026-07-27",
+        "days_overdue": 23
+      }
+    ],
+    "recent_payments": [],
+    "recent_activities": [],
+    "open_deals": []
+  },
+  "expect": {
+    "action": [
+      "remind",
+      "wait"
+    ],
+    "message": {
+      "mentions_refs": [
+        "inv_eval_2601"
+      ],
+      "requires": [
+        "SGD"
+      ],
+      "forbids": [
+        "MYR"
+      ],
+      "max_chars": 1200
+    },
+    "overrides": {
+      "expected": false
+    }
+  },
+  "fallback": {
+    "handled": true,
+    "note": "the template prints the invoice's own currency"
+  }
+}
