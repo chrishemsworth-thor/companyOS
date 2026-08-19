@@ -116,7 +116,9 @@ Pass `--tenant-id`, `--name`, `--slug`, or `--api-key` to `npm run seed:local` t
 CompanyOS is multi-tenant: every table is keyed by `tenant_id` and each company
 is fully isolated. New companies are provisioned through an internal admin API
 (guarded by `PLATFORM_ADMIN_SECRET`) that creates the tenant, its first admin
-user, and an API key in one call:
+user, and an API key in one call. Production runbook (including secret
+rotation and the hand-off checklist):
+[docs/onboarding-a-company.md](docs/onboarding-a-company.md).
 
 ```sh
 curl -X POST http://localhost:8787/admin/tenants \
