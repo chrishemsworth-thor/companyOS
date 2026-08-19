@@ -46,6 +46,34 @@ export interface RenderQuoteInput {
    * genuinely self-contained record of what was signed.
    */
   logoDataUri?: string | null;
+  /**
+   * The acceptance being recorded, when this render is the ARTIFACT frozen at
+   * acceptance rather than a live document.
+   *
+   * Its presence changes the document in two ways: the blank
+   * "customer confirmation" signature box is replaced by the completed one, and
+   * a full audit panel is appended. The frozen artifact must be readable on its
+   * own as evidence — a lawyer opening it should see who accepted, when, from
+   * where, and the exact words they agreed to, without a second system.
+   */
+  acceptance?: RenderedAcceptance | null;
+}
+
+/** The acceptance facts rendered onto the archived artifact. */
+export interface RenderedAcceptance {
+  signatory_name: string;
+  signatory_email: string;
+  accepted_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  agreement_version: string;
+  agreement_text: string;
+  /**
+   * The typed or drawn signature, inlined as a `data:` URI for the same reason
+   * the logo is: a reference to `/files/{id}` stops resolving if the file is
+   * ever deleted, and this artifact has to keep rendering.
+   */
+  signature_data_uri?: string | null;
 }
 
 /**
@@ -178,6 +206,48 @@ export function renderQuoteDocument(input: RenderQuoteInput): QuoteDocumentParts
       ? `<section class="terms"><h3>${esc(L.terms_title)}</h3><p>${esc(cfg.terms_text)}</p></section>`
       : "";
 
+  const acceptance = input.acceptance ?? null;
+
+  // The customer's box: blank on a live quote, completed on the artifact.
+  const customerSigBox = acceptance
+    ? `<div class="sig-box">
+          <div class="sig-role">${esc(L.customer_confirmation)}</div>
+          ${
+            acceptance.signature_data_uri
+              ? `<img class="sig-image" src="${esc(acceptance.signature_data_uri)}" alt="Signature of ${esc(acceptance.signatory_name)}" />`
+              : `<div class="sig-typed">${esc(acceptance.signatory_name)}</div>`
+          }
+          <div class="sig-line"></div>
+          <div class="sig-name">${esc(L.name)}: ${esc(acceptance.signatory_name)}</div>
+          <div class="sig-company">${esc(L.date)}: ${esc(acceptance.accepted_at)}</div>
+        </div>`
+    : `<div class="sig-box">
+          <div class="sig-role">${esc(L.customer_confirmation)}</div>
+          <div class="sig-line"></div>
+          <div class="sig-name">${esc(L.name)}: ${buyerName}</div>
+          <div class="sig-company">${esc(L.date)}: __________</div>
+        </div>`;
+
+  /**
+   * The audit panel. Only on the artifact, and deliberately verbose: this is
+   * the part somebody reads when the acceptance is disputed, so it states the
+   * agreed text in full rather than citing a version nobody can look up.
+   */
+  const acceptanceBlock = acceptance
+    ? `<section class="acceptance">
+        <h3>Electronic acceptance record</h3>
+        <table class="acceptance-table">
+          <tr><td class="k">Accepted by</td><td>${esc(acceptance.signatory_name)}</td></tr>
+          <tr><td class="k">Email</td><td>${esc(acceptance.signatory_email)}</td></tr>
+          <tr><td class="k">Accepted at (UTC)</td><td>${esc(acceptance.accepted_at)}</td></tr>
+          ${acceptance.ip_address ? `<tr><td class="k">IP address</td><td>${esc(acceptance.ip_address)}</td></tr>` : ""}
+          ${acceptance.user_agent ? `<tr><td class="k">User agent</td><td>${esc(acceptance.user_agent)}</td></tr>` : ""}
+          <tr><td class="k">Agreement version</td><td>${esc(acceptance.agreement_version)}</td></tr>
+        </table>
+        <p class="acceptance-text">${esc(acceptance.agreement_text)}</p>
+      </section>`
+    : "";
+
   const signatureBlock = cfg.show_signature_block
     ? `<section class="signatures">
         <div class="sig-box">
@@ -192,12 +262,7 @@ export function renderQuoteDocument(input: RenderQuoteInput): QuoteDocumentParts
           <div class="sig-name">${esc(quote.approved_by ?? "")}</div>
           <div class="sig-company">${sellerName}</div>
         </div>
-        <div class="sig-box">
-          <div class="sig-role">${esc(L.customer_confirmation)}</div>
-          <div class="sig-line"></div>
-          <div class="sig-name">${esc(L.name)}: ${buyerName}</div>
-          <div class="sig-company">${esc(L.date)}: __________</div>
-        </div>
+        ${customerSigBox}
       </section>`
     : "";
 
@@ -272,6 +337,15 @@ export function renderQuoteDocument(input: RenderQuoteInput): QuoteDocumentParts
   .sig-role { font-weight: 600; color: var(--accent); margin-bottom: 32px; }
   .sig-line { border-top: 1px solid #9ca3af; margin-bottom: 6px; }
   .sig-company { color: #6b7280; }
+  .sig-image { max-height: 56px; max-width: 100%; display: block; margin-bottom: 4px; }
+  .sig-typed { font-family: cursive, ${branding.font_family}; font-size: 20px; margin-bottom: 6px; }
+  .acceptance {
+    border: 1px solid #d1d5db; border-radius: 6px; padding: 14px 16px; background: #f9fafb;
+  }
+  .acceptance-table { border-collapse: collapse; margin-bottom: 8px; }
+  .acceptance-table td { padding: 1px 0; vertical-align: top; }
+  .acceptance-table .k { color: #6b7280; padding-right: 16px; white-space: nowrap; }
+  .acceptance-text { font-size: 11px; color: #4b5563; margin: 0; }
   .doc-footer {
     margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb;
     font-size: 11px; color: #6b7280; white-space: pre-wrap;
@@ -316,6 +390,7 @@ export function renderQuoteDocument(input: RenderQuoteInput): QuoteDocumentParts
     ${notesBlock}
     ${termsBlock}
     ${signatureBlock}
+    ${acceptanceBlock}
     ${footerBlock}
   </div>`,
   };

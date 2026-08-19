@@ -34,7 +34,9 @@ export class QuotesError extends Error {
        * names the way forward — create a new version.
        */
       | "locked"
-      | "already_superseded",
+      | "already_superseded"
+      /** A malformed acceptance — no name, no email, or the box unticked. */
+      | "invalid_request",
     message: string,
     readonly httpStatus: 404 | 409 | 422 = 422,
   ) {
@@ -733,6 +735,14 @@ export async function convertQuote(
     currency: quote.currency,
     due_date: dueDate,
     lines: invoiceLines,
+    // PRD-004: the audit trail has to survive conversion. Without this the
+    // evidence that anyone agreed to this money stops at the quote, and the
+    // invoice — the document that actually gets chased and paid — has no link
+    // back to the acceptance that authorised it.
+    quote_id: quote.quote_id,
+    ...(quote.accepted_acceptance_id
+      ? { quote_acceptance_id: quote.accepted_acceptance_id }
+      : {}),
   });
 
   const now = new Date().toISOString();
@@ -754,6 +764,9 @@ export async function convertQuote(
         customer_id: quote.customer_id,
         grand_total_cents: quote.grand_total_cents,
         currency: quote.currency,
+        ...(quote.accepted_acceptance_id
+          ? { acceptance_id: quote.accepted_acceptance_id }
+          : {}),
       },
     }),
   );

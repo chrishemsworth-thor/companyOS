@@ -22,6 +22,8 @@ export const FILE_PURPOSES = [
   /** Medical certificates and the like, on a leave request (PRD-006c, S7). */
   "leave_attachment",
   "signature",
+  /** The frozen HTML of an accepted quote (PRD-004, S9). */
+  "quote_artifact",
   "other",
 ] as const;
 export type FilePurpose = (typeof FILE_PURPOSES)[number];
@@ -63,7 +65,31 @@ export const FILE_POLICIES: Record<FilePurpose, FilePolicy> = {
   // readable — it is health information about a named employee, which is the
   // most sensitive thing this system stores.
   leave_attachment: DEFAULT_POLICY,
-  signature: DEFAULT_POLICY,
+  // A hand-drawn or typed signature captured on the public quote page. Tighter
+  // than the default on both axes: no PDF (it is rendered into an <img> on the
+  // archived artifact, and a PDF cannot be), and 1 MB, because a canvas
+  // signature is a few tens of kilobytes and the bytes arrive from an
+  // UNAUTHENTICATED caller. Never publicly readable — it is a person's
+  // signature, and the artifact embeds a copy anyway.
+  signature: {
+    maxBytes: 1 * MB,
+    contentTypes: ["image/png", "image/jpeg", "image/webp"],
+    publiclyReadable: false,
+  },
+  // The frozen document a customer accepted: the artifact whose SHA-256 is the
+  // acceptance record's proof. Large because it inlines its own images as
+  // `data:` URIs — a 2 MB logo is ~2.7 MB base64 — which is exactly what makes
+  // it render identically after the tenant changes their branding.
+  //
+  // NOT publicly readable. It is reachable two ways, both of which resolve the
+  // caller's right to it first: `GET /q/:token/artifact` (holding the link) and
+  // `GET /v1/quotes/:id/artifact` (holding the tenant's credentials). Marking
+  // it public would mean stored HTML served to anyone with an id.
+  quote_artifact: {
+    maxBytes: 8 * MB,
+    contentTypes: ["text/html"],
+    publiclyReadable: false,
+  },
   other: DEFAULT_POLICY,
 };
 

@@ -25,6 +25,7 @@ import {
   mintQuoteLink,
   revokeQuoteLink,
 } from "../../modules/quotes/links";
+import { listAcceptances, readArtifact } from "../../modules/quotes/acceptance";
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -276,6 +277,53 @@ quotes.get("/:id/link", async (c) => {
   const link = await getActiveLink(c.env.DB, tenant.tenant_id, c.req.param("id"));
   if (!link) return c.json({ error: "this quote has no active public link" }, 404);
   return c.json(link);
+});
+
+/**
+ * `GET /v1/quotes/:id/acceptances` — the audit record(s).
+ *
+ * A list, not a single row, because PRD-004 keeps one row per signatory so that
+ * P2 multi-party counter-signing is additive, and because a declined quote that
+ * was later re-sent has more than one response worth reading.
+ */
+quotes.get("/:id/acceptances", async (c) => {
+  const tenant = c.get("tenant");
+  const quote = await getQuote(c.env.DB, tenant.tenant_id, c.req.param("id"));
+  if (!quote) return c.json({ error: "quote not found" }, 404);
+  return c.json({
+    acceptances: await listAcceptances(c.env.DB, tenant.tenant_id, quote.quote_id),
+    accepted_acceptance_id: quote.accepted_acceptance_id,
+  });
+});
+
+/**
+ * `GET /v1/quotes/:id/artifact` — the frozen document, exactly as signed.
+ *
+ * Served from storage rather than re-rendered. Re-rendering would silently
+ * apply today's branding and today's line items, and the hash on the acceptance
+ * record would stop describing what came back — which is the one thing this
+ * endpoint exists to make checkable.
+ */
+quotes.get("/:id/artifact", async (c) => {
+  const tenant = c.get("tenant");
+  const quote = await getQuote(c.env.DB, tenant.tenant_id, c.req.param("id"));
+  if (!quote) return c.json({ error: "quote not found" }, 404);
+
+  const artifact = await readArtifact(c.env, tenant.tenant_id, quote);
+  if (!artifact) {
+    return c.json({ error: "this quote has no archived artifact", code: "not_found" }, 404);
+  }
+  return new Response(artifact.html, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      // Self-contained by construction: its images are data: URIs. Nothing else
+      // is permitted, so a stored artifact cannot reach out from the API origin.
+      "Content-Security-Policy":
+        "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'",
+      ETag: `"${artifact.sha256}"`,
+      "Cache-Control": "private, no-store",
+    },
+  });
 });
 
 /** `DELETE /v1/quotes/:id/link` — revoke it. The token stops working at once. */

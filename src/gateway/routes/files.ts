@@ -51,9 +51,19 @@ function filesErrorResponse(c: Context<AuthedEnv>, err: unknown) {
  * form is stripped to safe ASCII; the RFC 5987 `filename*` carries the real
  * name for clients that understand it.
  */
-function contentDisposition(filename: string): string {
+function contentDisposition(filename: string, contentType: string): string {
   const ascii = filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "_");
-  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+  // HTML is never served inline from the generic file routes. The only HTML in
+  // the bucket is an archived quote artifact (purpose `quote_artifact`, S9),
+  // which is not publicly readable and has two purpose-built routes of its own
+  // that render it deliberately with a restrictive CSP. Serving it inline HERE
+  // would put stored markup on the API origin for any authenticated caller
+  // holding an id — a cheap way to turn a file store into a stored-XSS surface,
+  // for a convenience nobody needs.
+  const mode = contentType.split(";")[0]!.trim().toLowerCase() === "text/html"
+    ? "attachment"
+    : "inline";
+  return `${mode}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 /**
@@ -80,7 +90,7 @@ export async function streamFile(
     headers: {
       "Content-Type": row.content_type,
       "Content-Length": String(row.size_bytes),
-      "Content-Disposition": contentDisposition(row.filename),
+      "Content-Disposition": contentDisposition(row.filename, row.content_type),
       ETag: `"${row.sha256}"`,
       "Cache-Control": cacheControl,
     },

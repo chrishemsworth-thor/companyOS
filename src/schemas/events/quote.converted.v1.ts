@@ -7,5 +7,11 @@ export const quoteConvertedV1 = z.object({
   customer_id: z.string(),
   grand_total_cents: z.number().int().nonnegative(),
   currency: z.string().length(3),
+  /**
+   * The acceptance record that authorised the conversion (PRD-004, S9).
+   * Optional and additive: a quote accepted by an operator over the phone has
+   * no signed record behind it.
+   */
+  acceptance_id: z.string().optional(),
 });
 export type QuoteConvertedV1 = z.infer<typeof quoteConvertedV1>;

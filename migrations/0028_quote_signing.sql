@@ -205,3 +205,75 @@ CREATE INDEX idx_quote_links_quote ON quote_links (tenant_id, quote_id, created_
 
 ALTER TABLE quote_branding ADD COLUMN logo_file_id TEXT;
 ALTER TABLE quote_branding ADD COLUMN footer_text  TEXT;
+
+-- ============================================================================
+-- (d) `quote_acceptances` — the evidentiary record, and the invoice link
+-- ============================================================================
+--
+-- PRD-004's whole point: *"today a CompanyOS quote has no evidentiary value —
+-- there is no record that the customer saw the document, when, or that they
+-- agreed to its specific contents."* This table is that record.
+--
+-- ONE ROW PER SIGNATORY, deliberately. PRD-004 puts multi-party counter-signing
+-- in P2 with the instruction to "keep the acceptance record as a row per
+-- signatory so this is additive" — so a second signatory is a second row and no
+-- schema change. `quotes.accepted_acceptance_id` names the operative one.
+--
+-- Declines live here too. A decline has the same evidentiary shape (who, when,
+-- from where, against which document) and differs only in carrying no artifact;
+-- a separate table would duplicate every column to express one boolean.
+--
+-- `agreement_text` is stored VERBATIM rather than as a pointer to the versioned
+-- constant in src/modules/quotes/agreement.ts. A record of what somebody agreed
+-- to that changes when the constant changes is not a record. The version is
+-- stored alongside it so the two can be checked against each other.
+--
+-- `document_sha256` is the load-bearing column. It is the SHA-256 the files
+-- primitive computed over the archived artifact — the same value, copied, never
+-- recomputed — so "the stored artifact's hash equals the hash in the acceptance
+-- record" is true by construction rather than by a second calculation that
+-- could drift.
+
+CREATE TABLE quote_acceptances (
+  acceptance_id     TEXT NOT NULL,            -- qacc_01J...
+  tenant_id         TEXT NOT NULL REFERENCES tenants(tenant_id),
+  quote_id          TEXT NOT NULL,
+  link_id           TEXT NOT NULL,            -- which public link carried it
+  -- 'accepted' | 'declined'. No CHECK, matching this migration's other
+  -- vocabulary columns: validated by Zod in the service.
+  decision          TEXT NOT NULL,
+
+  signatory_name    TEXT NOT NULL,
+  signatory_email   TEXT NOT NULL,
+  -- The PRD-003 contact this signatory was matched to, and which rung of
+  -- resolveContact's chain answered ('role' | 'primary' | 'any'). Both NULL
+  -- when the customer has no contacts at all, which is a normal outcome.
+  contact_id        TEXT,
+  contact_match     TEXT,
+
+  agreement_version TEXT NOT NULL,
+  agreement_text    TEXT NOT NULL,
+
+  -- Accepted only. A decline agrees to nothing, so there is nothing to freeze.
+  document_sha256   TEXT,
+  artifact_file_id  TEXT,
+  signature_file_id TEXT,                     -- purpose = signature, optional
+  decline_reason    TEXT,
+
+  -- PRD-004's audit record: "IP address, user agent, UTC timestamp".
+  ip_address        TEXT,
+  user_agent        TEXT,
+  created_at        TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+
+  PRIMARY KEY (tenant_id, acceptance_id),
+  FOREIGN KEY (tenant_id, quote_id) REFERENCES quotes(tenant_id, quote_id)
+);
+
+CREATE INDEX idx_quote_acceptances_quote
+  ON quote_acceptances (tenant_id, quote_id, created_at);
+
+-- PRD-004: "Conversion to invoice carries a reference to the acceptance
+-- record." Nullable ALTERs — `invoices` has no CHECK to fight and every
+-- existing invoice predates quotes-with-signatures, so both stay NULL there.
+ALTER TABLE invoices ADD COLUMN quote_id            TEXT;
+ALTER TABLE invoices ADD COLUMN quote_acceptance_id TEXT;

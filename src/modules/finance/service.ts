@@ -51,6 +51,16 @@ export interface CreateInvoiceInput {
   due_date?: string;
   /** Optional project this invoice bills for; stamped onto its ledger lines. */
   project_id?: string;
+  /**
+   * The quote this invoice was converted from, and the acceptance record that
+   * authorised it (PRD-004, S9).
+   *
+   * PRD-004: *"Conversion to invoice carries a reference to the acceptance
+   * record"* — so the evidentiary chain survives the conversion. Set only by
+   * `convertQuote`; an invoice raised directly carries neither.
+   */
+  quote_id?: string;
+  quote_acceptance_id?: string;
   lines: { description: string; quantity: number; unit_cents: number }[];
 }
 
@@ -74,10 +84,14 @@ interface InvoiceRow {
   issued_at: string | null;
   sent_at: string | null;
   paid_at: string | null;
+  /** Set when this invoice came from an accepted quote (PRD-004, S9). */
+  quote_id: string | null;
+  quote_acceptance_id: string | null;
 }
 
 const INVOICE_COLUMNS =
-  "invoice_id, customer_id, status, total_cents, amount_due_cents, currency, due_date, issued_at, sent_at, paid_at";
+  "invoice_id, customer_id, status, total_cents, amount_due_cents, currency, due_date, issued_at, sent_at, paid_at, " +
+  "quote_id, quote_acceptance_id";
 
 export async function getInvoice(
   db: D1Database,
@@ -182,8 +196,8 @@ export async function createInvoice(
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO invoices
-         (invoice_id, tenant_id, customer_id, status, amount_due_cents, total_cents, currency, due_date, issued_at, project_id)
-       VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?)`,
+         (invoice_id, tenant_id, customer_id, status, amount_due_cents, total_cents, currency, due_date, issued_at, project_id, quote_id, quote_acceptance_id)
+       VALUES (?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       invoiceId,
       tenantId,
@@ -194,6 +208,8 @@ export async function createInvoice(
       dueDate,
       issuedAt,
       input.project_id ?? null,
+      input.quote_id ?? null,
+      input.quote_acceptance_id ?? null,
     ),
     ...input.lines.map((line, i) =>
       env.DB.prepare(

@@ -22,6 +22,13 @@ export interface Invoice {
   issued_at: string | null;
   sent_at: string | null;
   paid_at: string | null;
+  /**
+   * The quote this invoice was converted from, and the acceptance record that
+   * authorised it (PRD-004, S9). Both null on an invoice raised directly — the
+   * common case, and the reason they are nullable rather than required.
+   */
+  quote_id: string | null;
+  quote_acceptance_id: string | null;
 }
 
 export interface InvoiceLine {
