@@ -36,6 +36,33 @@ export interface RenderQuoteInput {
   contact: Contact | null;
   profile: CompanyProfile | null;
   branding: QuoteBranding;
+  /**
+   * The logo as a `data:` URI, overriding every other source.
+   *
+   * Used when freezing the artifact at acceptance: a document that references
+   * `/files/{id}` stops rendering the moment the tenant deletes that logo, and
+   * PRD-004 requires the archived artifact to render identically after the
+   * tenant changes their branding. Inlining the bytes is what makes it a
+   * genuinely self-contained record of what was signed.
+   */
+  logoDataUri?: string | null;
+}
+
+/**
+ * Where the logo comes from, in precedence order.
+ *
+ *   1. an inlined `data:` URI — the frozen artifact
+ *   2. `logo_file_id` — a file this system owns, served by the public
+ *      `/files/:id` route, which is the only purpose that route will serve
+ *   3. `logo_url` — an externally hosted image, predating file storage
+ *   4. nothing, and the document falls back to the company name in type
+ *
+ * Returned as a plain URL string so the caller escapes it once, in one place.
+ */
+function logoSrc(input: RenderQuoteInput): string | null {
+  if (input.logoDataUri) return input.logoDataUri;
+  if (input.branding.logo_file_id) return `/files/${input.branding.logo_file_id}`;
+  return input.branding.logo_url;
 }
 
 /** A rendered document, in parts, so another surface can wrap it. */
@@ -174,9 +201,19 @@ export function renderQuoteDocument(input: RenderQuoteInput): QuoteDocumentParts
       </section>`
     : "";
 
-  const logo = branding.logo_url
-    ? `<img class="logo" src="${esc(branding.logo_url)}" alt="${sellerName}" />`
+  const logoUrl = logoSrc(input);
+  // No logo is a first-class outcome, not a degraded one: PRD-004 requires the
+  // document to render cleanly with the company name alone.
+  const logo = logoUrl
+    ? `<img class="logo" src="${esc(logoUrl)}" alt="${sellerName}" />`
     : `<div class="logo-text">${sellerName}</div>`;
+
+  // The standing footer — payment terms, bank details, registration numbers.
+  // Distinct from the terms SECTION above it, which is contractual text the
+  // tenant can switch off per template.
+  const footerBlock = branding.footer_text
+    ? `<footer class="doc-footer">${esc(branding.footer_text)}</footer>`
+    : "";
 
   return {
     title: `${esc(quote.quote_number)} · ${sellerName}`,
@@ -235,6 +272,10 @@ export function renderQuoteDocument(input: RenderQuoteInput): QuoteDocumentParts
   .sig-role { font-weight: 600; color: var(--accent); margin-bottom: 32px; }
   .sig-line { border-top: 1px solid #9ca3af; margin-bottom: 6px; }
   .sig-company { color: #6b7280; }
+  .doc-footer {
+    margin-top: 32px; padding-top: 12px; border-top: 1px solid #e5e7eb;
+    font-size: 11px; color: #6b7280; white-space: pre-wrap;
+  }
   @page { size: A4; margin: 14mm; }
   @media print {
     body { background: #fff; }
@@ -275,6 +316,7 @@ export function renderQuoteDocument(input: RenderQuoteInput): QuoteDocumentParts
     ${notesBlock}
     ${termsBlock}
     ${signatureBlock}
+    ${footerBlock}
   </div>`,
   };
 }

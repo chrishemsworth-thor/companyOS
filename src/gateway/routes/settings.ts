@@ -8,6 +8,7 @@ import {
   getQuoteBranding,
   upsertCompanyProfile,
   upsertQuoteBranding,
+  QuoteBrandingError,
 } from "../../modules/quotes/settings";
 import { quoteTemplateConfigSchema } from "../../modules/quotes/branding";
 
@@ -49,9 +50,15 @@ const HEX_COLOR = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
 
 const quoteBrandingSchema = z.object({
   logo_url: z.string().url().max(2000).nullish(),
+  // A file uploaded through POST /v1/files with purpose=quote_logo. Validated
+  // against the caller's tenant and that purpose in the service — see
+  // assertUsableLogo — so a wrong id is a 422 here rather than a broken image
+  // on a document already in front of a customer.
+  logo_file_id: z.string().max(64).nullish(),
   primary_color: z.string().regex(HEX_COLOR, "must be a hex colour").optional(),
   accent_color: z.string().regex(HEX_COLOR, "must be a hex colour").optional(),
   font_family: z.string().max(200).optional(),
+  footer_text: z.string().max(5000).nullish(),
   // Accept a partial config; the service re-validates/defaults through the full schema.
   template_config: quoteTemplateConfigSchema.partial().optional(),
 });
@@ -75,8 +82,15 @@ settings.get("/quote-branding", async (c) => {
 
 settings.put("/quote-branding", zValidator("json", quoteBrandingSchema), async (c) => {
   const tenant = c.get("tenant");
-  const branding = await upsertQuoteBranding(c.env.DB, tenant.tenant_id, c.req.valid("json"));
-  return c.json(branding);
+  try {
+    const branding = await upsertQuoteBranding(c.env.DB, tenant.tenant_id, c.req.valid("json"));
+    return c.json(branding);
+  } catch (err) {
+    if (err instanceof QuoteBrandingError) {
+      return c.json({ error: err.message, code: err.code }, err.httpStatus);
+    }
+    throw err;
+  }
 });
 
 // Marks the first-run onboarding journey as done (finished or dismissed) so

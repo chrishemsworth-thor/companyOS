@@ -54,17 +54,35 @@ export function resolveTemplateConfig(raw: unknown): QuoteTemplateConfig {
 }
 
 export interface QuoteBranding {
+  /** An externally hosted logo. Predates file storage; still honoured. */
   logo_url: string | null;
+  /**
+   * A logo held by the file primitive with `purpose = quote_logo` (PRD-004 P0).
+   * Wins over `logo_url` when both are set: a file this system owns cannot rot
+   * the way somebody else's URL can, and `quote_logo` is the one purpose whose
+   * bytes the credential-less `/files/:id` route will serve — which is what
+   * makes it renderable on the public quote page.
+   */
+  logo_file_id: string | null;
   primary_color: string;
   accent_color: string;
   font_family: string;
+  /**
+   * Free text under the document: payment terms, bank details, registration
+   * numbers. Distinct from `template_config.terms_text`, which is the
+   * contractual terms *section* and is toggleable; this is the standing
+   * footer that appears on every page.
+   */
+  footer_text: string | null;
   template_config: QuoteTemplateConfig;
 }
 
 export const DEFAULT_BRANDING: QuoteBranding = {
   logo_url: null,
+  logo_file_id: null,
   primary_color: "#1a1a2e",
   accent_color: "#0f3460",
   font_family: "Helvetica, Arial, sans-serif",
+  footer_text: null,
   template_config: quoteTemplateConfigSchema.parse({}),
 };

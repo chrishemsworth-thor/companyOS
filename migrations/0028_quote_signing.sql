@@ -5,9 +5,14 @@
 --
 --   (a) rebuild `quotes` — new lifecycle columns, and the status CHECK dropped
 --   (b) `quote_links`     — the public, token-addressed view
---   (c) `quote_acceptances` + the invoice back-reference
---   (d) `quote_branding`  — uploaded logo, footer text
+--   (c) `quote_branding`  — uploaded logo, footer text
+--   (d) `quote_acceptances` + the invoice back-reference
 --   (e) the internal sign-off threshold
+--
+-- (c) lands before (d) even though PRD-004 lists the logo after acceptance.
+-- The artifact frozen at acceptance has to inline the logo to stay renderable
+-- after the tenant changes it, so the logo has to exist first — doing it the
+-- other way round means writing the acceptance path twice.
 --
 -- ============================================================================
 -- (a) REBUILD `quotes`
@@ -179,3 +184,24 @@ CREATE TABLE quote_links (
 CREATE UNIQUE INDEX idx_quote_links_token ON quote_links (token_hash);
 -- "the live link for this quote", which is the only lookup the console does.
 CREATE INDEX idx_quote_links_quote ON quote_links (tenant_id, quote_id, created_at);
+
+-- ============================================================================
+-- (c) `quote_branding` — the uploaded logo and the document footer
+-- ============================================================================
+--
+-- PRD-004 P0: "Logo upload via PRD-000 file storage (purpose = quote_logo),
+-- referenced from tenant branding settings" and "optional accent colour and
+-- footer text (terms, bank details, registration numbers)".
+--
+-- The accent colour already exists (`accent_color`, from 0013) and is already
+-- rendered, so only two columns are new. `logo_url` — an externally hosted
+-- image — stays and keeps working; `logo_file_id` wins when both are set,
+-- because a file this system owns cannot rot the way somebody else's URL can.
+--
+-- No FK to `files`. The files primitive soft-deletes (0021), so a hard
+-- reference would either block a delete or leave a dangling one; the settings
+-- write path validates the id against the caller's tenant and the `quote_logo`
+-- purpose instead, which is where a wrong value can actually be explained.
+
+ALTER TABLE quote_branding ADD COLUMN logo_file_id TEXT;
+ALTER TABLE quote_branding ADD COLUMN footer_text  TEXT;
