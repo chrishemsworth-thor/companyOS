@@ -13,6 +13,13 @@ import type { StructuredResult } from "../src/llm/types";
  *
  * The window itself is tested where it belongs: `agent-guardrails-window.test.ts`
  * (pure, fixed timestamps) and `agent-guardrails.test.ts` (through the DO).
+ *
+ * **Before adding a test that drives the agent, read
+ * [`docs/testing/durable-object-suites.md`](../docs/testing/durable-object-suites.md).**
+ * Two things there will otherwise cost you an afternoon: a frozen clock pinned
+ * near today makes Durable Object alarms fire immediately (miniflare schedules
+ * on the real clock while `Date.now()` is faked), and reading DO storage from the
+ * test realm breaks the pool's isolated-storage snapshots.
  */
 
 /**

@@ -10,6 +10,7 @@ migration `0028_agent_guardrails.sql`.
 | **Guardrails** | `src/agents/guardrails/` | the kill switches, the contact window, the cooldown, the per-invoice cap, the escalation gate, reference integrity, the character cap |
 | **Eval harness** | `evals/` | 28 frozen scenarios, a generic runner, `npm run eval`, the committed baseline |
 | **Observability** | `collections.decision.v2`, `GET /v1/insights/agents` | provider, model, prompt version, tokens, latency, cost, fallback and override rates |
+| **Risk scoring** | `assessRisk` in `src/agents/decision.ts` | the deterministic score, weighted by how the customer actually pays |
 
 **Depends on:** the LLM port (`src/llm/`), the delivery port
 (`src/delivery/`), S6's public holidays and work week ([`leave.md`](leave.md)),
@@ -207,6 +208,34 @@ appear for them.
 
 ---
 
+## The deterministic risk score
+
+The fallback's `risk_score` is `(lateness + ignored reminders) × reliability
+factor`, where the factor comes from DSO against the customer's **own** payment
+terms. So a customer who has always settled within terms scores well below one
+that has never settled anything, at the same number of days late — which is the
+difference between "chase them politely" and "this may not be coming".
+
+Two things the score deliberately does not use:
+
+- **The health band.** `computeHealth` derives `at_risk` partly *from* overdue
+  invoices, so weighting a days-overdue score by the band would multiply the same
+  fact by itself, and a reliable customer with one very late invoice would still
+  read as high risk. The score uses the underlying numbers instead.
+- **Exposure.** Invoices carry their own currency and one context can hold
+  several; there is no base-currency conversion here yet, and scoring MYR 5,000
+  and SGD 5,000 identically would be worse than leaving money out. The model sees
+  the amounts.
+
+The score decides nothing on its own — it is reported on the decision and on
+`customer.risk_flagged`, while the *action* is decided separately and then
+guarded. That is what makes the curve safe to re-tune, and `evals/` is how a
+re-tune gets checked. Its constants (`LATENESS_CURVE`, `RELIABILITY_FACTORS`) are
+named so the calibration conversation has something to point at; none of them is
+validated against real Malaysian SME behaviour yet.
+
+---
+
 ## Settings
 
 | Surface | Gate | Notes |
@@ -231,5 +260,6 @@ with it.
 | A reminder went out at a strange hour | `company_profile.timezone`, then `contact_window_*_hour`; `guardrails/window.ts` decides |
 | No reminders at all for a customer | `customers.agent_paused`, then `agent_settings.enabled`, then the reminder cap; all three log a line naming themselves |
 | Overrides fired on nearly every decision | the prompt, not the guard. PRD-002 holds the override rate under 10% on the eval suite — above that, the prompt is wrong |
+| A risk score looks wrong | `assessRisk` returns its components (`lateness`, `persistence`, `factor`, `band`) so a score can be explained rather than argued with. The likely culprit is the reliability band: check `dso_days` against the customer's `payment_terms_days` |
 | Spend looks too low | `spend.unpriced_decisions` on `GET /v1/insights/agents` |
 | An eval scenario fails after a prompt change | `npm run eval` names the scenarios and the failing check; bump `PROMPT_VERSION` and recapture the baseline once the change is intended |

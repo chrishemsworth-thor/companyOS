@@ -13,6 +13,7 @@
   },
   "context": {
     "customer": null,
+    "payment_reliability": null,
     "billing_contact": null,
     "health": null,
     "overdue_invoices": [

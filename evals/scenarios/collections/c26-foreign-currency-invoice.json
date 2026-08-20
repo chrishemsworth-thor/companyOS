@@ -18,6 +18,10 @@
       "email": "ap@sinar.sg",
       "phone": "+6598887777"
     },
+    "payment_reliability": {
+      "dso_days": 44,
+      "payment_terms_days": 45
+    },
     "billing_contact": {
       "contact_id": "con_eval_1",
       "name": "Nurul Aziz",

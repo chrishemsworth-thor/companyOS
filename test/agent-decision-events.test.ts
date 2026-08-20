@@ -124,7 +124,7 @@ describe("the registry", () => {
       contact_match: null,
       provider: "anthropic",
       model: "claude-opus-4-8",
-      prompt_version: "collections-2026-08-19",
+      prompt_version: "collections-2026-08-20",
       input_tokens: 1_200,
       output_tokens: 180,
       latency_ms: 900,
@@ -184,7 +184,7 @@ describe("what the agent actually emits", () => {
   async function drive(): Promise<void> {
     await env.DB.prepare(
       `INSERT INTO invoices (invoice_id, tenant_id, customer_id, status, amount_due_cents, currency, due_date)
-       VALUES ('inv_decv2_1', ?, ?, 'overdue', 250000, 'MYR', '2026-06-01')`,
+       VALUES ('inv_decv2_1', ?, ?, 'overdue', 250000, 'MYR', '2029-06-01')`,
     )
       .bind(TENANT_ID, CUSTOMER_ID)
       .run();
@@ -208,7 +208,7 @@ describe("what the agent actually emits", () => {
 
   it("emits a schema-valid v2 decision carrying provider, model, tokens and cost", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-19T04:00:00Z"));
+    vi.setSystemTime(new Date("2029-08-15T04:00:00Z"));
     llmMock.mockResolvedValue({
       risk_score: 61,
       action: "remind",
@@ -228,7 +228,7 @@ describe("what the agent actually emits", () => {
       source: "llm",
       provider: "anthropic",
       model: "claude-opus-4-8",
-      prompt_version: "collections-2026-08-19",
+      prompt_version: "collections-2026-08-20",
       input_tokens: 1_200,
       output_tokens: 180,
       // 1,200 in + 180 out on claude-opus-4-8 at $5/$25 per MTok.
@@ -242,7 +242,7 @@ describe("what the agent actually emits", () => {
 
   it("records the fallback and its reason when no model is configured", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-19T04:00:00Z"));
+    vi.setSystemTime(new Date("2029-08-15T04:00:00Z"));
     setLlmProviderFactoryForTests(() => null);
 
     await drive();
@@ -263,7 +263,7 @@ describe("what the agent actually emits", () => {
 
   it("records which guardrails fired on the decision itself", async () => {
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-19T04:00:00Z"));
+    vi.setSystemTime(new Date("2029-08-15T04:00:00Z"));
     llmMock.mockResolvedValue({
       risk_score: 99,
       action: "escalate",

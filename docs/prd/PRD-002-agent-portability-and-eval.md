@@ -202,12 +202,21 @@ All four are now measurable rather than aspirational: the first from
   regression test. The cost — a fixture rotting against the context type — is paid
   by schema-validating every fixture on load.
 
-**New, from running the harness:** the deterministic fallback's risk score
-saturates. It is `min(100, days_overdue * 5 + reminders * 10)`, so anything past
-about 20 days scores 100 and a 20-day-late invoice from a reliable customer reads
-identically to a 200-day write-off. S10 recorded it rather than fixing it —
-re-tuning the risk curve changes agent behaviour and wants a product decision.
-See `evals/README.md`.
+**Found by the harness, then fixed (S10):** the deterministic fallback's risk
+score saturated — `min(100, days_overdue * 5 + reminders * 10)` hit 100 at 20
+days, so a 20-day-late invoice from a customer who had paid twelve of twelve on
+time read identically to a 200-day write-off. It is now
+`(lateness + ignored reminders) × reliability factor`, where the factor comes
+from DSO against the customer's **own** terms; the same payment record was added
+to the prompt so the model weighs it too. Two limitations are recorded rather
+than hidden: exposure is absent (no base-currency conversion, and one context can
+hold several currencies), and deviation from a customer's own payment habit is
+not modelled. See `evals/README.md`.
+
+**Still open (product):** the reliability factors and the lateness curve are
+uncalibrated against real Malaysian SME behaviour. They are named constants and
+the eval suite checks a change to them, so this is cheap to revisit with a design
+partner.
 
 ## Timeline Considerations
 

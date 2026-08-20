@@ -30,6 +30,18 @@ export const collectionsContextSchema = z.object({
       phone: nullableString,
     })
     .nullable(),
+  /**
+   * How the customer pays (PRD-003's DSO against their own terms). Required but
+   * nullable: a frozen fixture must SAY what the payment record is, because the
+   * deterministic risk score weighs it — a fixture that omitted it would score
+   * as "unproven" by accident rather than by intent.
+   */
+  payment_reliability: z
+    .object({
+      dso_days: z.number().nullable(),
+      payment_terms_days: z.number().int().min(0),
+    })
+    .nullable(),
   billing_contact: z
     .object({
       contact_id: z.string(),

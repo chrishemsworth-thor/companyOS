@@ -81,21 +81,61 @@ its risk band is a known blind spot. A declared blind spot is reported as a
 
 ## What the fallback baseline says today
 
-22 pass, 6 declared gaps, 0 failures. The gaps are worth reading — they are the
-first thing this harness found:
+26 pass, 2 declared gaps, 0 failures. The two gaps are judgement the heuristic
+cannot do:
 
-- **`c05`, `c08`** — the heuristic has no notion of "already paid" or "disputed",
-  so it reminds where a model should wait. Both are judgement, not arithmetic.
-- **`c03`, `c06`, `c07`, `c24`** — the fallback's **risk score saturates**.
-  It is `min(100, days_overdue * 5 + reminders * 10)`, so anything past about 20
-  days scores 100, and it cannot land in a band. A 20-day-late invoice from a
-  customer who always pays reads as identical to a 200-day write-off.
+- **`c05`** — a payment arrived this morning and the sweep has not caught up. The
+  heuristic reminds; a model should wait.
+- **`c08`** — a disputed invoice with a credit note pending. The heuristic
+  reminds for the full amount, because it has no notion of a dispute.
 
-That second one is a real defect in the fallback, surfaced by the eval rather
-than by a customer — which is the point of the exercise. **It is deliberately
-not fixed in S10**: re-tuning collections' risk curve changes agent behaviour and
-wants a product decision, not a guardrail session. The action and message
-expectations on those scenarios stay enforced, so the gap is scoped to the score.
+Both are about the *action*, not the score, and both are declared in their
+fixture with a note. Neither is fixable by arithmetic.
+
+### The finding this harness paid for
+
+The first fallback run turned up a real defect: **the risk score saturated.** It
+was `min(100, days_overdue * 5 + reminders * 10)`, so anything past about 20 days
+scored 100 and a 20-day-late invoice from a customer who had paid twelve of
+twelve on time read identically to a 200-day write-off from somebody who had
+never paid at all.
+
+It is now weighted by how the customer actually pays
+(`assessRisk` in `src/agents/decision.ts`):
+
+```
+score = (lateness + ignored reminders) × reliability factor
+```
+
+- **lateness** — a curve, not a line, capped at 55 so lateness alone can never
+  produce a maximum score. Shaped so 60–90 days reads as notable rather than
+  alarming, which is the Malaysian norm.
+- **ignored reminders** — up to 20. The customer's own behaviour in response to
+  us, which is the strongest evidence a heuristic has.
+- **reliability factor** — from DSO against the customer's *own* terms:
+  `always_pays` 0.55, `pays_late` 0.75, `chronically_late` 0.9, `unproven` 1.0,
+  `never_paid` 1.25. Nothing settled *and* no chance to settle yet is `unproven`,
+  not `never_paid`: unknown must not read as bad.
+
+The scenarios show the gradient: `c06` (reliable, 20 days late) scores **7**,
+`c03` (unproven, 30 days) **27**, `c24` (chronically late but always pays, 31
+days) **18**, and `c04` (never paid, 90 days, three reminders ignored) **75**.
+
+**Two limitations, recorded rather than hidden:**
+
+1. **Exposure is not in the score.** Amount owed obviously belongs in a risk
+   judgement, but invoices carry their own currency and one context can hold
+   several; scoring MYR 5,000 and SGD 5,000 the same would be worse than leaving
+   money out until there is a base-currency conversion to do it properly. The
+   model sees the amounts and can weigh them.
+2. **Deviation from the customer's own habit is not modelled.** A customer 75
+   days late against their own 62-day average is treated the same as one 75 days
+   late on 30-day terms. That is the more sophisticated signal, and it is the
+   obvious next refinement.
+
+The factors are uncalibrated against real Malaysian SME behaviour and are meant
+to be argued with. They are named constants for exactly that reason, and this
+suite is how a change to them gets checked.
 
 ## Prompt versions
 
@@ -107,6 +147,7 @@ prompt builder changes, and add a line here.**
 | Version | Change |
 |---|---|
 | `collections-2026-08-19` | First versioned prompt. Contents as shipped through S8: tone rules, escalation guidance, contact-role addressing (PRD-003), account-health as a tone signal only. |
+| `collections-2026-08-20` | Added the payment record — DSO against the customer's own terms — to the context, and a rule telling the model to weigh it rather than the days overdue alone ("in Malaysia, paying 60–90 days after invoice is common and is not by itself alarming"). Same change as the deterministic score's reliability weighting, so the two paths reason from the same fact. |
 
 `prompts/broken.ts` holds the deliberately broken prompt for PRD-002's second
 acceptance criterion — broken the way a real regression is broken (a constraint

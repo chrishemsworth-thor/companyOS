@@ -198,18 +198,22 @@ describe("LLM-driven decisions", () => {
    * `agent-guardrails.test.ts`.
    */
   it("escalate: emits customer.risk_flagged.v1 and marks the stage escalated", async () => {
-    // 2026-06-20 due date → 66 days past due, over the 60-day default.
+    // The invoice is due 2026-06-20 and the clock is frozen in 2029, so it is far
+    // past the 60-day default. The clock is pinned years ahead on purpose: a
+    // frozen "now" in the real past makes the DO's next alarm fire immediately,
+    // because miniflare schedules alarms on the real clock while `Date.now()` is
+    // faked — see the note in test/agent-guardrails.test.ts.
     vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-08-25T10:00:00Z"));
+    vi.setSystemTime(new Date("2029-08-15T10:00:00Z"));
 
     const invoiceId = await createOverdueInvoice(300_000);
     llmMock.mockResolvedValue(remind(invoiceId));
     await agentStub().onEvent(overdueEnvelope(invoiceId, 300_000));
 
-    vi.setSystemTime(new Date("2026-08-26T10:00:01Z"));
+    vi.setSystemTime(new Date("2029-08-16T10:00:01Z"));
     await agentStub().onEvent(overdueEnvelope(invoiceId, 300_000));
 
-    vi.setSystemTime(new Date("2026-08-27T10:00:02Z"));
+    vi.setSystemTime(new Date("2029-08-17T10:00:02Z"));
     llmMock.mockResolvedValue({
       risk_score: 90,
       action: "escalate",

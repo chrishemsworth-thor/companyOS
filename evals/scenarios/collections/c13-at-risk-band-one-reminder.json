@@ -1,7 +1,7 @@
 {
   "id": "c13-at-risk-band-one-reminder",
   "title": "Health band at_risk, but only one reminder has gone out",
-  "covers": "The health band is a tone signal, never a licence to escalate early (PRD-003 / C9)",
+  "covers": "The health band is a tone signal, never a licence to escalate early (PRD-003 / C9). The risk band is deliberately wide: this customer is chronically late AND has stopped paying, and the score does not yet separate 'late against their own 62-day habit' from 'late against 30-day terms'",
   "now": "2026-08-19T04:00:00Z",
   "llm": {
     "mode": "live"
@@ -17,6 +17,10 @@
       "name": "Sinar Teknologi Sdn Bhd",
       "email": "ap@sinar.example",
       "phone": "+60123456789"
+    },
+    "payment_reliability": {
+      "dso_days": 62,
+      "payment_terms_days": 30
     },
     "billing_contact": {
       "contact_id": "con_eval_1",
@@ -51,7 +55,7 @@
       "remind"
     ],
     "risk_score": {
-      "min": 40,
+      "min": 30,
       "max": 100
     },
     "message": {

@@ -67,7 +67,7 @@ function decisionEvent(over: DecisionOverrides = {}) {
       contact_match: null,
       provider: over.provider === undefined ? "anthropic" : over.provider,
       model: over.model === undefined ? "claude-opus-4-8" : over.model,
-      prompt_version: "collections-2026-08-19",
+      prompt_version: "collections-2026-08-20",
       input_tokens: over.input_tokens === undefined ? 1_200 : over.input_tokens,
       output_tokens: over.output_tokens === undefined ? 180 : over.output_tokens,
       latency_ms: over.latency_ms ?? 900,
@@ -160,7 +160,7 @@ describe("the v2 decision payload in events_log", () => {
     expect(row).toEqual({
       provider: "anthropic",
       model: "claude-opus-4-8",
-      prompt_version: "collections-2026-08-19",
+      prompt_version: "collections-2026-08-20",
       // PRD-002's P2 outcome scoring is a query over this, not a migration.
       invoice_id: "inv_ins_1",
     });
@@ -287,13 +287,13 @@ describe("GET /v1/insights/agents", () => {
       {
         provider: "anthropic",
         model: "claude-opus-4-8",
-        prompt_version: "collections-2026-08-19",
+        prompt_version: "collections-2026-08-20",
         decisions: 2,
       },
       {
         provider: "openai",
         model: "gpt-5",
-        prompt_version: "collections-2026-08-19",
+        prompt_version: "collections-2026-08-20",
         decisions: 1,
       },
     ]);

@@ -266,7 +266,7 @@ describe("what a run reports", () => {
     expect(report.scenarios[0]!.observation).toMatchObject({
       provider: "anthropic",
       model: "claude-opus-4-8",
-      prompt_version: "collections-2026-08-19",
+      prompt_version: "collections-2026-08-20",
       canned: false,
     });
     expect(report.mode).toBe("live");

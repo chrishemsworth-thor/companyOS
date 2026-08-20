@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
+import { env } from "cloudflare:test";
 import {
   contactWindow,
   DEFAULT_AGENT_POLICY,
+  loadHolidayLookup,
   DEFAULT_TIME_ZONE,
   loadAgentPolicy,
   parseWorkWeek,
@@ -259,5 +261,104 @@ describe("the fallback guarantee, at the policy layer", () => {
       contact_cooldown_hours: 24,
       max_message_chars: 2000,
     });
+  });
+});
+
+describe("the shipped Malaysian calendar, through the guard's own loader", () => {
+  /**
+   * `loadHolidayLookup` is where the guard meets S6: it resolves the shipped
+   * calendar merged with the tenant's own rows, on the national scope. Asserted
+   * here rather than through the agent because it needs no Durable Object — and
+   * because the DO-level window tests are pinned to 2029, a year the shipped
+   * calendar deliberately does not cover.
+   */
+  const TENANT = "biz_window_holidays";
+
+  beforeAll(async () => {
+    await env.DB.prepare(
+      "INSERT OR IGNORE INTO tenants (tenant_id, name, api_key_hash) VALUES (?, ?, ?)",
+    )
+      .bind(TENANT, "Holiday Window SME", "hash_window_holidays")
+      .run();
+  });
+
+  it("finds a shipped national holiday", async () => {
+    // 2026-08-31 is National Day in the shipped calendar; the tenant has said
+    // nothing about it.
+    const holidays = await loadHolidayLookup(
+      env.DB,
+      TENANT,
+      "Asia/Kuala_Lumpur",
+      at("2026-08-01T00:00:00Z"),
+    );
+    expect(holidays.isHoliday("2026-08-31")).toBe(true);
+    expect(holidays.isHoliday("2026-08-19")).toBe(false);
+  });
+
+  it("ignores a holiday that only applies to one state", async () => {
+    // 2026-08-24 is the Melaka governor's birthday. Leave asks "is this
+    // employee's state closed"; collections asks "is the country closed", and a
+    // Melaka holiday is no reason to withhold a reminder from a customer in
+    // Penang.
+    const holidays = await loadHolidayLookup(
+      env.DB,
+      TENANT,
+      "Asia/Kuala_Lumpur",
+      at("2026-08-01T00:00:00Z"),
+    );
+    expect(holidays.isHoliday("2026-08-24")).toBe(false);
+  });
+
+  it("honours a tenant's own addition and its suppression of a shipped one", async () => {
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT OR REPLACE INTO public_holidays (holiday_id, tenant_id, holiday_date, name, scope, observed)
+         VALUES ('hol_win_add', ?, '2026-09-01', 'Company anniversary', 'national', 1)`,
+      ).bind(TENANT),
+      // The tenant trades through National Day.
+      env.DB.prepare(
+        `INSERT OR REPLACE INTO public_holidays (holiday_id, tenant_id, holiday_date, name, scope, observed)
+         VALUES ('hol_win_sup', ?, '2026-08-31', 'We are open', 'national', 0)`,
+      ).bind(TENANT),
+    ]);
+
+    const holidays = await loadHolidayLookup(
+      env.DB,
+      TENANT,
+      "Asia/Kuala_Lumpur",
+      at("2026-08-01T00:00:00Z"),
+    );
+    expect(holidays.isHoliday("2026-09-01")).toBe(true);
+    expect(holidays.isHoliday("2026-08-31")).toBe(false);
+  });
+
+  it("reports no holidays for a year the calendar does not cover, rather than every day", async () => {
+    // The fallback guarantee: "no data" must not read as "suppress everything",
+    // which would stop collections for a whole year, silently, in January.
+    const holidays = await loadHolidayLookup(
+      env.DB,
+      TENANT,
+      "Asia/Kuala_Lumpur",
+      at("2035-06-13T00:00:00Z"),
+    );
+    for (const date of ["2035-01-01", "2035-06-13", "2035-08-31", "2035-12-25"]) {
+      expect(holidays.isHoliday(date), date).toBe(false);
+    }
+  });
+
+  it("still applies a tenant's own rows in an uncovered year", async () => {
+    await env.DB.prepare(
+      `INSERT OR REPLACE INTO public_holidays (holiday_id, tenant_id, holiday_date, name, scope, observed)
+       VALUES ('hol_win_2035', ?, '2035-06-14', 'Company shutdown', 'national', 1)`,
+    )
+      .bind(TENANT)
+      .run();
+    const holidays = await loadHolidayLookup(
+      env.DB,
+      TENANT,
+      "Asia/Kuala_Lumpur",
+      at("2035-06-13T00:00:00Z"),
+    );
+    expect(holidays.isHoliday("2035-06-14")).toBe(true);
   });
 });

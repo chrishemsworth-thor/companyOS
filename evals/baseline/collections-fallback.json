@@ -1,7 +1,7 @@
 {
   "agent": "collections",
   "mode": "fallback",
-  "prompt_version": "collections-2026-08-19",
+  "prompt_version": "collections-2026-08-20",
   "model": null,
   "scenarios": [
     {
@@ -18,7 +18,7 @@
     },
     {
       "id": "c03-thirty-days-one-reminder",
-      "status": "gap",
+      "status": "pass",
       "action": "remind",
       "source": "fallback"
     },
@@ -36,13 +36,13 @@
     },
     {
       "id": "c06-live-deal-small-overdue",
-      "status": "gap",
+      "status": "pass",
       "action": "remind",
       "source": "fallback"
     },
     {
       "id": "c07-open-support-ticket",
-      "status": "gap",
+      "status": "pass",
       "action": "remind",
       "source": "fallback"
     },
@@ -144,7 +144,7 @@
     },
     {
       "id": "c24-chronically-late-always-pays",
-      "status": "gap",
+      "status": "pass",
       "action": "remind",
       "source": "fallback"
     },
@@ -175,9 +175,9 @@
   ],
   "totals": {
     "scenarios": 28,
-    "passed": 22,
+    "passed": 26,
     "failed": 0,
-    "gaps": 6,
+    "gaps": 2,
     "errors": 0
   }
 }

@@ -26,7 +26,7 @@ export const MAX_MESSAGE_CHARS = 2000;
  * and add a line to the changelog in `evals/README.md`. A baseline captured
  * under one version says nothing about another.
  */
-export const PROMPT_VERSION = "collections-2026-08-19";
+export const PROMPT_VERSION = "collections-2026-08-20";
 
 export const collectionsDecisionSchema = z.object({
   risk_score: z.number().int().min(0).max(100),
@@ -83,9 +83,43 @@ export interface BillingContactContext {
   matched: "role" | "primary" | "any";
 }
 
+/**
+ * How this customer pays, as facts rather than a verdict.
+ *
+ * Both numbers are already computed by `getCustomerSignals` (PRD-003) on the
+ * one query the agent's context assembly already makes — they were being thrown
+ * away. They are the only inputs that say anything about *reliability* as
+ * opposed to *lateness*, and keeping them as numbers (rather than passing S8's
+ * health band) matters twice over:
+ *
+ *  1. **The band would double-count.** `computeHealth` derives `at_risk` partly
+ *     FROM overdue invoices, so weighting a days-overdue score by the band
+ *     would multiply the same fact by itself and a reliable customer with one
+ *     very late invoice would still read as high risk.
+ *  2. **DSO against the customer's OWN terms is the honest comparison.** A
+ *     customer on 60-day terms paying in 55 days is paying on time, and S8
+ *     already resolves those terms the same way invoice due dates do.
+ */
+export interface PaymentReliability {
+  /**
+   * Mean days from issue to payment over settled invoices. **Null means nothing
+   * has ever been settled** — which is not the same as "pays badly", and the
+   * scoring below is careful about the difference.
+   */
+  dso_days: number | null;
+  /** The customer's own terms; `dso_days` is judged against these. */
+  payment_terms_days: number;
+}
+
 export interface CollectionsContext {
   customer: { customer_id: string; name: string; email: string | null; phone: string | null } | null;
   billing_contact: BillingContactContext | null;
+  /**
+   * Null only when there is no customer record at all. Consumed by the
+   * deterministic risk score and shown to the model, so both weigh a reliable
+   * payer differently from an unknown one.
+   */
+  payment_reliability: PaymentReliability | null;
   /**
    * Derived health (PRD-003). Present in the context so the agent can reason
    * about the whole account rather than one invoice — **it is a signal, not a
@@ -112,6 +146,7 @@ Rules:
 - Recommend "escalate" only after reminders have been ignored or the exposure is serious; escalation sends a firm final notice and flags the customer to the business owner.
 - Recommend "wait" when contacting now would do more harm than good (e.g. payment just received days ago, or contact was very recent).
 - A customer with a significant open deal in the pipeline gets a gentler tone — do not burn a live sale over a small overdue amount.
+- Weigh the payment record, not just the days overdue. A customer who has always settled within terms being late once is a low risk with a probable explanation; a customer who has never settled anything is a high risk at the same number of days. In Malaysia, paying 60-90 days after invoice is common and is not by itself alarming.
 - State amounts with their currency exactly as given. Never invent invoice numbers, amounts, or dates.
 - Keep the message under 150 words, plain text, no subject line, signed off as "the accounts team".`;
 
@@ -154,6 +189,20 @@ export function buildDecisionPrompt(
     );
   }
 
+  // How they pay, separately from how late this invoice is. The model sees the
+  // same two facts the deterministic score weighs, and for the same reason:
+  // "60 days late from a customer who always pays" and "60 days late from a
+  // customer who has never paid" are not the same situation, and a risk score
+  // that cannot tell them apart is not worth reporting.
+  if (context.payment_reliability) {
+    const { dso_days, payment_terms_days } = context.payment_reliability;
+    lines.push(
+      dso_days === null
+        ? `\nPayment record: nothing settled yet; terms are ${payment_terms_days} days.`
+        : `\nPayment record: settles in ${Math.round(dso_days)} days on average against ${payment_terms_days}-day terms.`,
+    );
+  }
+
   lines.push(`\nOverdue invoices (${context.overdue_invoices.length}):`);
   for (const inv of context.overdue_invoices) {
     lines.push(
@@ -191,6 +240,154 @@ export function buildDecisionPrompt(
 }
 
 /**
+ * How a customer pays, as one word. Ordered least to most worrying, except
+ * `unproven`, which sits in the middle on purpose: we know nothing, and
+ * "unknown" must not read as "bad".
+ */
+export type ReliabilityBand =
+  /** Settles within its own terms. */
+  | "always_pays"
+  /** Settles a little late — inside the tolerance S8 already uses. */
+  | "pays_late"
+  /** Always late, always pays. The Malaysian SME norm, and not a write-off. */
+  | "chronically_late"
+  /** Nothing settled yet, and not enough time to judge. A new customer. */
+  | "unproven"
+  /** Invoiced, given a full cycle plus tolerance, and has settled nothing. */
+  | "never_paid";
+
+/**
+ * How much the payment record moves the score, as a multiplier on the
+ * lateness-and-persistence subtotal.
+ *
+ * A multiplier rather than an addition so reliability *scales* the concern
+ * instead of cancelling it: a customer who has always paid, 90 days late, still
+ * scores meaningfully above zero — being reliable is a reason to chase politely,
+ * not a reason to ignore the money.
+ *
+ * The numbers are uncalibrated against real Malaysian SME behaviour and are
+ * meant to be argued with; they are named here so the argument has something to
+ * point at, and `evals/` is how a change to them gets checked.
+ */
+export const RELIABILITY_FACTORS: Record<ReliabilityBand, number> = {
+  always_pays: 0.55,
+  pays_late: 0.75,
+  chronically_late: 0.9,
+  unproven: 1,
+  never_paid: 1.25,
+};
+
+/**
+ * The same 15-day grace S8's health module allows before calling somebody a
+ * slow payer. One tolerance, one place to change it.
+ */
+const DSO_TOLERANCE_DAYS = 15;
+
+export function reliabilityBand(
+  reliability: PaymentReliability | null,
+  maxDaysOverdue: number,
+): ReliabilityBand {
+  // No customer record at all (the degenerate context): judge nothing.
+  if (!reliability) return "unproven";
+  const { dso_days, payment_terms_days } = reliability;
+  const tolerance = payment_terms_days + DSO_TOLERANCE_DAYS;
+
+  if (dso_days === null) {
+    // Never settled anything. Whether that is damning depends on whether they
+    // have HAD the chance: a customer whose first invoice is a week late is
+    // unproven, not delinquent.
+    return maxDaysOverdue > tolerance ? "never_paid" : "unproven";
+  }
+  if (dso_days <= payment_terms_days) return "always_pays";
+  if (dso_days <= tolerance) return "pays_late";
+  return "chronically_late";
+}
+
+/**
+ * Days-overdue → points, on a curve rather than a straight line.
+ *
+ * The old formula was `days * 5`, which hit the 100 ceiling at 20 days and made
+ * every invoice past three weeks look identical — a 20-day-late invoice from a
+ * reliable customer scored the same as a 200-day write-off. The breakpoints
+ * below are shaped to Malaysian SME reality, where **60–90 days late is common
+ * and not by itself alarming**, and they stop at 55 so lateness alone can never
+ * produce a maximum score.
+ */
+const LATENESS_CURVE: readonly [days: number, points: number][] = [
+  [0, 0],
+  [7, 5],
+  [30, 20],
+  [60, 30],
+  [90, 40],
+  [180, 50],
+  [365, 55],
+];
+
+export function latenessPoints(daysOverdue: number): number {
+  const days = Math.max(0, daysOverdue);
+  const last = LATENESS_CURVE[LATENESS_CURVE.length - 1]!;
+  if (days >= last[0]) return last[1];
+  for (let i = 1; i < LATENESS_CURVE.length; i++) {
+    const [upperDays, upperPoints] = LATENESS_CURVE[i]!;
+    if (days > upperDays) continue;
+    const [lowerDays, lowerPoints] = LATENESS_CURVE[i - 1]!;
+    const span = upperDays - lowerDays;
+    const progress = span === 0 ? 0 : (days - lowerDays) / span;
+    return lowerPoints + progress * (upperPoints - lowerPoints);
+  }
+  return last[1];
+}
+
+/**
+ * Reminders about *this* invoice that went unanswered. Ignored contact is the
+ * strongest evidence available to a heuristic — it is the customer's own
+ * behaviour in response to us, rather than an inference about them.
+ */
+const PERSISTENCE_POINTS: readonly number[] = [0, 7, 13, 20];
+
+export function persistencePoints(remindersSent: number): number {
+  const i = Math.max(0, Math.min(remindersSent, PERSISTENCE_POINTS.length - 1));
+  return PERSISTENCE_POINTS[i]!;
+}
+
+export interface RiskAssessment {
+  score: number;
+  band: ReliabilityBand;
+  /** The components, so a surprising score can be explained rather than argued with. */
+  lateness: number;
+  persistence: number;
+  factor: number;
+}
+
+/**
+ * The deterministic risk score: how late, how ignored, weighted by how this
+ * customer actually pays.
+ *
+ * **Exposure is deliberately absent.** Amount owed obviously belongs in a risk
+ * judgement, but invoices carry their own currency and this context can hold
+ * several; scoring MYR 5,000 and SGD 5,000 as the same number would be worse
+ * than leaving money out until there is a base-currency conversion to do it
+ * properly. The model, which sees the amounts and the currencies, can and does
+ * weigh them — this is the floor beneath it, not a replacement for it.
+ */
+export function assessRisk(
+  context: CollectionsContext,
+  state: AgentStateSummary,
+): RiskAssessment {
+  const maxDays = context.overdue_invoices.reduce((max, i) => Math.max(max, i.days_overdue), 0);
+  const band = reliabilityBand(context.payment_reliability, maxDays);
+  const factor = RELIABILITY_FACTORS[band];
+  const lateness = latenessPoints(maxDays);
+  const persistence = persistencePoints(state.reminders_sent);
+  // Floored at 1 while anything is overdue. Rounding a reliable customer one day
+  // late down to 0 would say "will certainly pay" — and 0 is more useful as the
+  // reserved value for "nothing is due at all".
+  const raw = Math.round((lateness + persistence) * factor);
+  const score = Math.min(100, Math.max(context.overdue_invoices.length > 0 ? 1 : 0, raw));
+  return { score, band, lateness, persistence, factor };
+}
+
+/**
  * Deterministic fallback: the Phase 1 heuristic and template, kept so
  * collections never silently stops when the LLM is unconfigured or down.
  */
@@ -201,11 +398,14 @@ export function fallbackDecision(
   if (context.overdue_invoices.length === 0) {
     return { risk_score: 0, action: "wait", channel: "email", message: "(nothing due)" };
   }
-  const maxDays = Math.max(...context.overdue_invoices.map((i) => i.days_overdue));
-  const risk_score = Math.min(100, maxDays * 5 + state.reminders_sent * 10);
   const action =
     state.escalation_stage !== "none" && state.reminders_sent >= 2 ? "escalate" : "remind";
-  return { risk_score, action, channel: "email", message: templateMessage(context, action) };
+  return {
+    risk_score: assessRisk(context, state).score,
+    action,
+    channel: "email",
+    message: templateMessage(context, action),
+  };
 }
 
 /**

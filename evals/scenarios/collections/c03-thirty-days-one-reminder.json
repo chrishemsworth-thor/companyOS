@@ -18,6 +18,10 @@
       "email": "ap@sinar.example",
       "phone": "+60123456789"
     },
+    "payment_reliability": {
+      "dso_days": null,
+      "payment_terms_days": 30
+    },
     "billing_contact": {
       "contact_id": "con_eval_1",
       "name": "Nurul Aziz",
@@ -78,10 +82,7 @@
     }
   },
   "fallback": {
-    "handled": false,
-    "missing": [
-      "risk_score"
-    ],
-    "note": "the heuristic's risk score saturates at 100 from about 20 days overdue (min(100, days*5 + reminders*10)), so it cannot land in a band; the action and message expectations still apply"
+    "handled": true,
+    "note": "the weighted risk score lands in a band; it did not before S10's re-tuning"
   }
 }

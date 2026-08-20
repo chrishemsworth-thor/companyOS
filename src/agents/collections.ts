@@ -146,7 +146,8 @@ export class CollectionsAgent extends DurableObject<Env> {
       (id) => id !== payload.invoice_id,
     );
     if (state.open_overdue_invoices.length === 0) {
-      // Loop closed: reset and stop re-checking.
+      // Loop closed: reset and stop re-checking. This is the ONLY thing that
+      // stops the agent — every invoice settled.
       state.risk_score = 0;
       state.escalation_stage = "none";
       await this.ctx.storage.deleteAlarm();
@@ -523,6 +524,15 @@ export class CollectionsAgent extends DurableObject<Env> {
       band: computed.band,
       reasons: computed.reasons.map((r) => r.detail),
     };
+    // The same query already knows how this customer pays. Both numbers feed the
+    // deterministic risk score and the prompt, so a customer who has always paid
+    // is not scored like one who has never paid at all — and neither is inferred
+    // from the health band, which is itself derived from the overdue invoices
+    // and would double-count them.
+    const payment_reliability = {
+      dso_days: signals.dso_days,
+      payment_terms_days: signals.payment_terms_days,
+    };
 
     const { results: recent_activities } = await db
       .prepare(
@@ -545,6 +555,7 @@ export class CollectionsAgent extends DurableObject<Env> {
       context: {
         customer,
         billing_contact,
+        payment_reliability,
         health,
         overdue_invoices,
         recent_payments,
@@ -555,7 +566,7 @@ export class CollectionsAgent extends DurableObject<Env> {
     };
   }
 
-  /** Read-only snapshot for debugging/insights. */
+  /** Read-only snapshot for debugging/insights. Never writes. */
   async snapshot(): Promise<AgentState | null> {
     return this.getState();
   }
