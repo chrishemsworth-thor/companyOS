@@ -4,6 +4,7 @@ import worker from "../src/index";
 import { sha256Hex } from "../src/gateway/middleware/auth";
 import { createUser } from "../src/auth/users";
 import { decide } from "../src/modules/approvals/service";
+import { canTransitionQuote } from "../src/modules/quotes/types";
 import { ensureEventBus } from "../src/queue/direct";
 import type { Env } from "../src/env";
 
@@ -376,5 +377,75 @@ describe("the decision", () => {
     ).json()) as QuoteResp;
     expect(after.status).toBe("draft");
     expect(after.sign_off_approval_id).toBeNull();
+  });
+});
+
+describe("an approved quote never goes back", () => {
+  /**
+   * The product rule, stated after the phase shipped: an approved quote does not
+   * return to `draft`. Changing it means restarting the quote — a new version,
+   * which goes through the approval flow again from scratch.
+   *
+   * Worth pinning as its own round-trip test rather than trusting the pieces:
+   * three separate mechanisms have to hold together for it to be true (the
+   * transition table, the editability rule, and `createQuoteVersion` not
+   * carrying the old sign-off forward), and each is independently plausible to
+   * break.
+   */
+  it("locks after approval, and a new version must be approved again", async () => {
+    await setThreshold(THRESHOLD_CENTS);
+    const v1 = await quoteWorth(THRESHOLD_CENTS * 2);
+    const parked = (await (await send(v1.quote_id)).json()) as QuoteResp;
+
+    await decide(serviceEnv(), TENANT_ID, parked.sign_off_approval_id!, {
+      actor_user_id: adminUserId,
+      actor_role: "admin",
+      decision: "approved",
+    });
+
+    // Approved and sent. There is no route back: not by editing...
+    const edit = await fetchWorker(`/v1/quotes/${v1.quote_id}`, {
+      method: "PATCH",
+      headers: auth,
+      body: JSON.stringify({ notes: "quietly changing the deal" }),
+    });
+    expect(edit.status).toBe(409);
+    expect(((await edit.json()) as { code: string }).code).toBe("locked");
+
+    // ...and not by re-sending, which is the only other way a quote moves
+    // through the sign-off gate.
+    expect((await send(v1.quote_id)).status).toBe(409);
+
+    // The sanctioned route is a new version, which starts clean: no inherited
+    // approval, so the gate applies to it on its own merits.
+    const v2 = (await (
+      await fetchWorker(`/v1/quotes/${v1.quote_id}/version`, { method: "POST", headers: auth })
+    ).json()) as QuoteResp;
+    expect(v2.status).toBe("draft");
+    expect(v2.sign_off_approval_id).toBeNull();
+    expect(v2.sign_off_comment).toBeNull();
+
+    const resent = (await (await send(v2.quote_id)).json()) as QuoteResp;
+    expect(resent.status).toBe("pending_approval");
+    // A NEW approval, not the one that already said yes to the old price.
+    expect(resent.sign_off_approval_id).not.toBe(parked.sign_off_approval_id);
+
+    // And v1 is untouched by any of it — somebody may have been shown it.
+    const after = (await (
+      await fetchWorker(`/v1/quotes/${v1.quote_id}`, { headers: auth })
+    ).json()) as QuoteResp;
+    expect(after.status).toBe("sent");
+  });
+
+  it("has no transition from sent, accepted or converted back to draft", async () => {
+    // The table is the source of truth since 0028 dropped the status CHECK, so
+    // it is worth asserting directly rather than only through the routes.
+    for (const from of ["sent", "accepted", "converted", "rejected", "expired"] as const) {
+      expect(canTransitionQuote(from, "draft")).toBe(false);
+      expect(canTransitionQuote(from, "pending_approval")).toBe(false);
+    }
+    // The one legal way into `draft` is a rejected sign-off — PRD-004's
+    // "returns to draft with the comment attached".
+    expect(canTransitionQuote("pending_approval", "draft")).toBe(true);
   });
 });

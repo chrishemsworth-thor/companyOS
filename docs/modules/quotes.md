@@ -171,6 +171,16 @@ Approving **sends** the quote, in the same batch as the decision (see
 it to `draft` with the comment on `sign_off_comment`; re-sending raises a *new*
 approval rather than reopening the rejected one (SESSION-PLAN C8).
 
+**An approved quote never returns to `draft`.** Stated as a product rule, and
+three mechanisms hold it up: `QUOTE_TRANSITIONS` has no edge from `sent` back to
+`draft` or `pending_approval`; only `draft` is editable; and
+`createQuoteVersion` does not carry `sign_off_approval_id` forward, so a new
+version faces the threshold on its own merits and raises a fresh approval.
+Changing an approved quote therefore means restarting it — a new version,
+approved again from scratch. Pinned as a round-trip test in
+`test/quote-sign-off.test.ts`, because each of the three is independently
+plausible to break.
+
 ## API
 
 `QuotesError` maps to 404 (`not_found`), 409 (`invalid_status`, `locked`,
